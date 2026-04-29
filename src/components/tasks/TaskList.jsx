@@ -9,12 +9,16 @@ export default function TaskList({
   categories,
   members,
   workspaceId,
+  currentUserId,
+  runningTimer,
   onAdd,
   onUpdate,
   onDelete,
   onToggleDone,
   onAssign,
   onUnassign,
+  onStartTimer,
+  onStopTimer,
 }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -123,11 +127,15 @@ export default function TaskList({
               projects={projects}
               members={members}
               workspaceId={workspaceId}
+              currentUserId={currentUserId}
+              runningTimer={runningTimer}
               onToggleDone={onToggleDone}
               onEdit={startEdit}
               onDelete={onDelete}
               onAssign={onAssign}
               onUnassign={onUnassign}
+              onStartTimer={onStartTimer}
+              onStopTimer={onStopTimer}
             />
           ))
         )}

@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { PRIORITY_COLORS, projectColor } from '../../lib/constants.js';
 import { formatDue, daysUntil } from '../../lib/utils.js';
+import { canTrackTime } from '../../hooks/useTime.js';
 
 export default function TaskRow({
   task,
   projects,
   members,
   workspaceId,
+  currentUserId,
+  runningTimer,
   onToggleDone,
   onEdit,
   onDelete,
   onAssign,
   onUnassign,
+  onStartTimer,
+  onStopTimer,
 }) {
   const [showAssign, setShowAssign] = useState(false);
   const priColor = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.Medium;
@@ -112,6 +117,26 @@ export default function TaskRow({
 
       {/* Actions */}
       <div style={styles.actions}>
+        {onStartTimer && canTrackTime(task, currentUserId, workspaceId) && (
+          (() => {
+            const isRunning = runningTimer?.taskId === task.id;
+            return (
+              <button
+                onClick={() =>
+                  isRunning ? onStopTimer() : onStartTimer(task)
+                }
+                style={{
+                  ...styles.actionBtn,
+                  color: isRunning ? '#FF6B35' : 'var(--color-text-secondary)',
+                  fontSize: 11,
+                }}
+                title={isRunning ? 'Stop timer' : 'Start timer'}
+              >
+                {isRunning ? '■' : '▶'}
+              </button>
+            );
+          })()
+        )}
         {workspaceId && members && members.length > 0 && !isAssigned && (
           <div style={{ position: 'relative' }}>
             <button

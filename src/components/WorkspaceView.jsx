@@ -8,18 +8,23 @@ import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
 import Notepad from './notes/Notepad.jsx';
+import TimesheetPanel from './time/TimesheetPanel.jsx';
 
 const TABS = [
   { key: 'tasks', label: 'Tasks' },
   { key: 'projects', label: 'Projects' },
   { key: 'notes', label: 'Notes' },
   { key: 'notepad', label: 'Notepad' },
-  { key: 'time', label: 'Timesheet', disabled: true },
+  { key: 'time', label: 'Timesheet' },
   { key: 'congresses', label: 'Congresses', disabled: true },
   { key: 'settings', label: 'Settings', disabled: true },
 ];
 
-export default function WorkspaceView({ activeWorkspace }) {
+export default function WorkspaceView({
+  activeWorkspace,
+  time,
+  onTimerStartedForTask,
+}) {
   const [tab, setTab] = useState('tasks');
   const [members, setMembers] = useState([]);
 
@@ -64,6 +69,12 @@ export default function WorkspaceView({ activeWorkspace }) {
     }
   }, [workspaceId]);
 
+  // Wrapper around startTimer that also caches the task title for the indicator
+  const startTimer = async (task) => {
+    onTimerStartedForTask?.(task);
+    await time.startTimer(task);
+  };
+
   const categories = DEFAULT_CATEGORIES;
 
   return (
@@ -96,12 +107,16 @@ export default function WorkspaceView({ activeWorkspace }) {
             categories={categories}
             members={members}
             workspaceId={workspaceId}
+            currentUserId={time.currentUserId}
+            runningTimer={time.runningTimer}
             onAdd={addTask}
             onUpdate={updateTask}
             onDelete={deleteTask}
             onToggleDone={toggleDone}
             onAssign={assignToMember}
             onUnassign={unassignFromMember}
+            onStartTimer={startTimer}
+            onStopTimer={time.stopTimer}
           />
         )}
         {tab === 'projects' && (
@@ -144,6 +159,20 @@ export default function WorkspaceView({ activeWorkspace }) {
             onAddTask={addTask}
             onAddProject={addProject}
             onAddNote={addNote}
+          />
+        )}
+        {tab === 'time' && (
+          <TimesheetPanel
+            tasks={allTasks}
+            projects={projects}
+            entries={time.entries}
+            loadingEntries={time.loadingEntries}
+            runningTimer={time.runningTimer}
+            currentUserId={time.currentUserId}
+            workspaceId={workspaceId}
+            onSetEntry={time.setEntry}
+            onStartTimer={startTimer}
+            onStopTimer={time.stopTimer}
           />
         )}
       </div>

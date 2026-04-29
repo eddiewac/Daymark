@@ -5,17 +5,25 @@ import {
   getStoredActiveWorkspaceId,
   setStoredActiveWorkspaceId,
 } from './lib/workspaces.js';
+import { useTime } from './hooks/useTime.js';
 import Auth from './components/Auth.jsx';
 import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
+import RunningTimerIndicator from './components/RunningTimerIndicator.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(true);
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspace, setActiveWorkspace] = useState(null);
+  // Cached so the indicator can show a name when the timer task isn't in the
+  // currently-loaded tasks list (eg you switched workspaces).
+  const [runningTaskTitle, setRunningTaskTitle] = useState('');
 
-  // Subscribe to auth state
+  // Time tracking lives at the app level so the timer survives workspace switches.
+  const time = useTime(activeWorkspace?.id || null);
+
+  // Auth subscription
   useEffect(() => {
     let mounted = true;
 
@@ -35,7 +43,7 @@ export default function App() {
     };
   }, []);
 
-  // When signed in, load workspaces and pick the saved active one
+  // Workspace loading
   useEffect(() => {
     if (!session) {
       setWorkspaces([]);
@@ -73,6 +81,22 @@ export default function App() {
     return <Auth />;
   }
 
+  const indicator = time.runningTimer ? (
+    <RunningTimerIndicator
+      runningTimer={time.runningTimer}
+      elapsedMs={time.elapsedMsForRunning}
+      taskTitle={runningTaskTitle}
+      onStop={() => {
+        time.stopTimer();
+        setRunningTaskTitle('');
+      }}
+      onCancel={() => {
+        time.cancelTimer();
+        setRunningTaskTitle('');
+      }}
+    />
+  ) : null;
+
   return (
     <div style={appStyle}>
       <TopBar
@@ -81,10 +105,13 @@ export default function App() {
         activeWorkspace={activeWorkspace}
         onSwitchWorkspace={handleSwitch}
         onWorkspacesChanged={handleWorkspacesChanged}
+        timerIndicator={indicator}
       />
       <WorkspaceView
         key={activeWorkspace?.id || 'personal'}
         activeWorkspace={activeWorkspace}
+        time={time}
+        onTimerStartedForTask={(task) => setRunningTaskTitle(task?.title || '')}
       />
     </div>
   );

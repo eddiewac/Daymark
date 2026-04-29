@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { createWorkspace, setStoredActiveWorkspaceId } from '../lib/workspaces.js';
 
-export default function TopBar({ user, workspaces, activeWorkspace, onSwitchWorkspace, onWorkspacesChanged }) {
+export default function TopBar({
+  user,
+  workspaces,
+  activeWorkspace,
+  onSwitchWorkspace,
+  onWorkspacesChanged,
+  timerIndicator,
+}) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -81,6 +88,8 @@ export default function TopBar({ user, workspaces, activeWorkspace, onSwitchWork
       )}
 
       <div style={{ flex: 1 }} />
+
+      {timerIndicator}
 
       <div style={{ position: 'relative' }}>
         <button onClick={() => setShowMenu((v) => !v)} style={styles.userBtn}>

@@ -7,6 +7,7 @@ export default function NotesPanel({
   team,
   loading,
   projects,
+  tasks,
   workspaceId,
   onAdd,
   onUpdate,
@@ -140,6 +141,7 @@ export default function NotesPanel({
             note={active.note}
             isTeam={active.scope === 'team'}
             projects={projects}
+            tasks={tasks}
             workspaceId={workspaceId}
             onUpdate={onUpdate}
             onDelete={(id, isTeam) => {

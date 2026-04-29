@@ -128,6 +128,7 @@ export default function WorkspaceView({ activeWorkspace }) {
             team={teamNotes}
             loading={notesLoading}
             projects={projects}
+            tasks={allTasks}
             workspaceId={workspaceId}
             onAdd={addNote}
             onUpdate={updateNote}

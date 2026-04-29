@@ -34,11 +34,24 @@ export default function NoteCard({ note, projects, isActive, onClick }) {
       {note.body && (
         <div style={styles.preview}>{note.body.slice(0, 140)}</div>
       )}
-      {note.projectName && (
-        <div style={{ ...styles.projectPill, color: color || '#888', borderColor: color || '#ddd' }}>
-          {note.projectName}
-        </div>
-      )}
+      <div style={styles.tagRow}>
+        {note.projectName && (
+          <span
+            style={{
+              ...styles.projectPill,
+              color: color || '#888',
+              borderColor: color || '#ddd',
+            }}
+          >
+            {note.projectName}
+          </span>
+        )}
+        {note.taskIds?.length > 0 && (
+          <span style={styles.taskPill}>
+            ↪ {note.taskIds.length} task{note.taskIds.length === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
     </button>
   );
 }
@@ -91,5 +104,20 @@ const styles = {
     background: 'transparent',
     fontWeight: 500,
     marginTop: 2,
+  },
+  tagRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
+  },
+  taskPill: {
+    alignSelf: 'flex-start',
+    fontSize: 10,
+    padding: '1px 7px',
+    borderRadius: 10,
+    background: '#534AB711',
+    color: '#534AB7',
+    fontWeight: 500,
   },
 };

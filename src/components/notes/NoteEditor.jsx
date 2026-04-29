@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import TaskMultiSelect from './TaskMultiSelect.jsx';
 
 export default function NoteEditor({
   note,
   isTeam,
   projects,
+  tasks,
   workspaceId,
   onUpdate,
   onDelete,
@@ -13,6 +15,7 @@ export default function NoteEditor({
   const [title, setTitle] = useState(note.title || '');
   const [body, setBody] = useState(note.body || '');
   const [projectName, setProjectName] = useState(note.projectName || '');
+  const [taskIds, setTaskIds] = useState(note.taskIds || []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const saveTimer = useRef(null);
 
@@ -21,15 +24,21 @@ export default function NoteEditor({
     setTitle(note.title || '');
     setBody(note.body || '');
     setProjectName(note.projectName || '');
+    setTaskIds(note.taskIds || []);
     setConfirmDelete(false);
   }, [note.id]);
 
   // Debounced auto-save
   useEffect(() => {
+    const noteTaskIds = note.taskIds || [];
+    const sameTaskIds =
+      taskIds.length === noteTaskIds.length &&
+      taskIds.every((id) => noteTaskIds.includes(id));
     if (
       title === (note.title || '') &&
       body === (note.body || '') &&
-      projectName === (note.projectName || '')
+      projectName === (note.projectName || '') &&
+      sameTaskIds
     ) {
       return;
     }
@@ -42,10 +51,11 @@ export default function NoteEditor({
         projectId: projectName
           ? projects?.find((p) => p.name === projectName)?.id || null
           : null,
+        taskIds,
       }, isTeam);
     }, 600);
     return () => clearTimeout(saveTimer.current);
-  }, [title, body, projectName]);
+  }, [title, body, projectName, taskIds]);
 
   return (
     <div style={styles.wrap}>
@@ -85,6 +95,19 @@ export default function NoteEditor({
             {isTeam ? '↩ Move to personal' : '↗ Move to team'}
           </button>
         )}
+      </div>
+
+      <div style={styles.taskRow}>
+        <span style={styles.taskRowLabel}>Tasks</span>
+        <div style={{ flex: 1 }}>
+          <TaskMultiSelect
+            tasks={tasks || []}
+            taskIds={taskIds}
+            preferredProject={projectName}
+            onChange={setTaskIds}
+            placeholder="+ Tag a task"
+          />
+        </div>
       </div>
 
       <input
@@ -170,6 +193,20 @@ const styles = {
     padding: '8px 14px',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
     alignItems: 'center',
+  },
+  taskRow: {
+    display: 'flex',
+    gap: 8,
+    padding: '8px 14px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+    alignItems: 'flex-start',
+  },
+  taskRowLabel: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    fontWeight: 500,
+    paddingTop: 8,
+    minWidth: 38,
   },
   projectSelect: {
     flex: 1,

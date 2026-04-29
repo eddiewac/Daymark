@@ -1,13 +1,14 @@
-import { useMemo, useState, useCallback } from 'react';
-import { canTrackTime, fmtHours } from '../../hooks/useTime.js';
+import { useMemo, useState } from 'react';
+import { canTrackTime } from '../../hooks/useTime.js';
 import { localDateStr, todayStr } from '../../lib/utils.js';
 import { projectColor } from '../../lib/constants.js';
+import BlocksEditor from './BlocksEditor.jsx';
 
 // ── Week helpers ─────────────────────────────────────────────────────────────
 function startOfWeek(d) {
   const date = new Date(d);
-  const day = date.getDay(); // 0=Sun, 1=Mon...
-  const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + diff);
   date.setHours(0, 0, 0, 0);
   return date;
@@ -30,34 +31,42 @@ function fmtDayDate(d) {
 export default function TimesheetPanel({
   tasks,
   projects,
-  entries,
+  blocks,
   loadingEntries,
   runningTimer,
   currentUserId,
   workspaceId,
-  onSetEntry,
+  onAddBlock,
+  onUpdateBlock,
+  onRemoveBlock,
   onStartTimer,
-  onStopTimer,
+  onRequestStop,
 }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [showDone, setShowDone] = useState(false);
+  const [editingCell, setEditingCell] = useState(null); // { taskId, date }
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart]
   );
-
   const dayKeys = useMemo(() => days.map((d) => localDateStr(d)), [days]);
 
-  // Tasks shown in the timesheet:
-  // - Tasks with hours logged this week, plus
-  // - Tasks the user can track (so they can start adding hours).
-  // Done tasks with no hours this week are filtered out by default.
-  const [showDone, setShowDone] = useState(false);
+  // Build a map from "taskId|date" -> array of blocks
+  const blocksByCell = useMemo(() => {
+    const m = {};
+    for (const b of blocks) {
+      const key = `${b.taskId}|${b.date}`;
+      (m[key] = m[key] || []).push(b);
+    }
+    return m;
+  }, [blocks]);
 
+  // Visible tasks: ones with blocks this week, plus trackable tasks
   const visibleTasks = useMemo(() => {
     const dayKeySet = new Set(dayKeys);
     const taskHasHoursThisWeek = (taskId) =>
-      entries.some((e) => e.taskId === taskId && dayKeySet.has(e.date));
+      blocks.some((b) => b.taskId === taskId && dayKeySet.has(b.date));
 
     return (tasks || [])
       .filter((t) => {
@@ -67,29 +76,22 @@ export default function TimesheetPanel({
         return true;
       })
       .sort((a, b) => {
-        // Active first, then alpha
         if (!!a.done !== !!b.done) return a.done ? 1 : -1;
         if (a.project && !b.project) return -1;
         if (!a.project && b.project) return 1;
         if (a.project !== b.project) return (a.project || '').localeCompare(b.project || '');
         return (a.title || '').localeCompare(b.title || '');
       });
-  }, [tasks, entries, dayKeys, currentUserId, workspaceId, showDone]);
-
-  // Lookup map for fast cell rendering
-  const entryMap = useMemo(() => {
-    const m = {};
-    for (const e of entries) {
-      m[`${e.taskId}|${e.date}`] = e.hours;
-    }
-    return m;
-  }, [entries]);
+  }, [tasks, blocks, dayKeys, currentUserId, workspaceId, showDone]);
 
   const dayTotals = useMemo(() => {
     return dayKeys.map((dk) =>
-      visibleTasks.reduce((sum, t) => sum + (entryMap[`${t.id}|${dk}`] || 0), 0)
+      visibleTasks.reduce((sum, t) => {
+        const cellBlocks = blocksByCell[`${t.id}|${dk}`] || [];
+        return sum + cellBlocks.reduce((s, b) => s + (b.hours || 0), 0);
+      }, 0)
     );
-  }, [visibleTasks, dayKeys, entryMap]);
+  }, [visibleTasks, dayKeys, blocksByCell]);
 
   const weekTotal = dayTotals.reduce((a, b) => a + b, 0);
 
@@ -97,9 +99,16 @@ export default function TimesheetPanel({
   const goNext = () => setWeekStart(addDays(weekStart, 7));
   const goToday = () => setWeekStart(startOfWeek(new Date()));
 
+  // Editing cell context
+  const editingTask = editingCell
+    ? visibleTasks.find((t) => t.id === editingCell.taskId)
+    : null;
+  const editingBlocks = editingCell
+    ? blocksByCell[`${editingCell.taskId}|${editingCell.date}`] || []
+    : [];
+
   return (
     <div style={styles.wrap}>
-      {/* Toolbar */}
       <div style={styles.toolbar}>
         <button onClick={goPrev} style={styles.navBtn}>‹</button>
         <button onClick={goToday} style={styles.todayBtn}>Today</button>
@@ -127,7 +136,6 @@ export default function TimesheetPanel({
         </div>
       </div>
 
-      {/* Grid */}
       <div style={styles.scroll}>
         {loadingEntries ? (
           <div style={styles.empty}>Loading…</div>
@@ -161,20 +169,20 @@ export default function TimesheetPanel({
             </thead>
             <tbody>
               {visibleTasks.map((t) => {
-                const taskTotal = dayKeys.reduce(
-                  (sum, dk) => sum + (entryMap[`${t.id}|${dk}`] || 0),
-                  0
-                );
+                const taskTotal = dayKeys.reduce((sum, dk) => {
+                  const bks = blocksByCell[`${t.id}|${dk}`] || [];
+                  return sum + bks.reduce((s, b) => s + (b.hours || 0), 0);
+                }, 0);
                 const canTrack = canTrackTime(t, currentUserId, workspaceId);
                 const isRunning = runningTimer?.taskId === t.id;
                 const projColor = projectColor(t.project, projects);
                 return (
-                  <tr key={t.id} style={styles.row}>
+                  <tr key={t.id}>
                     <td style={{ ...styles.td, ...styles.taskCol, ...styles.taskCell }}>
                       {canTrack && (
                         <button
                           onClick={() =>
-                            isRunning ? onStopTimer() : onStartTimer(t)
+                            isRunning ? onRequestStop() : onStartTimer(t)
                           }
                           style={{
                             ...styles.timerBtn,
@@ -209,9 +217,13 @@ export default function TimesheetPanel({
                         )}
                       </div>
                     </td>
-                    {dayKeys.map((dk, i) => {
+                    {dayKeys.map((dk) => {
+                      const cellBlocks = blocksByCell[`${t.id}|${dk}`] || [];
+                      const cellHours = cellBlocks.reduce(
+                        (s, b) => s + (b.hours || 0),
+                        0
+                      );
                       const isToday = dk === todayStr();
-                      const v = entryMap[`${t.id}|${dk}`] || 0;
                       return (
                         <td
                           key={dk}
@@ -221,11 +233,37 @@ export default function TimesheetPanel({
                             ...(isToday ? styles.tdToday : {}),
                           }}
                         >
-                          <HourCell
-                            value={v}
+                          <button
+                            onClick={() => {
+                              if (!canTrack) return;
+                              setEditingCell({ taskId: t.id, date: dk });
+                            }}
                             disabled={!canTrack}
-                            onCommit={(newVal) => onSetEntry(t.id, dk, newVal)}
-                          />
+                            style={{
+                              ...styles.cellBtn,
+                              ...(cellHours > 0 ? styles.cellBtnFilled : {}),
+                              cursor: canTrack ? 'pointer' : 'not-allowed',
+                              color: canTrack
+                                ? cellHours > 0
+                                  ? '#534AB7'
+                                  : 'var(--color-text-tertiary)'
+                                : 'var(--color-text-tertiary)',
+                            }}
+                            title={
+                              canTrack
+                                ? cellBlocks.length > 0
+                                  ? `${cellBlocks.length} block${cellBlocks.length === 1 ? '' : 's'} — click to edit`
+                                  : 'Click to add a block'
+                                : 'Not assigned to you'
+                            }
+                          >
+                            {cellHours > 0 ? cellHours.toFixed(2) : canTrack ? '+' : ''}
+                            {cellBlocks.length > 1 && (
+                              <span style={styles.blockCount}>
+                                {cellBlocks.length}
+                              </span>
+                            )}
+                          </button>
                         </td>
                       );
                     })}
@@ -253,6 +291,9 @@ export default function TimesheetPanel({
                       ...styles.dayCol,
                       fontWeight: 600,
                       color: dt > 0 ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                      textAlign: 'center',
+                      fontFamily: 'monospace',
+                      padding: '8px 4px',
                     }}
                   >
                     {dt > 0 ? dt.toFixed(2) : '—'}
@@ -273,88 +314,22 @@ export default function TimesheetPanel({
           </table>
         )}
       </div>
+
+      {editingCell && editingTask && (
+        <BlocksEditor
+          taskTitle={editingTask.title || '(untitled)'}
+          date={editingCell.date}
+          blocks={editingBlocks}
+          taskId={editingCell.taskId}
+          onAddBlock={onAddBlock}
+          onUpdateBlock={onUpdateBlock}
+          onRemoveBlock={onRemoveBlock}
+          onClose={() => setEditingCell(null)}
+        />
+      )}
     </div>
   );
 }
-
-// ── HourCell — editable hours input ─────────────────────────────────────────
-function HourCell({ value, disabled, onCommit }) {
-  const [draft, setDraft] = useState(fmtHours(value));
-  const [editing, setEditing] = useState(false);
-
-  // Reset draft when external value changes (eg timer added time)
-  useMemo(() => {
-    if (!editing) setDraft(fmtHours(value));
-  }, [value, editing]);
-
-  const commit = () => {
-    setEditing(false);
-    const num = parseFloat(draft);
-    const safe = isNaN(num) || num < 0 ? 0 : num;
-    if (safe.toFixed(2) === (value || 0).toFixed(2)) {
-      setDraft(fmtHours(safe));
-      return;
-    }
-    onCommit(safe);
-    setDraft(fmtHours(safe));
-  };
-
-  if (disabled) {
-    return (
-      <div style={cellStyles.readonly}>
-        {value > 0 ? value.toFixed(2) : ''}
-      </div>
-    );
-  }
-
-  return (
-    <input
-      value={draft}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        setEditing(true);
-      }}
-      onFocus={() => setEditing(true)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.target.blur();
-        }
-      }}
-      placeholder=""
-      style={{
-        ...cellStyles.input,
-        ...(value > 0 ? cellStyles.inputFilled : {}),
-      }}
-    />
-  );
-}
-
-const cellStyles = {
-  input: {
-    width: '100%',
-    padding: '4px 6px',
-    border: 'none',
-    background: 'transparent',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    textAlign: 'center',
-    outline: 'none',
-    borderRadius: 4,
-  },
-  inputFilled: {
-    background: '#534AB708',
-    color: '#534AB7',
-    fontWeight: 500,
-  },
-  readonly: {
-    padding: '4px 6px',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    textAlign: 'center',
-    color: 'var(--color-text-tertiary)',
-  },
-};
 
 const styles = {
   wrap: {
@@ -409,10 +384,7 @@ const styles = {
     fontSize: 13,
     color: 'var(--color-text-secondary)',
   },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-  },
+  table: { width: '100%', borderCollapse: 'collapse' },
   th: {
     padding: '8px 6px',
     fontSize: 11,
@@ -434,7 +406,7 @@ const styles = {
   },
   tdToday: { background: '#534AB704' },
   taskCol: { width: '38%', textAlign: 'left', paddingLeft: 14, paddingRight: 8 },
-  dayCol: { width: '7%', minWidth: 70 },
+  dayCol: { width: '7%', minWidth: 78 },
   totalCol: { width: '8%', minWidth: 70, textAlign: 'center', fontFamily: 'monospace' },
   taskCell: {
     display: 'flex',
@@ -454,10 +426,38 @@ const styles = {
   taskInfo: { flex: 1, minWidth: 0 },
   taskTitle: { fontSize: 12, color: 'var(--color-text-primary)' },
   taskProject: { fontSize: 10, marginTop: 1, fontWeight: 500 },
+  cellBtn: {
+    position: 'relative',
+    width: '100%',
+    minHeight: 32,
+    padding: '4px 6px',
+    border: 'none',
+    background: 'transparent',
+    fontSize: 12,
+    fontFamily: 'monospace',
+    textAlign: 'center',
+    borderRadius: 4,
+  },
+  cellBtnFilled: {
+    background: '#534AB708',
+    fontWeight: 500,
+  },
+  blockCount: {
+    position: 'absolute',
+    top: 2,
+    right: 4,
+    fontSize: 9,
+    padding: '0 4px',
+    borderRadius: 6,
+    background: '#534AB7',
+    color: '#fff',
+    fontFamily: 'inherit',
+  },
   totalCell: {
     color: 'var(--color-text-secondary)',
     fontWeight: 500,
+    textAlign: 'center',
+    padding: '8px 4px',
   },
-  row: {},
   totalRow: { background: '#534AB704' },
 };

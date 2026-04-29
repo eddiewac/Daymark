@@ -1,12 +1,15 @@
 import { supabase, getCurrentUser } from './supabase.js';
 
-// ── Time entries ─────────────────────────────────────────────────────────────
+// ── Block-based time entries ────────────────────────────────────────────────
 //
-// We use a `time_entries` table with one row per (user, task, date).
-// Columns: id, user_id, workspace_id (nullable), task_id, date (YYYY-MM-DD),
-//          hours (numeric), data (jsonb), updated_at.
+// Schema:
+//   id (uuid), user_id, workspace_id (nullable), task_id (text),
+//   date (YYYY-MM-DD), started_at (timestamptz?), ended_at (timestamptz?),
+//   hours (numeric), data (jsonb), created_at, updated_at
 //
-// The `data` jsonb is a free-form bucket for future fields without schema migrations.
+// Each row is one "block" of work. A task on a given day can have multiple
+// blocks. Hours can either be derived from started_at/ended_at OR set manually
+// (when blocks have no times — eg quick total entry).
 
 export async function loadTimeEntries(workspaceId, fromDate, toDate) {
   const user = await getCurrentUser();
@@ -31,86 +34,119 @@ export async function loadTimeEntries(workspaceId, fromDate, toDate) {
     console.error('loadTimeEntries:', error);
     return [];
   }
-  return (data || []).map((row) => ({
+
+  return (data || []).map(rowToBlock);
+}
+
+function rowToBlock(row) {
+  return {
     id: row.id,
     taskId: row.task_id,
+    workspaceId: row.workspace_id,
     date: row.date,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
     hours: parseFloat(row.hours) || 0,
     notes: row.data?.notes || '',
-  }));
+    createdAt: row.created_at,
+  };
 }
 
-export async function setTimeEntry(workspaceId, taskId, date, hours, notes = '') {
+// Insert a new block.
+//   block: { taskId, date, startedAt?, endedAt?, hours?, notes? }
+// If startedAt + endedAt are both set, hours is computed from them.
+export async function createTimeBlock(workspaceId, block) {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user) return null;
 
-  // Use a deterministic id so upsert "merges" into the same row for that day/task.
-  // This avoids having to query first to see if a row exists.
-  const id = `${user.id}_${workspaceId || 'p'}_${taskId}_${date}`;
+  const computedHours =
+    block.startedAt && block.endedAt
+      ? Math.max(
+          0,
+          (new Date(block.endedAt) - new Date(block.startedAt)) / 3600000
+        )
+      : block.hours || 0;
 
-  if (!hours || hours <= 0) {
-    // Clear out the row entirely
-    const { error } = await supabase.from('time_entries').delete().eq('id', id);
-    if (error) console.error('setTimeEntry delete:', error);
+  const { data, error } = await supabase
+    .from('time_entries')
+    .insert({
+      user_id: user.id,
+      workspace_id: workspaceId || null,
+      task_id: block.taskId,
+      date: block.date,
+      started_at: block.startedAt || null,
+      ended_at: block.endedAt || null,
+      hours: computedHours,
+      data: { notes: block.notes || '' },
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('createTimeBlock:', error);
     return null;
   }
+  return rowToBlock(data);
+}
 
-  const row = {
-    id,
-    user_id: user.id,
-    workspace_id: workspaceId || null,
-    task_id: taskId,
-    date,
-    hours,
-    data: { notes },
-    updated_at: new Date().toISOString(),
-  };
+// Update an existing block. Pass through the patch — recomputes hours if needed.
+export async function updateTimeBlock(blockId, patch) {
+  const updateRow = { updated_at: new Date().toISOString() };
+  if (patch.startedAt !== undefined) updateRow.started_at = patch.startedAt;
+  if (patch.endedAt !== undefined) updateRow.ended_at = patch.endedAt;
+  if (patch.date !== undefined) updateRow.date = patch.date;
+  if (patch.notes !== undefined) updateRow.data = { notes: patch.notes };
 
+  if (patch.hours !== undefined) {
+    updateRow.hours = patch.hours;
+  } else if (patch.startedAt !== undefined || patch.endedAt !== undefined) {
+    const { data: cur } = await supabase
+      .from('time_entries')
+      .select('started_at, ended_at')
+      .eq('id', blockId)
+      .maybeSingle();
+    const s = patch.startedAt !== undefined ? patch.startedAt : cur?.started_at;
+    const e = patch.endedAt !== undefined ? patch.endedAt : cur?.ended_at;
+    if (s && e) {
+      updateRow.hours = Math.max(0, (new Date(e) - new Date(s)) / 3600000);
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('time_entries')
+    .update(updateRow)
+    .eq('id', blockId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('updateTimeBlock:', error);
+    return null;
+  }
+  return rowToBlock(data);
+}
+
+export async function deleteTimeBlock(blockId) {
   const { error } = await supabase
     .from('time_entries')
-    .upsert(row, { onConflict: 'id' });
-  if (error) console.error('setTimeEntry upsert:', error);
-  return id;
+    .delete()
+    .eq('id', blockId);
+  if (error) console.error('deleteTimeBlock:', error);
 }
 
-// Add hours to whatever is already on a given (task, date). Used by the timer
-// when it stops — we just bump the existing total instead of overwriting.
-export async function addTimeEntry(workspaceId, taskId, date, addHours) {
-  const user = await getCurrentUser();
-  if (!user) return;
-
-  const id = `${user.id}_${workspaceId || 'p'}_${taskId}_${date}`;
-
-  // Read existing
-  const { data: existing } = await supabase
-    .from('time_entries')
-    .select('hours')
-    .eq('id', id)
-    .maybeSingle();
-
-  const total = (parseFloat(existing?.hours) || 0) + addHours;
-
-  return setTimeEntry(workspaceId, taskId, date, total);
-}
-
-// ── Running timer (single-row state) ────────────────────────────────────────
-//
-// A single row in `app_storage` keyed by `<user_id>:active-timer-v1` holds the
-// currently-running timer. value is JSON: { taskId, workspaceId, startedAt }.
-
+// ── Running timer ────────────────────────────────────────────────────────────
 const TIMER_KEY_SUFFIX = 'active-timer-v1';
 
 export async function loadRunningTimer() {
   const user = await getCurrentUser();
   if (!user) return null;
-
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('app_storage')
     .select('value')
     .eq('key', user.id + ':' + TIMER_KEY_SUFFIX)
     .maybeSingle();
-
-  if (error || !data?.value) return null;
+  if (!data?.value) return null;
   try {
     const parsed = JSON.parse(data.value);
     if (!parsed.taskId || !parsed.startedAt) return null;
@@ -123,13 +159,11 @@ export async function loadRunningTimer() {
 export async function startRunningTimer(taskId, workspaceId) {
   const user = await getCurrentUser();
   if (!user) return null;
-
   const state = {
     taskId,
     workspaceId: workspaceId || null,
     startedAt: Date.now(),
   };
-
   await supabase.from('app_storage').upsert(
     {
       key: user.id + ':' + TIMER_KEY_SUFFIX,
@@ -144,7 +178,6 @@ export async function startRunningTimer(taskId, workspaceId) {
 export async function clearRunningTimer() {
   const user = await getCurrentUser();
   if (!user) return;
-
   await supabase
     .from('app_storage')
     .delete()

@@ -1,39 +1,40 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getCurrentUser } from '../lib/supabase.js';
 import {
   loadTimeEntries,
-  setTimeEntry as setTimeEntryDb,
-  addTimeEntry as addTimeEntryDb,
+  createTimeBlock as createBlockDb,
+  updateTimeBlock as updateBlockDb,
+  deleteTimeBlock as deleteBlockDb,
   loadRunningTimer,
   startRunningTimer,
   clearRunningTimer,
 } from '../lib/time.js';
 import { localDateStr } from '../lib/utils.js';
 
-// "Can the current user log time on this task?"
-// Personal workspace: yes (always your own task)
-// Team workspace: yes if assigned to me, yes if unassigned, NO if assigned to someone else.
+// Permission check: can the current user log time on this task?
 export function canTrackTime(task, currentUserId, workspaceId) {
   if (!task) return false;
-  if (!workspaceId) return true; // personal workspace = always yes
+  if (!workspaceId) return true; // personal workspace
   if (!task.assignedToId) return true; // unassigned in team
   return task.assignedToId === currentUserId;
 }
 
 export function useTime(workspaceId) {
-  const [entries, setEntries] = useState([]);
+  const [blocks, setBlocks] = useState([]); // all loaded blocks
   const [loadingEntries, setLoadingEntries] = useState(true);
 
-  const [runningTimer, setRunningTimer] = useState(null); // { taskId, workspaceId, startedAt }
+  const [runningTimer, setRunningTimer] = useState(null);
   const [tickNow, setTickNow] = useState(Date.now());
   const [currentUserId, setCurrentUserId] = useState(null);
 
-  // ── Identity ──────────────────────────────────────────────────────────────
+  // Pending stop dialog state — when set, the indicator/UI shows the popup
+  const [pendingStop, setPendingStop] = useState(null);
+
   useEffect(() => {
     getCurrentUser().then((u) => setCurrentUserId(u?.id || null));
   }, []);
 
-  // ── Load entries (default: this week + last 4 weeks for context) ─────────
+  // Load blocks (5 weeks back, 1 week forward) when workspace changes
   useEffect(() => {
     let cancelled = false;
     setLoadingEntries(true);
@@ -45,7 +46,7 @@ export function useTime(workspaceId) {
 
     loadTimeEntries(workspaceId, localDateStr(from), localDateStr(to))
       .then((rows) => {
-        if (!cancelled) setEntries(rows);
+        if (!cancelled) setBlocks(rows);
       })
       .finally(() => {
         if (!cancelled) setLoadingEntries(false);
@@ -56,12 +57,12 @@ export function useTime(workspaceId) {
     };
   }, [workspaceId]);
 
-  // ── Load any running timer (might be in another workspace) ─────────────
+  // Load any running timer
   useEffect(() => {
     loadRunningTimer().then((r) => setRunningTimer(r));
   }, []);
 
-  // ── Tick once per second to update displayed elapsed time ─────────────
+  // Tick once per second
   useEffect(() => {
     if (!runningTimer) return;
     const id = setInterval(() => setTickNow(Date.now()), 1000);
@@ -73,9 +74,9 @@ export function useTime(workspaceId) {
   const startTimer = useCallback(
     async (task) => {
       if (!task) return;
-      // If something else is running, stop it first, banking the time.
+      // If something else is running, drop it silently (no time logged)
       if (runningTimer) {
-        await stopTimerInternal(runningTimer);
+        await clearRunningTimer();
       }
       const state = await startRunningTimer(task.id, workspaceId);
       setRunningTimer(state);
@@ -83,84 +84,107 @@ export function useTime(workspaceId) {
     [runningTimer, workspaceId]
   );
 
-  const stopTimerInternal = async (timer) => {
-    if (!timer) return;
-    const elapsedMs = Date.now() - timer.startedAt;
-    const hours = elapsedMs / 3600000;
-    if (hours >= 0.005) {
-      // Don't bother logging anything below 18 seconds
-      const date = localDateStr(new Date(timer.startedAt));
-      await addTimeEntryDb(timer.workspaceId, timer.taskId, date, hours);
-      // Reflect in local entries
-      const id = `${currentUserId}_${timer.workspaceId || 'p'}_${timer.taskId}_${date}`;
-      setEntries((prev) => {
-        const idx = prev.findIndex((e) => e.id === id);
-        if (idx === -1) {
-          return [
-            ...prev,
-            {
-              id,
-              taskId: timer.taskId,
-              date,
-              hours,
-              notes: '',
-            },
-          ];
-        }
-        const next = [...prev];
-        next[idx] = { ...next[idx], hours: next[idx].hours + hours };
-        return next;
-      });
-    }
-    await clearRunningTimer();
-  };
-
-  const stopTimer = useCallback(async () => {
+  // Open the stop dialog with prefilled times
+  const requestStop = useCallback(() => {
     if (!runningTimer) return;
-    await stopTimerInternal(runningTimer);
-    setRunningTimer(null);
-  }, [runningTimer, currentUserId]);
+    setPendingStop({
+      taskId: runningTimer.taskId,
+      workspaceId: runningTimer.workspaceId,
+      startedAt: new Date(runningTimer.startedAt).toISOString(),
+      endedAt: new Date().toISOString(),
+    });
+  }, [runningTimer]);
 
-  // Cancel without logging time (just discard)
-  const cancelTimer = useCallback(async () => {
-    await clearRunningTimer();
-    setRunningTimer(null);
-  }, []);
-
-  const setEntry = useCallback(
-    async (taskId, date, hours) => {
-      const id = `${currentUserId}_${workspaceId || 'p'}_${taskId}_${date}`;
-      // Optimistic local update
-      setEntries((prev) => {
-        if (!hours || hours <= 0) {
-          return prev.filter((e) => e.id !== id);
+  // Confirm the stop, save the block, clear the timer
+  const confirmStop = useCallback(
+    async (finalStart, finalEnd) => {
+      if (!pendingStop) return;
+      const startMs = new Date(finalStart).getTime();
+      const endMs = new Date(finalEnd).getTime();
+      const ms = endMs - startMs;
+      if (ms >= 30000) {
+        // Don't bother for blocks under 30 seconds
+        const date = localDateStr(new Date(finalStart));
+        const created = await createBlockDb(pendingStop.workspaceId, {
+          taskId: pendingStop.taskId,
+          date,
+          startedAt: finalStart,
+          endedAt: finalEnd,
+        });
+        // Only add to local state if the block belongs to the currently-loaded workspace
+        if (created && pendingStop.workspaceId == (workspaceId || null)) {
+          setBlocks((prev) => [...prev, created]);
         }
-        const idx = prev.findIndex((e) => e.id === id);
-        if (idx === -1) {
-          return [...prev, { id, taskId, date, hours, notes: '' }];
-        }
-        const next = [...prev];
-        next[idx] = { ...next[idx], hours };
-        return next;
-      });
-      await setTimeEntryDb(workspaceId, taskId, date, hours);
+      }
+      await clearRunningTimer();
+      setRunningTimer(null);
+      setPendingStop(null);
     },
-    [workspaceId, currentUserId]
+    [pendingStop, workspaceId]
   );
 
+  const cancelStop = useCallback(() => {
+    setPendingStop(null);
+  }, []);
+
+  // Cancel the running timer entirely (no logging, no popup)
+  const discardTimer = useCallback(async () => {
+    await clearRunningTimer();
+    setRunningTimer(null);
+    setPendingStop(null);
+  }, []);
+
+  // ── Block CRUD (used from the timesheet) ─────────────────────────────────
+
+  const addBlock = useCallback(
+    async (block) => {
+      const created = await createBlockDb(workspaceId, block);
+      if (created) {
+        setBlocks((prev) => [...prev, created]);
+      }
+      return created;
+    },
+    [workspaceId]
+  );
+
+  const updateBlock = useCallback(async (blockId, patch) => {
+    // Optimistic local update
+    setBlocks((prev) =>
+      prev.map((b) => (b.id === blockId ? { ...b, ...patch } : b))
+    );
+    const updated = await updateBlockDb(blockId, patch);
+    if (updated) {
+      // Replace with server canonical (esp. recomputed hours)
+      setBlocks((prev) =>
+        prev.map((b) => (b.id === blockId ? updated : b))
+      );
+    }
+  }, []);
+
+  const removeBlock = useCallback(async (blockId) => {
+    setBlocks((prev) => prev.filter((b) => b.id !== blockId));
+    await deleteBlockDb(blockId);
+  }, []);
+
   // ── Derived ───────────────────────────────────────────────────────────────
+
   const elapsedMsForRunning = runningTimer ? tickNow - runningTimer.startedAt : 0;
 
   return {
-    entries,
+    blocks,
     loadingEntries,
     runningTimer,
     elapsedMsForRunning,
     currentUserId,
+    pendingStop,
     startTimer,
-    stopTimer,
-    cancelTimer,
-    setEntry,
+    requestStop,
+    confirmStop,
+    cancelStop,
+    discardTimer,
+    addBlock,
+    updateBlock,
+    removeBlock,
   };
 }
 
@@ -176,4 +200,23 @@ export function fmtElapsed(ms) {
 export function fmtHours(h) {
   if (!h || h < 0.01) return '';
   return h.toFixed(2);
+}
+
+// "HH:MM" from a timestamp
+export function fmtTimeOfDay(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// Convert "HH:MM" + a date into a full ISO timestamp
+export function combineDateAndTime(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setHours(h || 0);
+  d.setMinutes(m || 0);
+  d.setSeconds(0);
+  d.setMilliseconds(0);
+  return d.toISOString();
 }

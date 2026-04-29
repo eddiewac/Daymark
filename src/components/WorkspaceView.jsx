@@ -116,7 +116,7 @@ export default function WorkspaceView({
             onAssign={assignToMember}
             onUnassign={unassignFromMember}
             onStartTimer={startTimer}
-            onStopTimer={time.stopTimer}
+            onStopTimer={time.requestStop}
           />
         )}
         {tab === 'projects' && (
@@ -165,14 +165,16 @@ export default function WorkspaceView({
           <TimesheetPanel
             tasks={allTasks}
             projects={projects}
-            entries={time.entries}
+            blocks={time.blocks}
             loadingEntries={time.loadingEntries}
             runningTimer={time.runningTimer}
             currentUserId={time.currentUserId}
             workspaceId={workspaceId}
-            onSetEntry={time.setEntry}
+            onAddBlock={time.addBlock}
+            onUpdateBlock={time.updateBlock}
+            onRemoveBlock={time.removeBlock}
             onStartTimer={startTimer}
-            onStopTimer={time.stopTimer}
+            onRequestStop={time.requestStop}
           />
         )}
       </div>

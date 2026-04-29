@@ -10,47 +10,39 @@ import Auth from './components/Auth.jsx';
 import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
 import RunningTimerIndicator from './components/RunningTimerIndicator.jsx';
+import StopTimerDialog from './components/StopTimerDialog.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(true);
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspace, setActiveWorkspace] = useState(null);
-  // Cached so the indicator can show a name when the timer task isn't in the
-  // currently-loaded tasks list (eg you switched workspaces).
   const [runningTaskTitle, setRunningTaskTitle] = useState('');
 
-  // Time tracking lives at the app level so the timer survives workspace switches.
   const time = useTime(activeWorkspace?.id || null);
 
-  // Auth subscription
   useEffect(() => {
     let mounted = true;
-
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       setSession(data.session);
       setChecking(false);
     });
-
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
-
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
     };
   }, []);
 
-  // Workspace loading
   useEffect(() => {
     if (!session) {
       setWorkspaces([]);
       setActiveWorkspace(null);
       return;
     }
-
     loadWorkspaces().then((list) => {
       setWorkspaces(list);
       const savedId = getStoredActiveWorkspaceId();
@@ -73,25 +65,17 @@ export default function App() {
     }
   };
 
-  if (checking) {
-    return <div style={loadingStyle}>…</div>;
-  }
-
-  if (!session) {
-    return <Auth />;
-  }
+  if (checking) return <div style={loadingStyle}>…</div>;
+  if (!session) return <Auth />;
 
   const indicator = time.runningTimer ? (
     <RunningTimerIndicator
       runningTimer={time.runningTimer}
       elapsedMs={time.elapsedMsForRunning}
       taskTitle={runningTaskTitle}
-      onStop={() => {
-        time.stopTimer();
-        setRunningTaskTitle('');
-      }}
+      onStop={time.requestStop}
       onCancel={() => {
-        time.cancelTimer();
+        time.discardTimer();
         setRunningTaskTitle('');
       }}
     />
@@ -113,6 +97,21 @@ export default function App() {
         time={time}
         onTimerStartedForTask={(task) => setRunningTaskTitle(task?.title || '')}
       />
+      {time.pendingStop && (
+        <StopTimerDialog
+          pendingStop={time.pendingStop}
+          taskTitle={runningTaskTitle}
+          onConfirm={(start, end) => {
+            time.confirmStop(start, end);
+            setRunningTaskTitle('');
+          }}
+          onCancel={time.cancelStop}
+          onDiscard={() => {
+            time.discardTimer();
+            setRunningTaskTitle('');
+          }}
+        />
+      )}
     </div>
   );
 }

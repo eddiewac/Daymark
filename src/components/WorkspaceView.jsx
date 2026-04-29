@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useTasks } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
+import { useNotes } from '../hooks/useNotes.js';
 import { loadWorkspaceMembers } from '../lib/workspaces.js';
 import { DEFAULT_CATEGORIES } from '../lib/constants.js';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
+import NotesPanel from './notes/NotesPanel.jsx';
+import Notepad from './notes/Notepad.jsx';
 
 const TABS = [
   { key: 'tasks', label: 'Tasks' },
   { key: 'projects', label: 'Projects' },
-  { key: 'notes', label: 'Notes', disabled: true },
+  { key: 'notes', label: 'Notes' },
+  { key: 'notepad', label: 'Notepad' },
   { key: 'time', label: 'Timesheet', disabled: true },
   { key: 'congresses', label: 'Congresses', disabled: true },
   { key: 'settings', label: 'Settings', disabled: true },
@@ -40,6 +44,16 @@ export default function WorkspaceView({ activeWorkspace }) {
     updateProject,
     deleteProject,
   } = useProjects(workspaceId);
+
+  const {
+    personal: personalNotes,
+    team: teamNotes,
+    loading: notesLoading,
+    addNote,
+    updateNote,
+    deleteNote,
+    moveNote,
+  } = useNotes(workspaceId);
 
   // Load workspace members for the assignment dropdowns
   useEffect(() => {
@@ -108,6 +122,20 @@ export default function WorkspaceView({ activeWorkspace }) {
             onAssignTask={assignToMember}
           />
         )}
+        {tab === 'notes' && (
+          <NotesPanel
+            personal={personalNotes}
+            team={teamNotes}
+            loading={notesLoading}
+            projects={projects}
+            workspaceId={workspaceId}
+            onAdd={addNote}
+            onUpdate={updateNote}
+            onDelete={deleteNote}
+            onMove={moveNote}
+          />
+        )}
+        {tab === 'notepad' && <Notepad />}
       </div>
     </div>
   );

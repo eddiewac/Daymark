@@ -135,7 +135,14 @@ export default function WorkspaceView({ activeWorkspace }) {
             onMove={moveNote}
           />
         )}
-        {tab === 'notepad' && <Notepad />}
+        {tab === 'notepad' && (
+          <Notepad
+            projects={projects}
+            workspaceId={workspaceId}
+            onAddTask={addTask}
+            onAddProject={addProject}
+          />
+        )}
       </div>
     </div>
   );

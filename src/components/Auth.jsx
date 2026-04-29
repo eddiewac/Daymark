@@ -38,7 +38,7 @@ export default function Auth() {
           Day<span style={{ color: '#534AB7' }}>mark</span>
         </div>
         <div style={styles.sub}>
-          {mode === 'login' ? 'Sign in to your account' : 'Create your Daymark account'}
+          {mode === 'login' ? 'Welcome back to Daymark' : 'Create your Daymark account'}
         </div>
 
         {error && <div style={styles.err}>{error}</div>}

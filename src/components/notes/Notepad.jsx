@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadNotepad, saveNotepad } from '../../lib/notepad.js';
+import TaskMultiSelect from './TaskMultiSelect.jsx';
 
 export default function Notepad({
   projects,
+  tasks,
   workspaceId,
   onAddTask,
   onAddProject,
+  onAddNote, // new — used for "Save as note"
 }) {
   const [body, setBody] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -13,7 +16,8 @@ export default function Notepad({
 
   // Selection / conversion state
   const [selection, setSelection] = useState('');
-  const [converting, setConverting] = useState(null); // 'task' | 'project' | null
+  const [selRange, setSelRange] = useState(null); // [start, end] in body
+  const [converting, setConverting] = useState(null); // 'task' | 'project' | 'note' | null
   const [taskForm, setTaskForm] = useState({
     title: '',
     project: '',
@@ -23,6 +27,13 @@ export default function Notepad({
   const [projectForm, setProjectForm] = useState({
     name: '',
     nextSteps: '',
+  });
+  const [noteForm, setNoteForm] = useState({
+    title: '',
+    body: '',
+    projectName: '',
+    taskIds: [],
+    removeAfter: false,
   });
   const [feedback, setFeedback] = useState(null);
 
@@ -51,8 +62,11 @@ export default function Notepad({
   const handleSelect = () => {
     const ta = textareaRef.current;
     if (!ta) return;
-    const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const sel = ta.value.slice(start, end).trim();
     setSelection(sel);
+    setSelRange(sel ? [start, end] : null);
     if (!sel) setConverting(null);
   };
 
@@ -65,10 +79,29 @@ export default function Notepad({
         priority: 'Medium',
         dueDate: '',
       });
-    } else {
+    } else if (type === 'project') {
       setProjectForm({
         name: selection.length <= 60 ? selection : selection.slice(0, 60),
         nextSteps: selection.length > 60 ? selection : '',
+      });
+    } else if (type === 'note') {
+      // Use first line as title, rest as body — or whole thing as body if short
+      const lines = selection.split('\n');
+      let title = '';
+      let noteBody = selection;
+      if (lines.length > 1) {
+        title = lines[0].trim();
+        noteBody = lines.slice(1).join('\n').trim();
+      } else if (selection.length <= 80) {
+        title = selection;
+        noteBody = '';
+      }
+      setNoteForm({
+        title,
+        body: noteBody,
+        projectName: '',
+        taskIds: [],
+        removeAfter: false,
       });
     }
     setConverting(type);
@@ -92,9 +125,37 @@ export default function Notepad({
         nextSteps: projectForm.nextSteps.trim(),
       });
       setFeedback({ type: 'project', text: projectForm.name.trim() });
+    } else if (converting === 'note') {
+      if (!noteForm.title.trim() && !noteForm.body.trim()) return;
+      const projObj = projects?.find((p) => p.name === noteForm.projectName);
+      await onAddNote(
+        {
+          title: noteForm.title.trim(),
+          body: noteForm.body.trim(),
+          projectName: noteForm.projectName || null,
+          projectId: projObj?.id || null,
+          taskIds: noteForm.taskIds,
+        },
+        false // always personal
+      );
+      setFeedback({
+        type: 'note',
+        text: noteForm.title.trim() || noteForm.body.trim().slice(0, 40),
+      });
+
+      // Optionally remove the selected text from the notepad
+      if (noteForm.removeAfter && selRange) {
+        const [start, end] = selRange;
+        const before = body.slice(0, start).replace(/\s+$/, '');
+        const after = body.slice(end).replace(/^\s+/, '');
+        const sep = before && after ? '\n\n' : '';
+        setBody(before + sep + after);
+      }
     }
+
     setConverting(null);
     setSelection('');
+    setSelRange(null);
     setTimeout(() => setFeedback(null), 3000);
   };
 
@@ -104,8 +165,8 @@ export default function Notepad({
         <div>
           <div style={styles.title}>📒 Notepad</div>
           <div style={styles.sub}>
-            Quick personal scratchpad. Select text and convert to a task or
-            project.
+            Quick personal scratchpad. Select text and convert to a task,
+            project, or note.
           </div>
         </div>
         <div style={styles.savedNote}>
@@ -116,7 +177,8 @@ export default function Notepad({
       {selection && !converting && (
         <div style={styles.selectionBar}>
           <span style={styles.selectionLabel}>
-            Selection: "{selection.length > 50 ? selection.slice(0, 50) + '…' : selection}"
+            Selection: "
+            {selection.length > 50 ? selection.slice(0, 50) + '…' : selection}"
           </span>
           <button onClick={() => startConvert('task')} style={styles.convertBtn}>
             → Convert to task
@@ -131,6 +193,17 @@ export default function Notepad({
             }}
           >
             → Convert to project
+          </button>
+          <button
+            onClick={() => startConvert('note')}
+            style={{
+              ...styles.convertBtn,
+              background: '#BA751711',
+              color: '#BA7517',
+              borderColor: '#BA7517',
+            }}
+          >
+            → Save as note
           </button>
         </div>
       )}
@@ -160,7 +233,9 @@ export default function Notepad({
             </select>
             <select
               value={taskForm.priority}
-              onChange={(e) => setTaskForm((f) => ({ ...f, priority: e.target.value }))}
+              onChange={(e) =>
+                setTaskForm((f) => ({ ...f, priority: e.target.value }))
+              }
               style={styles.select}
             >
               {['Low', 'Medium', 'High', 'Urgent'].map((p) => (
@@ -170,7 +245,9 @@ export default function Notepad({
             <input
               type="date"
               value={taskForm.dueDate}
-              onChange={(e) => setTaskForm((f) => ({ ...f, dueDate: e.target.value }))}
+              onChange={(e) =>
+                setTaskForm((f) => ({ ...f, dueDate: e.target.value }))
+              }
               style={styles.select}
               title="Due date"
             />
@@ -193,14 +270,18 @@ export default function Notepad({
           </div>
           <input
             value={projectForm.name}
-            onChange={(e) => setProjectForm((f) => ({ ...f, name: e.target.value }))}
+            onChange={(e) =>
+              setProjectForm((f) => ({ ...f, name: e.target.value }))
+            }
             placeholder="Project name"
             style={styles.input}
             autoFocus
           />
           <textarea
             value={projectForm.nextSteps}
-            onChange={(e) => setProjectForm((f) => ({ ...f, nextSteps: e.target.value }))}
+            onChange={(e) =>
+              setProjectForm((f) => ({ ...f, nextSteps: e.target.value }))
+            }
             placeholder="Next steps (optional)"
             rows={2}
             style={styles.textarea}
@@ -219,13 +300,95 @@ export default function Notepad({
         </div>
       )}
 
+      {converting === 'note' && (
+        <div style={{ ...styles.convertForm, borderColor: '#BA751744' }}>
+          <div style={{ ...styles.convertHeader, color: '#BA7517' }}>
+            Save selection as a note
+          </div>
+          <input
+            value={noteForm.title}
+            onChange={(e) => setNoteForm((f) => ({ ...f, title: e.target.value }))}
+            placeholder="Note title (optional)"
+            style={styles.input}
+            autoFocus
+          />
+          <textarea
+            value={noteForm.body}
+            onChange={(e) => setNoteForm((f) => ({ ...f, body: e.target.value }))}
+            placeholder="Body…"
+            rows={3}
+            style={styles.textarea}
+          />
+          <select
+            value={noteForm.projectName}
+            onChange={(e) =>
+              setNoteForm((f) => ({ ...f, projectName: e.target.value }))
+            }
+            style={styles.select}
+          >
+            <option value="">No project</option>
+            {(projects || []).map((p) => (
+              <option key={p.id} value={p.name}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <div>
+            <div style={styles.miniLabel}>Tasks</div>
+            <TaskMultiSelect
+              tasks={tasks || []}
+              taskIds={noteForm.taskIds}
+              preferredProject={noteForm.projectName}
+              onChange={(ids) => setNoteForm((f) => ({ ...f, taskIds: ids }))}
+              placeholder="+ Tag a task"
+            />
+          </div>
+          <label style={styles.checkLabel}>
+            <input
+              type="checkbox"
+              checked={noteForm.removeAfter}
+              onChange={(e) =>
+                setNoteForm((f) => ({ ...f, removeAfter: e.target.checked }))
+              }
+            />
+            Remove selection from notepad after saving
+          </label>
+          <div style={styles.btnRow}>
+            <button
+              onClick={submitConvert}
+              style={{ ...styles.primaryBtn, background: '#BA7517' }}
+            >
+              Save as note
+            </button>
+            <button onClick={() => setConverting(null)} style={styles.cancelBtn}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {feedback && (
         <div
           style={{
             ...styles.feedback,
-            background: feedback.type === 'task' ? '#534AB711' : '#0F6E5611',
-            color: feedback.type === 'task' ? '#534AB7' : '#0F6E56',
-            borderColor: feedback.type === 'task' ? '#534AB744' : '#0F6E5644',
+            background:
+              feedback.type === 'task'
+                ? '#534AB711'
+                : feedback.type === 'project'
+                ? '#0F6E5611'
+                : '#BA751711',
+            color:
+              feedback.type === 'task'
+                ? '#534AB7'
+                : feedback.type === 'project'
+                ? '#0F6E56'
+                : '#BA7517',
+            borderColor:
+              feedback.type === 'task'
+                ? '#534AB744'
+                : feedback.type === 'project'
+                ? '#0F6E5644'
+                : '#BA751744',
           }}
         >
           ✓ Created {feedback.type}: <strong>{feedback.text}</strong>
@@ -239,7 +402,11 @@ export default function Notepad({
         onSelect={handleSelect}
         onMouseUp={handleSelect}
         onKeyUp={handleSelect}
-        placeholder={loaded ? 'Start jotting…\n\nTip: select any text and click "Convert to task" or "Convert to project".' : 'Loading…'}
+        placeholder={
+          loaded
+            ? 'Start jotting…\n\nTip: select any text and click "Convert to task", "Convert to project", or "Save as note".'
+            : 'Loading…'
+        }
         disabled={!loaded}
         style={styles.area}
       />
@@ -256,7 +423,13 @@ function fmtTime(ts) {
 }
 
 const styles = {
-  wrap: { flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', overflow: 'hidden' },
+  wrap: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    background: '#fff',
+    overflow: 'hidden',
+  },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -274,6 +447,7 @@ const styles = {
     padding: '8px 18px',
     background: '#534AB708',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
+    flexWrap: 'wrap',
   },
   selectionLabel: {
     flex: 1,
@@ -283,6 +457,7 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    minWidth: 120,
   },
   convertBtn: {
     padding: '4px 10px',
@@ -339,6 +514,20 @@ const styles = {
     fontSize: 12,
     background: '#fff',
     outline: 'none',
+  },
+  miniLabel: {
+    fontSize: 10,
+    color: 'var(--color-text-secondary)',
+    marginBottom: 3,
+    fontWeight: 500,
+  },
+  checkLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
   },
   btnRow: { display: 'flex', gap: 6, marginTop: 4 },
   primaryBtn: {

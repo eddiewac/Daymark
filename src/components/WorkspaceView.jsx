@@ -139,9 +139,11 @@ export default function WorkspaceView({ activeWorkspace }) {
         {tab === 'notepad' && (
           <Notepad
             projects={projects}
+            tasks={allTasks}
             workspaceId={workspaceId}
             onAddTask={addTask}
             onAddProject={addProject}
+            onAddNote={addNote}
           />
         )}
       </div>

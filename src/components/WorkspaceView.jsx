@@ -71,6 +71,7 @@ export default function WorkspaceView({
     settings,
     loading: settingsLoading,
     updateSettings,
+    savedAt: settingsSavedAt,
   } = useSettings(workspaceId);
 
   // Load workspace members
@@ -244,6 +245,7 @@ export default function WorkspaceView({
             loading={settingsLoading}
             workspaceId={workspaceId}
             workspaceName={workspaceName}
+            savedAt={settingsSavedAt}
             onUpdate={updateSettings}
           />
         )}

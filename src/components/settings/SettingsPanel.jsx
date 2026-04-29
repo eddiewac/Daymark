@@ -1,10 +1,20 @@
 import { useState } from 'react';
 
+function fmtRel(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  if (diff < 5000) return 'just now';
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  return new Date(ts).toLocaleTimeString();
+}
+
 export default function SettingsPanel({
   settings,
   loading,
   workspaceId,
   workspaceName,
+  savedAt,
   onUpdate,
 }) {
   return (
@@ -17,7 +27,15 @@ export default function SettingsPanel({
           <div style={styles.introSub}>
             These settings apply to this workspace only. Personal and team
             workspaces have separate settings.
+            {workspaceId && (
+              <> Team members will see your changes in real time.</>
+            )}
           </div>
+          {savedAt && (
+            <div style={styles.savedHint}>
+              Last updated {fmtRel(savedAt)}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -391,6 +409,12 @@ const styles = {
   },
   introTitle: { fontSize: 14, fontWeight: 600, marginBottom: 4 },
   introSub: { fontSize: 11, color: 'var(--color-text-secondary)' },
+  savedHint: {
+    fontSize: 10,
+    color: '#1d9e75',
+    marginTop: 6,
+    fontWeight: 500,
+  },
   loading: { padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' },
   section: {
     background: 'var(--color-background-secondary)',

@@ -9,6 +9,7 @@ import ProjectsPanel from './projects/ProjectsPanel.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
 import Notepad from './notes/Notepad.jsx';
 import TimesheetPanel from './time/TimesheetPanel.jsx';
+import ExportPanel from './export/ExportPanel.jsx';
 
 const TABS = [
   { key: 'tasks', label: 'Tasks' },
@@ -16,6 +17,7 @@ const TABS = [
   { key: 'notes', label: 'Notes' },
   { key: 'notepad', label: 'Notepad' },
   { key: 'time', label: 'Timesheet' },
+  { key: 'export', label: 'Export' },
   { key: 'congresses', label: 'Congresses', disabled: true },
   { key: 'settings', label: 'Settings', disabled: true },
 ];
@@ -175,6 +177,13 @@ export default function WorkspaceView({
             onRemoveBlock={time.removeBlock}
             onStartTimer={startTimer}
             onRequestStop={time.requestStop}
+          />
+        )}
+        {tab === 'export' && (
+          <ExportPanel
+            tasks={allTasks}
+            projects={projects}
+            blocks={time.blocks}
           />
         )}
       </div>

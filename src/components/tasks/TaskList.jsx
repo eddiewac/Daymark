@@ -7,6 +7,8 @@ export default function TaskList({
   loading,
   projects,
   categories,
+  priorities,
+  statuses,
   members,
   workspaceId,
   currentUserId,
@@ -103,6 +105,8 @@ export default function TaskList({
           initialTask={editing}
           projects={projects}
           categories={categories}
+          priorities={priorities}
+          statuses={statuses}
           members={members}
           workspaceId={workspaceId}
           onSave={handleSave}

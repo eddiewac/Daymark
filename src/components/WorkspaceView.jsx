@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 import { useTasks } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useNotes } from '../hooks/useNotes.js';
+import { useSettings } from '../hooks/useSettings.js';
 import { loadWorkspaceMembers } from '../lib/workspaces.js';
-import { DEFAULT_CATEGORIES } from '../lib/constants.js';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
 import Notepad from './notes/Notepad.jsx';
 import TimesheetPanel from './time/TimesheetPanel.jsx';
 import ExportPanel from './export/ExportPanel.jsx';
+import SettingsPanel from './settings/SettingsPanel.jsx';
+import FocusBox from './FocusBox.jsx';
 
 const TABS = [
   { key: 'tasks', label: 'Tasks' },
@@ -19,7 +21,7 @@ const TABS = [
   { key: 'time', label: 'Timesheet' },
   { key: 'export', label: 'Export' },
   { key: 'congresses', label: 'Congresses', disabled: true },
-  { key: 'settings', label: 'Settings', disabled: true },
+  { key: 'settings', label: 'Settings' },
 ];
 
 export default function WorkspaceView({
@@ -29,6 +31,9 @@ export default function WorkspaceView({
 }) {
   const [tab, setTab] = useState('tasks');
   const [members, setMembers] = useState([]);
+
+  // Focus box visibility — auto-opens when timer starts, closes on stop or manual close
+  const [focusOpen, setFocusOpen] = useState(false);
 
   const workspaceId = activeWorkspace?.id || null;
   const workspaceName = activeWorkspace?.name || 'Personal';
@@ -62,7 +67,13 @@ export default function WorkspaceView({
     moveNote,
   } = useNotes(workspaceId);
 
-  // Load workspace members for the assignment dropdowns
+  const {
+    settings,
+    loading: settingsLoading,
+    updateSettings,
+  } = useSettings(workspaceId);
+
+  // Load workspace members
   useEffect(() => {
     if (workspaceId) {
       loadWorkspaceMembers(workspaceId).then(setMembers);
@@ -71,13 +82,42 @@ export default function WorkspaceView({
     }
   }, [workspaceId]);
 
-  // Wrapper around startTimer that also caches the task title for the indicator
+  // Auto-open the focus box when a timer starts (until user closes it or it stops)
+  useEffect(() => {
+    if (time.runningTimer && !focusOpen) {
+      // Only auto-open the very first time we see this timer
+      // (don't reopen if user closed it)
+    }
+  }, [time.runningTimer, focusOpen]);
+
+  // Wrapper around startTimer that caches the title AND opens focus box
   const startTimer = async (task) => {
     onTimerStartedForTask?.(task);
     await time.startTimer(task);
+    setFocusOpen(true);
   };
 
-  const categories = DEFAULT_CATEGORIES;
+  // Find the running task across all loaded tasks
+  const runningTask =
+    time.runningTimer && allTasks.find((t) => t.id === time.runningTimer.taskId);
+  const runningProject =
+    runningTask && projects.find((p) => p.name === runningTask.project);
+  // Find the deliverable + station the running task belongs to (if any)
+  let runningDeliverable = null;
+  let runningStation = null;
+  if (runningTask?.stationId && runningProject) {
+    for (const d of runningProject.deliverables || []) {
+      const s = (d.stations || []).find((x) => x.id === runningTask.stationId);
+      if (s) {
+        runningDeliverable = d;
+        runningStation = s;
+        break;
+      }
+    }
+  }
+
+  // All notes the focus box might display
+  const allNotes = [...personalNotes, ...teamNotes];
 
   return (
     <div style={styles.wrap}>
@@ -98,6 +138,16 @@ export default function WorkspaceView({
             {t.disabled && <span style={styles.soonBadge}>soon</span>}
           </button>
         ))}
+        {/* Open focus button when timer is running but focus box is hidden */}
+        {time.runningTimer && !focusOpen && (
+          <button
+            onClick={() => setFocusOpen(true)}
+            style={styles.openFocusBtn}
+            title="Open focus mode"
+          >
+            🎯 Focus
+          </button>
+        )}
       </div>
 
       <div style={styles.body}>
@@ -106,7 +156,9 @@ export default function WorkspaceView({
             tasks={allTasks}
             loading={tasksLoading}
             projects={projects}
-            categories={categories}
+            categories={settings.categories}
+            priorities={settings.priorities}
+            statuses={settings.statuses}
             members={members}
             workspaceId={workspaceId}
             currentUserId={time.currentUserId}
@@ -186,7 +238,34 @@ export default function WorkspaceView({
             blocks={time.blocks}
           />
         )}
+        {tab === 'settings' && (
+          <SettingsPanel
+            settings={settings}
+            loading={settingsLoading}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
+            onUpdate={updateSettings}
+          />
+        )}
       </div>
+
+      {/* Focus mode dialog */}
+      {focusOpen && time.runningTimer && (
+        <FocusBox
+          task={runningTask}
+          project={runningProject}
+          station={runningStation}
+          deliverable={runningDeliverable}
+          elapsedMs={time.elapsedMsForRunning}
+          notes={allNotes}
+          tagChecklists={settings.tagChecklists}
+          onStop={time.requestStop}
+          onUpdateTask={updateTask}
+          onUpdateProject={updateProject}
+          onAddNote={addNote}
+          onClose={() => setFocusOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -231,6 +310,17 @@ const styles = {
     background: 'var(--color-background-secondary)',
     color: 'var(--color-text-tertiary)',
     borderRadius: 8,
+  },
+  openFocusBtn: {
+    marginLeft: 'auto',
+    padding: '5px 12px',
+    background: '#FF6B3522',
+    color: '#FF6B35',
+    border: '0.5px solid #FF6B3544',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
   },
   body: { flex: 1, display: 'flex', minHeight: 0 },
 };

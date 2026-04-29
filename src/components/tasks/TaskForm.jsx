@@ -23,11 +23,15 @@ export default function TaskForm({
   initialTask,
   projects,
   categories,
+  priorities,
+  statuses,
   members,
   workspaceId,
   onSave,
   onCancel,
 }) {
+  const effectivePriorities = priorities && priorities.length ? priorities : DEFAULT_PRIORITIES;
+  const effectiveStatuses = statuses && statuses.length ? statuses : DEFAULT_STATUSES;
   const [form, setForm] = useState(blankForm);
 
   useEffect(() => {
@@ -75,7 +79,7 @@ export default function TaskForm({
           onChange={(e) => set({ priority: e.target.value })}
           style={styles.select}
         >
-          {DEFAULT_PRIORITIES.map((p) => (
+          {effectivePriorities.map((p) => (
             <option key={p}>{p}</option>
           ))}
         </select>
@@ -96,7 +100,7 @@ export default function TaskForm({
           onChange={(e) => set({ status: e.target.value })}
           style={styles.select}
         >
-          {DEFAULT_STATUSES.map((s) => (
+          {effectiveStatuses.map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
@@ -147,6 +151,23 @@ export default function TaskForm({
           </select>
         </div>
       )}
+
+      <div>
+        <label style={styles.label}>Tags <span style={{ opacity: 0.6, fontWeight: 400 }}>(comma-separated)</span></label>
+        <input
+          value={(form.tags || []).join(', ')}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const parsed = raw
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean);
+            set({ tags: parsed });
+          }}
+          placeholder="Review, Submit, …"
+          style={{ ...styles.select, width: '100%' }}
+        />
+      </div>
 
       <div style={styles.btnRow}>
         <button style={styles.primary} onClick={handleSave}>

@@ -11,12 +11,15 @@ import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
 import RunningTimerIndicator from './components/RunningTimerIndicator.jsx';
 import StopTimerDialog from './components/StopTimerDialog.jsx';
+import WorkspaceManagePopover from './components/WorkspaceManagePopover.jsx';
+import PendingInvitesBanner from './components/PendingInvitesBanner.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(true);
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspace, setActiveWorkspace] = useState(null);
+  const [managingWorkspace, setManagingWorkspace] = useState(null);
   const [runningTaskTitle, setRunningTaskTitle] = useState('');
 
   const time = useTime(activeWorkspace?.id || null);
@@ -83,12 +86,26 @@ export default function App() {
 
   return (
     <div style={appStyle}>
+      <PendingInvitesBanner
+        session={session}
+        onAccepted={async (newWsId) => {
+          // Reload workspaces and switch to the newly-accepted one
+          const list = await loadWorkspaces();
+          setWorkspaces(list);
+          const ws = list.find((w) => w.id === newWsId);
+          if (ws) {
+            setActiveWorkspace(ws);
+            setStoredActiveWorkspaceId(ws.id);
+          }
+        }}
+      />
       <TopBar
         user={session.user}
         workspaces={workspaces}
         activeWorkspace={activeWorkspace}
         onSwitchWorkspace={handleSwitch}
         onWorkspacesChanged={handleWorkspacesChanged}
+        onManageWorkspace={(ws) => setManagingWorkspace(ws)}
         timerIndicator={indicator}
       />
       <WorkspaceView
@@ -110,6 +127,12 @@ export default function App() {
             time.discardTimer();
             setRunningTaskTitle('');
           }}
+        />
+      )}
+      {managingWorkspace && (
+        <WorkspaceManagePopover
+          workspace={managingWorkspace}
+          onClose={() => setManagingWorkspace(null)}
         />
       )}
     </div>

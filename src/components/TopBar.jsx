@@ -8,6 +8,7 @@ export default function TopBar({
   activeWorkspace,
   onSwitchWorkspace,
   onWorkspacesChanged,
+  onManageWorkspace,
   timerIndicator,
 }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -54,18 +55,31 @@ export default function TopBar({
         Personal
       </button>
 
-      {workspaces.map((ws) => (
-        <button
-          key={ws.id}
-          style={{
-            ...styles.tab,
-            ...(activeWorkspace?.id === ws.id ? styles.tabActive : {}),
-          }}
-          onClick={() => onSwitchWorkspace(ws)}
-        >
-          {ws.name}
-        </button>
-      ))}
+      {workspaces.map((ws) => {
+        const isActive = activeWorkspace?.id === ws.id;
+        return (
+          <div key={ws.id} style={{ display: 'flex', alignItems: 'center' }}>
+            <button
+              style={{
+                ...styles.tab,
+                ...(isActive ? styles.tabActive : {}),
+              }}
+              onClick={() => onSwitchWorkspace(ws)}
+            >
+              {ws.name}
+            </button>
+            {isActive && (
+              <button
+                style={styles.manageBtn}
+                onClick={() => onManageWorkspace?.(ws)}
+                title="Manage members & invites"
+              >
+                👥
+              </button>
+            )}
+          </div>
+        );
+      })}
 
       <button style={styles.addWs} onClick={() => setShowCreate((v) => !v)}>
         + Team
@@ -136,6 +150,17 @@ const styles = {
     background: '#534AB711',
     color: '#534AB7',
     fontWeight: 500,
+  },
+  manageBtn: {
+    width: 28,
+    height: 28,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 14,
+    cursor: 'pointer',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 6,
+    marginLeft: 2,
   },
   addWs: {
     padding: '4px 10px',

@@ -4,6 +4,7 @@ import { useProjects } from '../hooks/useProjects.js';
 import { useNotes } from '../hooks/useNotes.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useCongresses } from '../hooks/useCongresses.js';
+import { useStatusRounds } from '../hooks/useStatusRounds.js';
 import { loadWorkspaceMembers } from '../lib/workspaces.js';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
@@ -13,11 +14,13 @@ import TimesheetPanel from './time/TimesheetPanel.jsx';
 import ExportPanel from './export/ExportPanel.jsx';
 import SettingsPanel from './settings/SettingsPanel.jsx';
 import CongressesPanel from './congresses/CongressesPanel.jsx';
+import StatusRoundsPanel from './status/StatusRoundsPanel.jsx';
 import FocusBox from './FocusBox.jsx';
 
 const TABS = [
   { key: 'tasks', label: 'Tasks' },
   { key: 'projects', label: 'Projects' },
+  { key: 'status', label: 'Status' },
   { key: 'notes', label: 'Notes' },
   { key: 'notepad', label: 'Notepad' },
   { key: 'time', label: 'Timesheet' },
@@ -83,6 +86,14 @@ export default function WorkspaceView({
     editCongress,
     removeCongress,
   } = useCongresses(workspaceId);
+
+  const {
+    rounds: statusRounds,
+    loading: statusLoading,
+    addRound,
+    editRound,
+    removeRound,
+  } = useStatusRounds(workspaceId);
 
   // Load workspace members
   useEffect(() => {
@@ -200,6 +211,21 @@ export default function WorkspaceView({
             onToggleTask={toggleDone}
             onDeleteTask={deleteTask}
             onAssignTask={assignToMember}
+          />
+        )}
+        {tab === 'status' && (
+          <StatusRoundsPanel
+            rounds={statusRounds}
+            loading={statusLoading}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
+            projects={projects}
+            tasks={allTasks}
+            currentUserId={time.currentUserId}
+            onAdd={addRound}
+            onEdit={editRound}
+            onRemove={removeRound}
+            onAddTask={addTask}
           />
         )}
         {tab === 'notes' && (

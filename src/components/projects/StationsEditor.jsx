@@ -25,7 +25,7 @@ function mkStation(name = 'New station') {
   };
 }
 
-export default function StationsEditor({ deliverable, onChange }) {
+export default function StationsEditor({ deliverable, onChange, stationTemplates }) {
   const [editingId, setEditingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [subTab, setSubTab] = useState('details'); // details | comms
@@ -61,9 +61,13 @@ export default function StationsEditor({ deliverable, onChange }) {
     updateStations(next);
   };
 
-  const seedDefaults = () => {
-    updateStations(DEFAULT_STATIONS.map((s) => mkStation(s.name)));
+  const seedDefaults = (template) => {
+    const stageNames = template?.stages?.length
+      ? template.stages
+      : DEFAULT_STATIONS.map((s) => s.name);
+    updateStations(stageNames.map((name) => mkStation(name)));
   };
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
   const toggleDone = (id) => {
     updateStations(
@@ -84,12 +88,48 @@ export default function StationsEditor({ deliverable, onChange }) {
       <div style={styles.empty}>
         <div style={styles.emptyMsg}>No stations yet.</div>
         <div style={styles.emptyActions}>
-          <button onClick={seedDefaults} style={styles.primaryBtn}>
-            Use default stages
-          </button>
-          <button onClick={() => addStation('Draft 1')} style={styles.secondaryBtn}>
-            + Add empty station
-          </button>
+          {showTemplatePicker && stationTemplates && stationTemplates.length > 1 ? (
+            <>
+              {stationTemplates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  onClick={() => {
+                    seedDefaults(tpl);
+                    setShowTemplatePicker(false);
+                  }}
+                  style={styles.primaryBtn}
+                  title={tpl.stages.join(' → ')}
+                >
+                  {tpl.name}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowTemplatePicker(false)}
+                style={styles.secondaryBtn}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  if (!stationTemplates || stationTemplates.length <= 1) {
+                    seedDefaults(stationTemplates?.[0]);
+                  } else {
+                    setShowTemplatePicker(true);
+                  }
+                }}
+                style={styles.primaryBtn}
+              >
+                Use template
+                {stationTemplates && stationTemplates.length > 1 ? ' ▾' : ''}
+              </button>
+              <button onClick={() => addStation('Draft 1')} style={styles.secondaryBtn}>
+                + Add empty station
+              </button>
+            </>
+          )}
         </div>
         <div style={styles.emptyHint}>
           Stations are the sequential stages this deliverable goes through —

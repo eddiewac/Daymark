@@ -60,6 +60,35 @@ export async function createWorkspace(name) {
   return ws;
 }
 
+// Delete a workspace and ALL its data.
+// Most tables cascade automatically via foreign keys (tasks, projects, notes,
+// time_entries, congresses, status_rounds, workspace_members, workspace_invites).
+// However, app_storage rows aren't linked by foreign key — they're keyed by
+// string like `ws:{id}:settings-v1`, so we clean those up manually first.
+export async function deleteWorkspace(workspaceId) {
+  if (!workspaceId) throw new Error('Missing workspace id');
+
+  // Clean up app_storage rows whose key starts with `ws:{workspaceId}:`
+  // (covers settings, notepad blobs, anything else keyed this way)
+  const prefix = `ws:${workspaceId}:`;
+  const { error: storageError } = await supabase
+    .from('app_storage')
+    .delete()
+    .like('key', `${prefix}%`);
+  if (storageError) {
+    console.error('deleteWorkspace app_storage cleanup:', storageError);
+    // Don't abort — the workspace delete is the more important step.
+  }
+
+  // Now delete the workspace itself. Cascade handles the rest.
+  const { error } = await supabase
+    .from('workspaces')
+    .delete()
+    .eq('id', workspaceId);
+
+  if (error) throw error;
+}
+
 const ACTIVE_WS_KEY = 'daymark-active-workspace';
 
 export function getStoredActiveWorkspaceId() {

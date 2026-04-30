@@ -9,6 +9,7 @@ export default function ProjectDetail({
   allProjects,
   tasks,
   congresses,
+  stationTemplates,
   onUpdate,
   onDelete,
   onTrack,
@@ -193,6 +194,7 @@ export default function ProjectDetail({
           <div style={styles.sectionTitle}>Deliverables</div>
           <DeliverableEditor
             deliverables={draft.deliverables || []}
+            stationTemplates={stationTemplates}
             onChange={(deliverables) => {
               const updated = { ...draft, deliverables };
               setDraft(updated);

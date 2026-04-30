@@ -32,6 +32,7 @@ export default function TrackView({
   tasks,
   members,
   workspaceId,
+  stationTemplates,
   onUpdateProject,
   onAddTask,
   onUpdateTask,
@@ -41,6 +42,7 @@ export default function TrackView({
   onClose,
 }) {
   const [focusKey, setFocusKey] = useState(null); // "delivId:stationId"
+  const [seedingForId, setSeedingForId] = useState(null); // delivId being seeded — shows the template picker
   const color = projectColor(project.name, allProjects);
   const deliverables = project.deliverables || [];
 
@@ -69,12 +71,17 @@ export default function TrackView({
     onUpdateProject(project.id, { deliverables: newDeliverables });
   };
 
-  const seedStationsFor = (delivId) => {
+  const seedStationsFor = (delivId, template) => {
+    // template can be a stationTemplates entry { name, stages } or undefined
+    // Falls back to DEFAULT_STATIONS for the very oldest data path.
+    const stageNames = template?.stages?.length
+      ? template.stages
+      : DEFAULT_STATIONS.map((s) => s.name);
     const newDeliverables = deliverables.map((d) => {
       if (d.id !== delivId) return d;
       return {
         ...d,
-        stations: DEFAULT_STATIONS.map((s) => mkStation(s.name)),
+        stations: stageNames.map((name) => mkStation(name)),
       };
     });
     onUpdateProject(project.id, { deliverables: newDeliverables });
@@ -217,12 +224,56 @@ export default function TrackView({
                   {stations.length === 0 ? (
                     <div style={styles.noStations}>
                       <span style={{ flex: 1 }}>No stations yet on this deliverable.</span>
-                      <button
-                        onClick={() => seedStationsFor(d.id)}
-                        style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
-                      >
-                        Use default stages
-                      </button>
+                      {seedingForId === d.id ? (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {(stationTemplates && stationTemplates.length > 0) ? (
+                            stationTemplates.map((tpl) => (
+                              <button
+                                key={tpl.id}
+                                onClick={() => {
+                                  seedStationsFor(d.id, tpl);
+                                  setSeedingForId(null);
+                                }}
+                                style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
+                                title={`Apply: ${tpl.stages.join(' → ')}`}
+                              >
+                                {tpl.name}
+                              </button>
+                            ))
+                          ) : (
+                            <button
+                              onClick={() => {
+                                seedStationsFor(d.id);
+                                setSeedingForId(null);
+                              }}
+                              style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
+                            >
+                              Standard
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSeedingForId(null)}
+                            style={styles.inlineAddBtn}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            // If only one template, apply it directly. Otherwise show the picker.
+                            if (!stationTemplates || stationTemplates.length <= 1) {
+                              seedStationsFor(d.id, stationTemplates?.[0]);
+                            } else {
+                              setSeedingForId(d.id);
+                            }
+                          }}
+                          style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
+                        >
+                          Use template
+                          {stationTemplates && stationTemplates.length > 1 ? ' ▾' : ''}
+                        </button>
+                      )}
                       <button
                         onClick={() => addStationTo(d.id)}
                         style={styles.inlineAddBtn}

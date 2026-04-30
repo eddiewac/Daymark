@@ -133,6 +133,16 @@ export default function App() {
         <WorkspaceManagePopover
           workspace={managingWorkspace}
           onClose={() => setManagingWorkspace(null)}
+          onDeleted={async (deletedId) => {
+            // Reload the workspace list and switch to Personal
+            const list = await loadWorkspaces();
+            setWorkspaces(list);
+            if (activeWorkspace?.id === deletedId) {
+              setActiveWorkspace(null);
+              setStoredActiveWorkspaceId(null);
+            }
+            setManagingWorkspace(null);
+          }}
         />
       )}
     </div>

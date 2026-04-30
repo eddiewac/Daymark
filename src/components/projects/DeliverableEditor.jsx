@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { uid } from '../../lib/utils.js';
 import StationsEditor from './StationsEditor.jsx';
 
-export default function DeliverableEditor({ deliverables, onChange }) {
+export default function DeliverableEditor({ deliverables, onChange, stationTemplates }) {
   const [editingId, setEditingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
@@ -135,7 +135,7 @@ export default function DeliverableEditor({ deliverables, onChange }) {
 
             {isExpanded && (
               <div style={styles.delivBody}>
-                <StationsEditor deliverable={d} onChange={updateDeliverable} />
+                <StationsEditor deliverable={d} onChange={updateDeliverable} stationTemplates={stationTemplates} />
               </div>
             )}
           </div>

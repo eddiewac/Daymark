@@ -4,9 +4,9 @@ import {
   loadInvitesForWorkspace,
   revokeInvite,
 } from '../lib/invites.js';
-import { loadWorkspaceMembers } from '../lib/workspaces.js';
+import { loadWorkspaceMembers, deleteWorkspace } from '../lib/workspaces.js';
 
-export default function WorkspaceManagePopover({ workspace, onClose }) {
+export default function WorkspaceManagePopover({ workspace, onClose, onDeleted }) {
   const [members, setMembers] = useState([]);
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +14,9 @@ export default function WorkspaceManagePopover({ workspace, onClose }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [showDanger, setShowDanger] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const flash = (text, kind = 'msg') => {
     if (kind === 'err') {
@@ -62,6 +65,23 @@ export default function WorkspaceManagePopover({ workspace, onClose }) {
   const handleRevoke = async (inviteId) => {
     await revokeInvite(inviteId);
     refresh();
+  };
+
+  const handleDelete = async () => {
+    if (deleteConfirmName !== workspace.name) {
+      setErr('Type the workspace name exactly to confirm.');
+      return;
+    }
+    setDeleting(true);
+    setErr('');
+    try {
+      await deleteWorkspace(workspace.id);
+      onDeleted?.(workspace.id);
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'Could not delete workspace.');
+      setDeleting(false);
+    }
   };
 
   return (
@@ -147,6 +167,64 @@ export default function WorkspaceManagePopover({ workspace, onClose }) {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        {/* Danger zone */}
+        <section style={dangerStyles.section}>
+          {!showDanger ? (
+            <button
+              onClick={() => setShowDanger(true)}
+              style={dangerStyles.toggleBtn}
+            >
+              Show danger zone
+            </button>
+          ) : (
+            <div>
+              <div style={dangerStyles.title}>Delete this workspace</div>
+              <div style={dangerStyles.warning}>
+                This permanently deletes the workspace and all its data:
+                tasks, projects, notes, time entries, congresses, settings,
+                status rounds, and all member access. This cannot be undone.
+              </div>
+              <div style={dangerStyles.confirmRow}>
+                <input
+                  value={deleteConfirmName}
+                  onChange={(e) => setDeleteConfirmName(e.target.value)}
+                  placeholder={`Type "${workspace.name}" to confirm`}
+                  style={dangerStyles.input}
+                  disabled={deleting}
+                />
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting || deleteConfirmName !== workspace.name}
+                  style={{
+                    ...dangerStyles.deleteBtn,
+                    opacity:
+                      deleting || deleteConfirmName !== workspace.name
+                        ? 0.4
+                        : 1,
+                    cursor:
+                      deleting || deleteConfirmName !== workspace.name
+                        ? 'not-allowed'
+                        : 'pointer',
+                  }}
+                >
+                  {deleting ? 'Deleting…' : 'Delete forever'}
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDanger(false);
+                  setDeleteConfirmName('');
+                  setErr('');
+                }}
+                style={dangerStyles.cancelLink}
+                disabled={deleting}
+              >
+                Hide
+              </button>
             </div>
           )}
         </section>
@@ -290,5 +368,66 @@ const styles = {
     fontSize: 11,
     color: 'var(--color-text-secondary)',
     textAlign: 'center',
+  },
+};
+
+const dangerStyles = {
+  section: {
+    background: '#e24b4a08',
+    borderRadius: 8,
+    padding: 12,
+    border: '0.5px solid #e24b4a44',
+  },
+  toggleBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: '#e24b4a',
+    fontSize: 11,
+    cursor: 'pointer',
+    padding: 0,
+    textDecoration: 'underline',
+  },
+  title: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#e24b4a',
+    marginBottom: 6,
+  },
+  warning: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    lineHeight: 1.5,
+    marginBottom: 10,
+  },
+  confirmRow: {
+    display: 'flex',
+    gap: 6,
+    marginBottom: 6,
+  },
+  input: {
+    flex: 1,
+    padding: '6px 10px',
+    border: '0.5px solid #e24b4a55',
+    borderRadius: 6,
+    fontSize: 12,
+    background: '#fff',
+    outline: 'none',
+  },
+  deleteBtn: {
+    padding: '6px 14px',
+    background: '#e24b4a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 500,
+  },
+  cancelLink: {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--color-text-secondary)',
+    fontSize: 10,
+    cursor: 'pointer',
+    padding: 0,
   },
 };

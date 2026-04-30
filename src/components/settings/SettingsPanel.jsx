@@ -66,12 +66,9 @@ export default function SettingsPanel({
               placeholder="Add a status…"
             />
 
-            <ListEditor
-              title="Default review stages"
-              hint='Used when you click "Use default stages" on a deliverable.'
-              items={settings.reviewStages}
-              onChange={(items) => onUpdate({ reviewStages: items })}
-              placeholder="Add a review stage…"
+            <StationTemplatesEditor
+              templates={settings.stationTemplates || []}
+              onChange={(stationTemplates) => onUpdate({ stationTemplates })}
             />
 
             <TagChecklistEditor
@@ -181,6 +178,252 @@ function ListEditor({ title, hint, items, onChange, placeholder }) {
         </button>
       </div>
     </section>
+  );
+}
+
+// ── StationTemplatesEditor: named templates of stages ─────────────────────
+function StationTemplatesEditor({ templates, onChange }) {
+  const [newName, setNewName] = useState('');
+
+  const addTemplate = () => {
+    const n = newName.trim();
+    if (!n) return;
+    if (templates.some((t) => t.name === n)) {
+      setNewName('');
+      return;
+    }
+    onChange([
+      ...templates,
+      {
+        id: 'tpl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        name: n,
+        stages: ['Draft', 'Review', 'Final'],
+      },
+    ]);
+    setNewName('');
+  };
+
+  const removeTemplate = (id) => {
+    onChange(templates.filter((t) => t.id !== id));
+  };
+
+  const renameTemplate = (id, name) => {
+    onChange(templates.map((t) => (t.id === id ? { ...t, name } : t)));
+  };
+
+  const updateStages = (id, stages) => {
+    onChange(templates.map((t) => (t.id === id ? { ...t, stages } : t)));
+  };
+
+  const moveTemplate = (idx, dir) => {
+    const newIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= templates.length) return;
+    const next = [...templates];
+    [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+    onChange(next);
+  };
+
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionTitle}>Station templates</div>
+      <div style={styles.sectionHint}>
+        Pre-built sets of stages for different deliverable types (e.g. a
+        slide-deck flow vs a manuscript flow). When creating a deliverable
+        in the Track view, you can pick which template to apply.
+      </div>
+
+      {templates.length === 0 && (
+        <div style={styles.empty}>
+          No templates yet. Add one below.
+        </div>
+      )}
+
+      <div style={styles.tagList}>
+        {templates.map((tpl, i) => (
+          <StationTemplateRow
+            key={tpl.id}
+            template={tpl}
+            isFirst={i === 0}
+            isLast={i === templates.length - 1}
+            onMoveUp={() => moveTemplate(i, 'up')}
+            onMoveDown={() => moveTemplate(i, 'down')}
+            onRename={(name) => renameTemplate(tpl.id, name)}
+            onUpdateStages={(stages) => updateStages(tpl.id, stages)}
+            onRemove={() => removeTemplate(tpl.id)}
+          />
+        ))}
+      </div>
+
+      <div style={styles.addRow}>
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addTemplate()}
+          placeholder='Template name (e.g. "Slide deck")…'
+          style={styles.addInput}
+        />
+        <button
+          onClick={addTemplate}
+          disabled={!newName.trim()}
+          style={{
+            ...styles.addBtn,
+            opacity: newName.trim() ? 1 : 0.4,
+            cursor: newName.trim() ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Add template
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function StationTemplateRow({
+  template,
+  isFirst,
+  isLast,
+  onMoveUp,
+  onMoveDown,
+  onRename,
+  onUpdateStages,
+  onRemove,
+}) {
+  const [name, setName] = useState(template.name);
+  const [draftStage, setDraftStage] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const addStage = () => {
+    const v = draftStage.trim();
+    if (!v) return;
+    onUpdateStages([...template.stages, v]);
+    setDraftStage('');
+  };
+
+  const removeStage = (i) =>
+    onUpdateStages(template.stages.filter((_, x) => x !== i));
+
+  const renameStage = (i, val) => {
+    const next = [...template.stages];
+    next[i] = val;
+    onUpdateStages(next);
+  };
+
+  const moveStage = (i, dir) => {
+    const newIdx = dir === 'up' ? i - 1 : i + 1;
+    if (newIdx < 0 || newIdx >= template.stages.length) return;
+    const next = [...template.stages];
+    [next[i], next[newIdx]] = [next[newIdx], next[i]];
+    onUpdateStages(next);
+  };
+
+  return (
+    <div style={styles.tagBlock}>
+      <div style={styles.tagHeader}>
+        <button
+          onClick={onMoveUp}
+          disabled={isFirst}
+          style={{ ...styles.iconBtn, opacity: isFirst ? 0.3 : 1 }}
+          title="Move up"
+        >
+          ↑
+        </button>
+        <button
+          onClick={onMoveDown}
+          disabled={isLast}
+          style={{ ...styles.iconBtn, opacity: isLast ? 0.3 : 1 }}
+          title="Move down"
+        >
+          ↓
+        </button>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => name !== template.name && onRename(name)}
+          style={styles.tagInput}
+        />
+        {!confirmRemove ? (
+          <button
+            onClick={() => setConfirmRemove(true)}
+            style={styles.removeTagBtn}
+            title="Remove template"
+          >
+            🗑
+          </button>
+        ) : (
+          <>
+            <button onClick={onRemove} style={styles.confirmRemove}>
+              Delete
+            </button>
+            <button
+              onClick={() => setConfirmRemove(false)}
+              style={styles.cancelSmall}
+            >
+              ×
+            </button>
+          </>
+        )}
+      </div>
+
+      <div style={styles.tagItems}>
+        {template.stages.length === 0 && (
+          <div style={styles.empty}>No stages defined.</div>
+        )}
+        {template.stages.map((stage, i) => (
+          <div key={i} style={styles.row}>
+            <button
+              onClick={() => moveStage(i, 'up')}
+              disabled={i === 0}
+              style={{ ...styles.iconBtn, opacity: i === 0 ? 0.3 : 1 }}
+            >
+              ↑
+            </button>
+            <button
+              onClick={() => moveStage(i, 'down')}
+              disabled={i === template.stages.length - 1}
+              style={{
+                ...styles.iconBtn,
+                opacity: i === template.stages.length - 1 ? 0.3 : 1,
+              }}
+            >
+              ↓
+            </button>
+            <input
+              value={stage}
+              onChange={(e) => renameStage(i, e.target.value)}
+              style={styles.itemInput}
+            />
+            <button
+              onClick={() => removeStage(i)}
+              style={styles.removeBtn}
+              title="Remove"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={styles.addRow}>
+        <input
+          value={draftStage}
+          onChange={(e) => setDraftStage(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addStage()}
+          placeholder="Add stage…"
+          style={styles.addInput}
+        />
+        <button
+          onClick={addStage}
+          disabled={!draftStage.trim()}
+          style={{
+            ...styles.addBtn,
+            opacity: draftStage.trim() ? 1 : 0.4,
+            cursor: draftStage.trim() ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Add
+        </button>
+      </div>
+    </div>
   );
 }
 

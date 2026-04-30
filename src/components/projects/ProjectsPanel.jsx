@@ -11,6 +11,7 @@ export default function ProjectsPanel({
   congresses,
   members,
   workspaceId,
+  stationTemplates,
   onAdd,
   onUpdate,
   onDelete,
@@ -56,6 +57,7 @@ export default function ProjectsPanel({
         tasks={tasks}
         members={members}
         workspaceId={workspaceId}
+        stationTemplates={stationTemplates}
         onUpdateProject={onUpdate}
         onAddTask={onAddTask}
         onUpdateTask={onUpdateTask}
@@ -166,6 +168,7 @@ export default function ProjectsPanel({
               allProjects={projects}
               tasks={tasks}
               congresses={congresses}
+              stationTemplates={stationTemplates}
               onUpdate={onUpdate}
               onDelete={onDelete}
               onTrack={() => {

@@ -11,11 +11,11 @@ export default function GoalsFloatingButton({
   const [flash, setFlash] = useState('');
   const popoverRef = useRef(null);
 
-  // Don't show if no active goals
   const activeGoals = (goals || []).filter((g) => !g.archived);
-  if (activeGoals.length === 0) return null;
 
-  // Default to first goal when popover opens
+  // Default to first goal when popover opens.
+  // Note: hooks must run unconditionally (before any early returns), so we
+  // guard with the activeGoals check inside the effect body.
   useEffect(() => {
     if (open && !pickedGoalId && activeGoals.length > 0) {
       setPickedGoalId(activeGoals[0].id);
@@ -30,9 +30,15 @@ export default function GoalsFloatingButton({
         setOpen(false);
       }
     };
-    setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    return () => document.removeEventListener('mousedown', handler);
+    const t = setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('mousedown', handler);
+    };
   }, [open]);
+
+  // Don't render anything if there are no active goals
+  if (activeGoals.length === 0) return null;
 
   const submit = async () => {
     if (!draft.trim() || !pickedGoalId) return;

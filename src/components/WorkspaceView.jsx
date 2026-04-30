@@ -11,6 +11,7 @@ import ProjectsPanel from './projects/ProjectsPanel.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
 import Notepad from './notes/Notepad.jsx';
 import TimesheetPanel from './time/TimesheetPanel.jsx';
+import PlanPanel from './plan/PlanPanel.jsx';
 import ExportPanel from './export/ExportPanel.jsx';
 import SettingsPanel from './settings/SettingsPanel.jsx';
 import CongressesPanel from './congresses/CongressesPanel.jsx';
@@ -19,6 +20,7 @@ import FocusBox from './FocusBox.jsx';
 
 const TABS = [
   { key: 'tasks', label: 'Tasks' },
+  { key: 'plan', label: 'Plan' },
   { key: 'projects', label: 'Projects' },
   { key: 'status', label: 'Status' },
   { key: 'notes', label: 'Notes' },
@@ -195,6 +197,15 @@ export default function WorkspaceView({
             onStopTimer={time.requestStop}
           />
         )}
+        {tab === 'plan' && (
+          <PlanPanel
+            tasks={allTasks}
+            projects={projects}
+            loading={tasksLoading}
+            onUpdateTask={updateTask}
+            onToggleDone={toggleDone}
+          />
+        )}
         {tab === 'projects' && (
           <ProjectsPanel
             projects={projects}
@@ -203,6 +214,7 @@ export default function WorkspaceView({
             congresses={congresses}
             members={members}
             workspaceId={workspaceId}
+            stationTemplates={settings.stationTemplates || []}
             onAdd={addProject}
             onUpdate={updateProject}
             onDelete={deleteProject}
@@ -273,6 +285,8 @@ export default function WorkspaceView({
             tasks={allTasks}
             projects={projects}
             blocks={time.blocks}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
           />
         )}
         {tab === 'settings' && (

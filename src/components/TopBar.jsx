@@ -9,6 +9,7 @@ export default function TopBar({
   onSwitchWorkspace,
   onWorkspacesChanged,
   onManageWorkspace,
+  onOpenGoals,
   timerIndicator,
 }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -105,6 +106,10 @@ export default function TopBar({
 
       {timerIndicator}
 
+      <button onClick={onOpenGoals} style={styles.goalsBtn} title="Personal goals">
+        🎯 Goals
+      </button>
+
       <div style={{ position: 'relative' }}>
         <button onClick={() => setShowMenu((v) => !v)} style={styles.userBtn}>
           {user?.email}
@@ -169,6 +174,16 @@ const styles = {
     border: '0.5px dashed var(--color-border-primary)',
     borderRadius: 8,
     color: 'var(--color-text-secondary)',
+  },
+  goalsBtn: {
+    padding: '5px 12px',
+    fontSize: 11,
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 8,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+    marginRight: 8,
   },
   createPopover: {
     position: 'absolute',

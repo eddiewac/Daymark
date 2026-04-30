@@ -6,6 +6,7 @@ import {
   setStoredActiveWorkspaceId,
 } from './lib/workspaces.js';
 import { useTime } from './hooks/useTime.js';
+import { useGoals } from './hooks/useGoals.js';
 import Auth from './components/Auth.jsx';
 import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
@@ -13,6 +14,8 @@ import RunningTimerIndicator from './components/RunningTimerIndicator.jsx';
 import StopTimerDialog from './components/StopTimerDialog.jsx';
 import WorkspaceManagePopover from './components/WorkspaceManagePopover.jsx';
 import PendingInvitesBanner from './components/PendingInvitesBanner.jsx';
+import GoalsModal from './components/goals/GoalsModal.jsx';
+import GoalsFloatingButton from './components/goals/GoalsFloatingButton.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -21,8 +24,10 @@ export default function App() {
   const [activeWorkspace, setActiveWorkspace] = useState(null);
   const [managingWorkspace, setManagingWorkspace] = useState(null);
   const [runningTaskTitle, setRunningTaskTitle] = useState('');
+  const [goalsOpen, setGoalsOpen] = useState(false);
 
   const time = useTime(activeWorkspace?.id || null);
+  const goalsApi = useGoals();
 
   useEffect(() => {
     let mounted = true;
@@ -106,6 +111,7 @@ export default function App() {
         onSwitchWorkspace={handleSwitch}
         onWorkspacesChanged={handleWorkspacesChanged}
         onManageWorkspace={(ws) => setManagingWorkspace(ws)}
+        onOpenGoals={() => setGoalsOpen(true)}
         timerIndicator={indicator}
       />
       <WorkspaceView
@@ -143,6 +149,26 @@ export default function App() {
             }
             setManagingWorkspace(null);
           }}
+        />
+      )}
+
+      {/* Goals: floating quick-evidence button + management modal */}
+      <GoalsFloatingButton
+        goals={goalsApi.goals}
+        onAddEvidence={goalsApi.addEvidence}
+        onOpenManager={() => setGoalsOpen(true)}
+      />
+      {goalsOpen && (
+        <GoalsModal
+          goals={goalsApi.goals}
+          loading={goalsApi.loading}
+          onAddGoal={goalsApi.addGoal}
+          onUpdateGoal={goalsApi.updateGoal}
+          onRemoveGoal={goalsApi.removeGoal}
+          onAddEvidence={goalsApi.addEvidence}
+          onUpdateEvidence={goalsApi.updateEvidence}
+          onRemoveEvidence={goalsApi.removeEvidence}
+          onClose={() => setGoalsOpen(false)}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { localDateStr, todayStr } from '../../lib/utils.js';
+import { describeImport, importLegacyJson } from '../../lib/legacyImport.js';
 
 // ── Column definitions ─────────────────────────────────────────────────────
 // Each "static" column maps to a string value computed per row.
@@ -50,7 +51,7 @@ function addDays(d, n) {
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export default function ExportPanel({ tasks, projects, blocks }) {
+export default function ExportPanel({ tasks, projects, blocks, workspaceId, workspaceName }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);
   const [showColumns, setShowColumns] = useState(false);
@@ -408,8 +409,197 @@ export default function ExportPanel({ tasks, projects, blocks }) {
             />
           </section>
         )}
+
+        <ImportSection
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+        />
       </div>
     </div>
+  );
+}
+
+// ── ImportSection: restore from legacy JSON ────────────────────────────────
+function ImportSection({ workspaceId, workspaceName }) {
+  const [parsed, setParsed] = useState(null);
+  const [filename, setFilename] = useState('');
+  const [parseError, setParseError] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [done, setDone] = useState(null); // { imported, errors }
+  const fileRef = useRef(null);
+
+  const reset = () => {
+    setParsed(null);
+    setFilename('');
+    setParseError('');
+    setDone(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFilename(f.name);
+    setParseError('');
+    setParsed(null);
+    setDone(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        setParsed(data);
+      } catch {
+        setParseError('Could not parse JSON. Make sure the file is a valid Daymark export.');
+      }
+    };
+    reader.onerror = () => setParseError('Could not read file.');
+    reader.readAsText(f);
+  };
+
+  const handleImport = async () => {
+    if (!parsed) return;
+    setImporting(true);
+    try {
+      const result = await importLegacyJson(parsed, workspaceId);
+      setDone(result);
+    } catch (e) {
+      setDone({
+        imported: {},
+        errors: [e.message || 'Import failed'],
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const reloadPage = () => {
+    window.location.reload();
+  };
+
+  const summary = parsed ? describeImport(parsed) : null;
+
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionTitle}>Restore from legacy JSON</div>
+      <div style={styles.sectionSub}>
+        Import data from a legacy Daymark export. <strong>This replaces all
+        tasks, projects, and notes in {workspaceName || 'this workspace'}</strong>{' '}
+        with the contents of the file. Goals are imported as personal data.
+        Time entries are not imported (the format changed).
+      </div>
+
+      {!parsed && !done && (
+        <div style={importStyles.fileRow}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json"
+            onChange={handleFile}
+            style={importStyles.fileInput}
+          />
+          {parseError && (
+            <div style={importStyles.error}>{parseError}</div>
+          )}
+        </div>
+      )}
+
+      {parsed && !done && (
+        <div style={importStyles.preview}>
+          <div style={importStyles.previewTitle}>
+            From {filename}:
+          </div>
+          <ul style={importStyles.list}>
+            {summary.counts.tasks > 0 && (
+              <li>{summary.counts.tasks} tasks</li>
+            )}
+            {summary.counts.projects > 0 && (
+              <li>{summary.counts.projects} projects</li>
+            )}
+            {summary.counts.notes > 0 && (
+              <li>{summary.counts.notes} notes</li>
+            )}
+            {summary.counts.categories > 0 && (
+              <li>{summary.counts.categories} categories (settings)</li>
+            )}
+            {summary.counts.priorities > 0 && (
+              <li>{summary.counts.priorities} priorities (settings)</li>
+            )}
+            {summary.counts.tagChecklists > 0 && (
+              <li>{summary.counts.tagChecklists} tag checklists (settings)</li>
+            )}
+            {summary.counts.objectives > 0 && (
+              <li>{summary.counts.objectives} goals (personal)</li>
+            )}
+          </ul>
+          {summary.skipped.length > 0 && (
+            <div style={importStyles.skipped}>
+              <strong>Skipped:</strong>
+              <ul style={importStyles.list}>
+                {summary.skipped.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div style={importStyles.warning}>
+            ⚠ This will replace existing tasks, projects, and notes in{' '}
+            <strong>{workspaceName || 'this workspace'}</strong>. This cannot be undone.
+          </div>
+          <div style={importStyles.btnRow}>
+            <button onClick={reset} style={importStyles.cancelBtn} disabled={importing}>
+              Cancel
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={importing}
+              style={{
+                ...importStyles.confirmBtn,
+                opacity: importing ? 0.5 : 1,
+                cursor: importing ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {importing ? 'Importing…' : 'Replace and import'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {done && (
+        <div style={importStyles.result}>
+          <div style={importStyles.resultTitle}>Import complete</div>
+          <ul style={importStyles.list}>
+            {Object.entries(done.imported || {}).map(([k, n]) =>
+              n > 0 ? (
+                <li key={k}>
+                  ✓ {n} {k}
+                </li>
+              ) : null
+            )}
+          </ul>
+          {(done.errors || []).length > 0 && (
+            <div style={importStyles.errorBlock}>
+              <strong>Errors ({done.errors.length}):</strong>
+              <ul style={importStyles.list}>
+                {done.errors.slice(0, 5).map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+                {done.errors.length > 5 && (
+                  <li>...and {done.errors.length - 5} more</li>
+                )}
+              </ul>
+            </div>
+          )}
+          <div style={importStyles.btnRow}>
+            <button onClick={reset} style={importStyles.cancelBtn}>
+              Import another file
+            </button>
+            <button onClick={reloadPage} style={importStyles.confirmBtn}>
+              Reload to see changes
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -632,5 +822,106 @@ const styles = {
     resize: 'vertical',
     background: '#fff',
     outline: 'none',
+  },
+};
+
+const importStyles = {
+  fileRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  fileInput: {
+    padding: '8px',
+    border: '0.5px dashed var(--color-border-primary)',
+    borderRadius: 6,
+    background: '#fff',
+    fontSize: 12,
+  },
+  error: {
+    color: '#e24b4a',
+    fontSize: 11,
+    fontWeight: 500,
+  },
+  preview: {
+    background: '#fff',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 8,
+    padding: 12,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  previewTitle: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: 'var(--color-text-secondary)',
+  },
+  list: {
+    margin: 0,
+    paddingLeft: 18,
+    fontSize: 11,
+    color: 'var(--color-text-primary)',
+    lineHeight: 1.6,
+  },
+  skipped: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    background: 'var(--color-background-secondary)',
+    padding: 8,
+    borderRadius: 6,
+  },
+  warning: {
+    padding: 8,
+    background: '#e24b4a11',
+    border: '0.5px solid #e24b4a44',
+    borderRadius: 6,
+    fontSize: 11,
+    color: '#e24b4a',
+    lineHeight: 1.5,
+  },
+  btnRow: {
+    display: 'flex',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  cancelBtn: {
+    padding: '6px 12px',
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 6,
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+  confirmBtn: {
+    padding: '6px 14px',
+    background: '#e24b4a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 500,
+  },
+  result: {
+    background: '#1d9e7511',
+    border: '0.5px solid #1d9e7544',
+    borderRadius: 8,
+    padding: 12,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  resultTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#1d9e75',
+  },
+  errorBlock: {
+    background: '#e24b4a11',
+    padding: 8,
+    borderRadius: 6,
+    fontSize: 11,
+    color: '#e24b4a',
   },
 };

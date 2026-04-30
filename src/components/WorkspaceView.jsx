@@ -5,6 +5,8 @@ import { useNotes } from '../hooks/useNotes.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useCongresses } from '../hooks/useCongresses.js';
 import { useStatusRounds } from '../hooks/useStatusRounds.js';
+import { usePriority } from '../hooks/usePriority.js';
+import { useUserPrefs } from '../hooks/useUserPrefs.js';
 import { loadWorkspaceMembers } from '../lib/workspaces.js';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
@@ -16,6 +18,8 @@ import ExportPanel from './export/ExportPanel.jsx';
 import SettingsPanel from './settings/SettingsPanel.jsx';
 import CongressesPanel from './congresses/CongressesPanel.jsx';
 import StatusRoundsPanel from './status/StatusRoundsPanel.jsx';
+import PriorityBanner from './priority/PriorityBanner.jsx';
+import PriorityModal from './priority/PriorityModal.jsx';
 import FocusBox from './FocusBox.jsx';
 
 const TABS = [
@@ -97,6 +101,12 @@ export default function WorkspaceView({
     removeRound,
   } = useStatusRounds(workspaceId);
 
+  const priorityApi = usePriority(workspaceId);
+  const { prefs: userPrefs, updatePrefs: updateUserPrefs } = useUserPrefs();
+
+  // Modal state for setting today's priority
+  const [priorityModalOpen, setPriorityModalOpen] = useState(false);
+
   // Load workspace members
   useEffect(() => {
     if (workspaceId) {
@@ -176,26 +186,38 @@ export default function WorkspaceView({
 
       <div style={styles.body}>
         {tab === 'tasks' && (
-          <TaskList
-            tasks={allTasks}
-            loading={tasksLoading}
-            projects={projects}
-            categories={settings.categories}
-            priorities={settings.priorities}
-            statuses={settings.statuses}
-            members={members}
-            workspaceId={workspaceId}
-            currentUserId={time.currentUserId}
-            runningTimer={time.runningTimer}
-            onAdd={addTask}
-            onUpdate={updateTask}
-            onDelete={deleteTask}
-            onToggleDone={toggleDone}
-            onAssign={assignToMember}
-            onUnassign={unassignFromMember}
-            onStartTimer={startTimer}
-            onStopTimer={time.requestStop}
-          />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <PriorityBanner
+              todayPriority={priorityApi.today}
+              bannerEnabled={userPrefs.showPriorityBanner}
+              tasks={allTasks}
+              projects={projects}
+              onOpenModal={() => setPriorityModalOpen(true)}
+              onDismiss={priorityApi.dismissToday}
+              onClear={priorityApi.clearToday}
+              onToggleDone={toggleDone}
+            />
+            <TaskList
+              tasks={allTasks}
+              loading={tasksLoading}
+              projects={projects}
+              categories={settings.categories}
+              priorities={settings.priorities}
+              statuses={settings.statuses}
+              members={members}
+              workspaceId={workspaceId}
+              currentUserId={time.currentUserId}
+              runningTimer={time.runningTimer}
+              onAdd={addTask}
+              onUpdate={updateTask}
+              onDelete={deleteTask}
+              onToggleDone={toggleDone}
+              onAssign={assignToMember}
+              onUnassign={unassignFromMember}
+              onStartTimer={startTimer}
+              onStopTimer={time.requestStop}
+            />
+          </div>
         )}
         {tab === 'plan' && (
           <PlanPanel
@@ -297,6 +319,8 @@ export default function WorkspaceView({
             workspaceName={workspaceName}
             savedAt={settingsSavedAt}
             onUpdate={updateSettings}
+            userPrefs={userPrefs}
+            onUpdateUserPrefs={updateUserPrefs}
           />
         )}
         {tab === 'congresses' && (
@@ -327,6 +351,17 @@ export default function WorkspaceView({
           onUpdateProject={updateProject}
           onAddNote={addNote}
           onClose={() => setFocusOpen(false)}
+        />
+      )}
+
+      {/* Today's priority modal */}
+      {priorityModalOpen && (
+        <PriorityModal
+          tasks={allTasks}
+          projects={projects}
+          current={priorityApi.today}
+          onSave={priorityApi.setTodayPriority}
+          onClose={() => setPriorityModalOpen(false)}
         />
       )}
     </div>

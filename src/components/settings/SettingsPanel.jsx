@@ -16,6 +16,8 @@ export default function SettingsPanel({
   workspaceName,
   savedAt,
   onUpdate,
+  userPrefs,
+  onUpdateUserPrefs,
 }) {
   return (
     <div style={styles.wrap}>
@@ -75,12 +77,65 @@ export default function SettingsPanel({
               checklists={settings.tagChecklists}
               onChange={(tagChecklists) => onUpdate({ tagChecklists })}
             />
+
+            {/* User preferences — these apply across all workspaces */}
+            {userPrefs && onUpdateUserPrefs && (
+              <section style={styles.section}>
+                <div style={styles.sectionTitle}>Daily triage</div>
+                <div style={styles.sectionHint}>
+                  These settings are personal — they apply across all your
+                  workspaces.
+                </div>
+                <label style={prefsToggleStyles.row}>
+                  <input
+                    type="checkbox"
+                    checked={!!userPrefs.showPriorityBanner}
+                    onChange={(e) =>
+                      onUpdateUserPrefs({ showPriorityBanner: e.target.checked })
+                    }
+                  />
+                  <div>
+                    <div style={prefsToggleStyles.label}>
+                      Show "today's priority" banner each morning
+                    </div>
+                    <div style={prefsToggleStyles.hint}>
+                      Reminds you to pick the one task you want done today.
+                      Turn off to use the manual button only.
+                    </div>
+                  </div>
+                </label>
+              </section>
+            )}
           </>
         )}
       </div>
     </div>
   );
 }
+
+const prefsToggleStyles = {
+  row: {
+    display: 'flex',
+    gap: 10,
+    alignItems: 'flex-start',
+    padding: 10,
+    background: '#fff',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 8,
+    cursor: 'pointer',
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: 'var(--color-text-primary)',
+  },
+  hint: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    marginTop: 3,
+    lineHeight: 1.5,
+  },
+};
 
 // ── ListEditor: simple ordered text-list editor (categories, priorities, etc) ──
 function ListEditor({ title, hint, items, onChange, placeholder }) {

@@ -3,6 +3,7 @@ import { useTasks } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useNotes } from '../hooks/useNotes.js';
 import { useSettings } from '../hooks/useSettings.js';
+import { useCongresses } from '../hooks/useCongresses.js';
 import { loadWorkspaceMembers } from '../lib/workspaces.js';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
@@ -11,6 +12,7 @@ import Notepad from './notes/Notepad.jsx';
 import TimesheetPanel from './time/TimesheetPanel.jsx';
 import ExportPanel from './export/ExportPanel.jsx';
 import SettingsPanel from './settings/SettingsPanel.jsx';
+import CongressesPanel from './congresses/CongressesPanel.jsx';
 import FocusBox from './FocusBox.jsx';
 
 const TABS = [
@@ -20,7 +22,7 @@ const TABS = [
   { key: 'notepad', label: 'Notepad' },
   { key: 'time', label: 'Timesheet' },
   { key: 'export', label: 'Export' },
-  { key: 'congresses', label: 'Congresses', disabled: true },
+  { key: 'congresses', label: 'Congresses' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -73,6 +75,14 @@ export default function WorkspaceView({
     updateSettings,
     savedAt: settingsSavedAt,
   } = useSettings(workspaceId);
+
+  const {
+    congresses,
+    loading: congressesLoading,
+    addCongress,
+    editCongress,
+    removeCongress,
+  } = useCongresses(workspaceId);
 
   // Load workspace members
   useEffect(() => {
@@ -179,7 +189,7 @@ export default function WorkspaceView({
             projects={projects}
             loading={projectsLoading}
             tasks={allTasks}
-            congresses={[]}
+            congresses={congresses}
             members={members}
             workspaceId={workspaceId}
             onAdd={addProject}
@@ -247,6 +257,17 @@ export default function WorkspaceView({
             workspaceName={workspaceName}
             savedAt={settingsSavedAt}
             onUpdate={updateSettings}
+          />
+        )}
+        {tab === 'congresses' && (
+          <CongressesPanel
+            congresses={congresses}
+            loading={congressesLoading}
+            workspaceId={workspaceId}
+            workspaceName={workspaceName}
+            onAdd={addCongress}
+            onEdit={editCongress}
+            onRemove={removeCongress}
           />
         )}
       </div>

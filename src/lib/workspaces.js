@@ -6,7 +6,9 @@ export async function loadWorkspaces() {
 
   const { data, error } = await supabase
     .from('workspace_members')
-    .select('workspace_id, workspaces(id, name, paid, trial_ends_at)')
+    .select(
+      'workspace_id, workspaces(id, name, paid, owner_id, trial_started_at, trial_ends_at, subscription_status, stripe_customer_id, stripe_subscription_id)'
+    )
     .eq('user_id', user.id);
 
   if (error || !data) return [];
@@ -17,7 +19,12 @@ export async function loadWorkspaces() {
       id: d.workspaces.id,
       name: d.workspaces.name,
       paid: d.workspaces.paid,
+      ownerId: d.workspaces.owner_id,
+      trialStartedAt: d.workspaces.trial_started_at,
       trialEndsAt: d.workspaces.trial_ends_at,
+      subscriptionStatus: d.workspaces.subscription_status,
+      stripeCustomerId: d.workspaces.stripe_customer_id,
+      stripeSubscriptionId: d.workspaces.stripe_subscription_id,
     }));
 }
 

@@ -5,6 +5,15 @@ import {
   revokeInvite,
 } from '../lib/invites.js';
 import { loadWorkspaceMembers, deleteWorkspace } from '../lib/workspaces.js';
+import {
+  workspaceState,
+  daysLeftInTrial,
+  isWorkspaceOwner,
+  billingEnforced,
+  WORKSPACE_PRICE_USD,
+  TRIAL_DAYS,
+} from '../lib/billing.js';
+import { getCurrentUser } from '../lib/supabase.js';
 
 export default function WorkspaceManagePopover({ workspace, onClose, onDeleted }) {
   const [members, setMembers] = useState([]);
@@ -17,6 +26,11 @@ export default function WorkspaceManagePopover({ workspace, onClose, onDeleted }
   const [showDanger, setShowDanger] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  useEffect(() => {
+    getCurrentUser().then((u) => setCurrentUserId(u?.id || null));
+  }, []);
 
   const flash = (text, kind = 'msg') => {
     if (kind === 'err') {
@@ -94,6 +108,11 @@ export default function WorkspaceManagePopover({ workspace, onClose, onDeleted }
           </div>
           <button onClick={onClose} style={styles.closeBtn}>×</button>
         </div>
+
+        <BillingSection
+          workspace={workspace}
+          isOwner={isWorkspaceOwner(workspace, currentUserId)}
+        />
 
         <section style={styles.section}>
           <div style={styles.sectionTitle}>Invite a teammate</div>
@@ -231,6 +250,92 @@ export default function WorkspaceManagePopover({ workspace, onClose, onDeleted }
       </div>
     </div>
   );
+}
+
+// ── BillingSection ──────────────────────────────────────────────────────────
+function BillingSection({ workspace, isOwner }) {
+  const state = workspaceState(workspace);
+  const days = daysLeftInTrial(workspace);
+  const enforced = billingEnforced();
+
+  // Choose banner color/copy based on state
+  let bannerStyle = billingStyles.bannerNeutral;
+  let title = '';
+  let body = '';
+
+  if (state === 'active') {
+    bannerStyle = billingStyles.bannerActive;
+    title = '✓ Active subscription';
+    body = `This workspace is on a paid plan ($${WORKSPACE_PRICE_USD}/month).`;
+  } else if (state === 'trial') {
+    bannerStyle = billingStyles.bannerTrial;
+    title = `Free trial · ${days} day${days === 1 ? '' : 's'} left`;
+    body = `Trial ends on ${fmtDate(workspace.trialEndsAt)}. After that, the workspace becomes read-only until you subscribe.`;
+  } else if (state === 'expired') {
+    bannerStyle = billingStyles.bannerExpired;
+    title = 'Trial expired';
+    body = enforced
+      ? 'This workspace is read-only until you subscribe. Existing data is preserved.'
+      : 'Your trial has expired. (Enforcement is currently off — workspace remains usable.)';
+  } else if (state === 'past_due') {
+    bannerStyle = billingStyles.bannerExpired;
+    title = 'Payment past due';
+    body = 'Your last payment failed. Update your payment method to restore full access.';
+  } else if (state === 'canceled') {
+    bannerStyle = billingStyles.bannerTrial;
+    title = 'Subscription canceled';
+    body = `Access continues until the end of the current billing period.`;
+  }
+
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionTitle}>Billing</div>
+
+      <div style={bannerStyle}>
+        <div style={billingStyles.bannerTitle}>{title}</div>
+        <div style={billingStyles.bannerBody}>{body}</div>
+      </div>
+
+      {/* Early-access notice when enforcement is off */}
+      {!enforced && (
+        <div style={billingStyles.earlyNote}>
+          <strong>Early access:</strong> Billing is not yet active during the
+          early-access period. All workspaces remain fully usable regardless of
+          trial status. We'll give plenty of notice before turning on enforcement.
+        </div>
+      )}
+
+      {/* Owner-only upgrade button (placeholder for now) */}
+      {isOwner && state !== 'active' && (
+        <div style={billingStyles.upgradeRow}>
+          <button
+            onClick={() => alert('Stripe integration not enabled yet. This will become a real checkout flow.')}
+            style={billingStyles.upgradeBtn}
+          >
+            Upgrade — ${WORKSPACE_PRICE_USD}/month
+          </button>
+          <span style={billingStyles.upgradeHint}>
+            Per workspace, unlimited members
+          </span>
+        </div>
+      )}
+
+      {!isOwner && (
+        <div style={billingStyles.notOwnerNote}>
+          Only the workspace owner can manage billing.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 function fmtRel(ts) {
@@ -429,5 +534,79 @@ const dangerStyles = {
     fontSize: 10,
     cursor: 'pointer',
     padding: 0,
+  },
+};
+
+const billingStyles = {
+  bannerNeutral: {
+    background: 'var(--color-background-tertiary)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  bannerActive: {
+    background: '#1d9e7511',
+    border: '0.5px solid #1d9e7544',
+    borderRadius: 8,
+    padding: 10,
+  },
+  bannerTrial: {
+    background: '#534AB711',
+    border: '0.5px solid #534AB744',
+    borderRadius: 8,
+    padding: 10,
+  },
+  bannerExpired: {
+    background: '#e24b4a11',
+    border: '0.5px solid #e24b4a44',
+    borderRadius: 8,
+    padding: 10,
+  },
+  bannerTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    marginBottom: 3,
+  },
+  bannerBody: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    lineHeight: 1.5,
+  },
+  earlyNote: {
+    marginTop: 10,
+    padding: 8,
+    background: '#ef9f2722',
+    border: '0.5px solid #ef9f2744',
+    borderRadius: 6,
+    fontSize: 11,
+    color: '#BA7517',
+    lineHeight: 1.5,
+  },
+  upgradeRow: {
+    marginTop: 10,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  upgradeBtn: {
+    padding: '7px 16px',
+    background: '#534AB7',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+  upgradeHint: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+  },
+  notOwnerNote: {
+    marginTop: 10,
+    fontSize: 11,
+    color: 'var(--color-text-tertiary)',
+    fontStyle: 'italic',
   },
 };

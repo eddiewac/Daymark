@@ -16,6 +16,7 @@ import WorkspaceManagePopover from './components/WorkspaceManagePopover.jsx';
 import PendingInvitesBanner from './components/PendingInvitesBanner.jsx';
 import GoalsModal from './components/goals/GoalsModal.jsx';
 import GoalsFloatingButton from './components/goals/GoalsFloatingButton.jsx';
+import AccountDeletionModal from './components/AccountDeletionModal.jsx';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -25,6 +26,7 @@ export default function App() {
   const [managingWorkspace, setManagingWorkspace] = useState(null);
   const [runningTaskTitle, setRunningTaskTitle] = useState('');
   const [goalsOpen, setGoalsOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
   const time = useTime(activeWorkspace?.id || null);
   const goalsApi = useGoals();
@@ -112,6 +114,7 @@ export default function App() {
         onWorkspacesChanged={handleWorkspacesChanged}
         onManageWorkspace={(ws) => setManagingWorkspace(ws)}
         onOpenGoals={() => setGoalsOpen(true)}
+        onOpenDeleteAccount={() => setDeleteAccountOpen(true)}
         timerIndicator={indicator}
       />
       <WorkspaceView
@@ -169,6 +172,12 @@ export default function App() {
           onUpdateEvidence={goalsApi.updateEvidence}
           onRemoveEvidence={goalsApi.removeEvidence}
           onClose={() => setGoalsOpen(false)}
+        />
+      )}
+      {deleteAccountOpen && (
+        <AccountDeletionModal
+          user={session.user}
+          onClose={() => setDeleteAccountOpen(false)}
         />
       )}
     </div>

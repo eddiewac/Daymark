@@ -10,6 +10,7 @@ export default function TopBar({
   onWorkspacesChanged,
   onManageWorkspace,
   onOpenGoals,
+  onOpenDeleteAccount,
   timerIndicator,
 }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -118,6 +119,16 @@ export default function TopBar({
           <div style={styles.menu}>
             <button onClick={signOut} style={styles.menuItem}>
               Sign out
+            </button>
+            <div style={styles.menuDivider} />
+            <button
+              onClick={() => {
+                setShowMenu(false);
+                onOpenDeleteAccount?.();
+              }}
+              style={{ ...styles.menuItem, color: '#e24b4a' }}
+            >
+              Delete account…
             </button>
           </div>
         )}
@@ -241,5 +252,11 @@ const styles = {
     textAlign: 'left',
     fontSize: 12,
     borderRadius: 6,
+    cursor: 'pointer',
+  },
+  menuDivider: {
+    height: 0.5,
+    background: 'var(--color-border-tertiary)',
+    margin: '4px 0',
   },
 };

@@ -165,6 +165,7 @@ export default function ProjectsPanel({
               project={active}
               allProjects={projects}
               tasks={tasks}
+              congresses={congresses}
               onUpdate={onUpdate}
               onDelete={onDelete}
               onTrack={() => {

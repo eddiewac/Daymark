@@ -8,6 +8,7 @@ export default function ProjectDetail({
   project,
   allProjects,
   tasks,
+  congresses,
   onUpdate,
   onDelete,
   onTrack,
@@ -136,6 +137,55 @@ export default function ProjectDetail({
             rows={2}
             style={styles.textarea}
           />
+        </div>
+
+        {/* Linked congresses */}
+        <div style={styles.field}>
+          <label style={styles.label}>
+            Linked congresses
+            <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 6 }}>
+              (markers appear on the Gantt for these)
+            </span>
+          </label>
+          {(!congresses || congresses.length === 0) ? (
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontStyle: 'italic', padding: 6 }}>
+              No congresses in this workspace yet. Add some in the Congresses tab.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {congresses.map((c) => {
+                const linked = (draft.congresses || []).includes(c.id);
+                const color = c.color || '#534AB7';
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      const current = draft.congresses || [];
+                      const next = linked
+                        ? current.filter((id) => id !== c.id)
+                        : [...current, c.id];
+                      const newDraft = { ...draft, congresses: next };
+                      setDraft(newDraft);
+                      onUpdate(project.id, newDraft);
+                    }}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 16,
+                      border: `0.5px solid ${linked ? color : 'var(--color-border-secondary)'}`,
+                      background: linked ? color + '22' : 'transparent',
+                      color: linked ? color : 'var(--color-text-secondary)',
+                      fontSize: 11,
+                      fontWeight: linked ? 500 : 400,
+                      cursor: 'pointer',
+                    }}
+                    title={c.name + (c.startDate ? ` · starts ${c.startDate}` : '')}
+                  >
+                    {c.abbr || c.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Deliverables */}

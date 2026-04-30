@@ -123,16 +123,17 @@ export default function GanttView({ projects, congresses }) {
     cur.setDate(cur.getDate() + 1);
   }
 
-  // Build congress markers (visible only if at least one project on the chart links to them)
+  // Build congress markers - looks at each project's `congresses` array of ids
+  // and shows markers for any congress linked to a visible project.
   const visibleProjectIds = new Set(rows.map((r) => r.project.id));
+  const linkedCongressIds = new Set();
+  for (const r of rows) {
+    for (const cid of r.project.congresses || []) {
+      linkedCongressIds.add(cid);
+    }
+  }
   const congressMarkers = (congresses || [])
-    .filter((c) => {
-      const linked = (c.projects || c.projectIds || []) || [];
-      // Best-effort: only show if at least one linked project is visible.
-      // Falls back to showing all if data hasn't been migrated yet.
-      if (!linked.length) return false;
-      return linked.some((id) => visibleProjectIds.has(id));
-    })
+    .filter((c) => linkedCongressIds.has(c.id))
     .flatMap((c) => {
       const col = c.color || '#534AB7';
       const m = [];

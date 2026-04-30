@@ -65,14 +65,17 @@ export async function revokeInvite(inviteId) {
   if (error) console.error('revokeInvite:', error);
 }
 
-// Load invites the current user has received (matched by their email)
+// Load invites the current user has received (matched by their email).
+// We can't JOIN workspaces directly because RLS blocks reading rows you're
+// not a member of yet. Instead, we fetch the invites and resolve the name
+// of each workspace via a SECURITY DEFINER RPC.
 export async function loadMyPendingInvites() {
   const user = await getCurrentUser();
   if (!user?.email) return [];
 
   const { data, error } = await supabase
     .from('workspace_invites')
-    .select('id, workspace_id, invited_email, created_at, workspaces(name)')
+    .select('id, workspace_id, invited_email, created_at')
     .eq('invited_email', user.email.toLowerCase())
     .is('accepted_at', null)
     .order('created_at', { ascending: false });
@@ -81,10 +84,21 @@ export async function loadMyPendingInvites() {
     console.error('loadMyPendingInvites:', error);
     return [];
   }
-  return (data || []).map((r) => ({
+
+  // Resolve each workspace name through the RPC (parallel)
+  const rows = data || [];
+  const names = await Promise.all(
+    rows.map((r) =>
+      supabase
+        .rpc('get_invited_workspace_name', { p_workspace_id: r.workspace_id })
+        .then(({ data, error }) => (error ? null : data))
+    )
+  );
+
+  return rows.map((r, i) => ({
     id: r.id,
     workspaceId: r.workspace_id,
-    workspaceName: r.workspaces?.name || '(unknown workspace)',
+    workspaceName: names[i] || '(unknown workspace)',
     invitedEmail: r.invited_email,
     createdAt: r.created_at,
   }));

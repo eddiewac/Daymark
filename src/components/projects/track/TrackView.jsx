@@ -33,6 +33,9 @@ export default function TrackView({
   members,
   workspaceId,
   stationTemplates,
+  categories,
+  priorities,
+  statuses,
   onUpdateProject,
   onAddTask,
   onUpdateTask,
@@ -122,6 +125,9 @@ export default function TrackView({
         tasks={tasks}
         members={members}
         workspaceId={workspaceId}
+        categories={categories}
+        priorities={priorities}
+        statuses={statuses}
         onUpdateStation={(updatedStation) => {
           updateStation(focused.deliverable.id, focused.station.id, updatedStation);
         }}

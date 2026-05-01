@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { projectColor } from '../../../lib/constants.js';
 import CommsTab from '../CommsTab.jsx';
+import TaskForm from '../../tasks/TaskForm.jsx';
 
 export default function StationFocus({
   project,
@@ -10,6 +11,9 @@ export default function StationFocus({
   tasks,
   members,
   workspaceId,
+  categories,
+  priorities,
+  statuses,
   onUpdateStation,
   onClose,
   onAddTask,
@@ -22,6 +26,8 @@ export default function StationFocus({
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskAssignee, setNewTaskAssignee] = useState('');
   const [assigningId, setAssigningId] = useState(null);
+  const [editingTask, setEditingTask] = useState(null); // task object being edited in modal
+  const [datePickerId, setDatePickerId] = useState(null); // task id whose date picker is open
   const color = projectColor(project.name, allProjects);
 
   // Tasks linked to this station via stationId
@@ -223,6 +229,8 @@ export default function StationFocus({
               <div style={styles.taskList}>
                 {stationTasks.map((t) => {
                   const assignee = members?.find((m) => m.id === t.assignedToId);
+                  const today = new Date().toISOString().slice(0, 10);
+                  const overdue = t.dueDate && !t.done && t.dueDate < today;
                   return (
                     <div key={t.id} style={styles.taskRow}>
                       <button
@@ -255,6 +263,81 @@ export default function StationFocus({
                           opacity: t.done ? 0.6 : 1,
                         }}
                       />
+
+                      {/* OOS chip if set */}
+                      {t.outOfScope && (
+                        <span
+                          title={
+                            t.outOfScopeNotes
+                              ? `Out of scope — ${t.outOfScopeNotes}${t.outOfScopeHours ? ` (${t.outOfScopeHours}h)` : ''}`
+                              : 'Out of scope'
+                          }
+                          style={enrichedStyles.oosChip}
+                        >
+                          ⚠ OOS{t.outOfScopeHours ? ` · ${t.outOfScopeHours}h` : ''}
+                        </span>
+                      )}
+
+                      {/* Due date chip if set */}
+                      {t.dueDate && (
+                        <span
+                          title={overdue ? 'Overdue' : 'Due date'}
+                          style={{
+                            ...enrichedStyles.dueChip,
+                            color: overdue ? '#e24b4a' : 'var(--color-text-secondary)',
+                            background: overdue ? '#e24b4a15' : 'var(--color-background-tertiary)',
+                            fontWeight: overdue ? 600 : 400,
+                          }}
+                        >
+                          {t.dueDate}
+                        </span>
+                      )}
+
+                      {/* Inline date picker (popover) */}
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          onClick={() =>
+                            setDatePickerId(datePickerId === t.id ? null : t.id)
+                          }
+                          style={enrichedStyles.iconBtn}
+                          title="Set due date"
+                        >
+                          📅
+                        </button>
+                        {datePickerId === t.id && (
+                          <div style={enrichedStyles.datePopover}>
+                            <input
+                              type="date"
+                              value={t.dueDate || ''}
+                              onChange={(e) => {
+                                onUpdateTask(t.id, { dueDate: e.target.value });
+                              }}
+                              style={enrichedStyles.dateInput}
+                            />
+                            <div style={enrichedStyles.dateBtnRow}>
+                              {t.dueDate && (
+                                <button
+                                  onClick={() => {
+                                    onUpdateTask(t.id, { dueDate: '' });
+                                    setDatePickerId(null);
+                                  }}
+                                  style={enrichedStyles.dateClearBtn}
+                                >
+                                  Clear
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setDatePickerId(null)}
+                                style={enrichedStyles.dateDoneBtn}
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Assign button — always show if workspace + at least one member */}
                       {workspaceId && members && members.length > 0 && (
                         <div style={{ position: 'relative' }}>
                           <button
@@ -302,6 +385,16 @@ export default function StationFocus({
                           )}
                         </div>
                       )}
+
+                      {/* Edit pencil — opens full TaskForm modal */}
+                      <button
+                        onClick={() => setEditingTask(t)}
+                        style={enrichedStyles.iconBtn}
+                        title="Edit task (full editor)"
+                      >
+                        ✎
+                      </button>
+
                       <button
                         onClick={() => onDeleteTask(t.id)}
                         style={styles.taskDelete}
@@ -321,6 +414,43 @@ export default function StationFocus({
           <CommsTab station={station} onUpdateStation={onUpdateStation} />
         )}
       </div>
+
+      {/* Edit task modal — uses the full TaskForm */}
+      {editingTask && (
+        <div
+          style={enrichedStyles.modalBackdrop}
+          onClick={() => setEditingTask(null)}
+        >
+          <div
+            style={enrichedStyles.modalDialog}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={enrichedStyles.modalHeader}>
+              <span style={enrichedStyles.modalTitle}>Edit task</span>
+              <button
+                onClick={() => setEditingTask(null)}
+                style={enrichedStyles.modalClose}
+              >
+                ×
+              </button>
+            </div>
+            <TaskForm
+              initialTask={editingTask}
+              projects={allProjects}
+              categories={categories}
+              priorities={priorities}
+              statuses={statuses}
+              members={members}
+              workspaceId={workspaceId}
+              onSave={(patch) => {
+                onUpdateTask(editingTask.id, patch);
+                setEditingTask(null);
+              }}
+              onCancel={() => setEditingTask(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -525,6 +655,121 @@ const styles = {
     borderRadius: 6,
     textAlign: 'left',
     fontSize: 12,
+    cursor: 'pointer',
+  },
+};
+
+const enrichedStyles = {
+  oosChip: {
+    fontSize: 9,
+    padding: '1px 6px',
+    borderRadius: 12,
+    background: '#e24b4a22',
+    color: '#e24b4a',
+    fontWeight: 600,
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+  },
+  dueChip: {
+    fontSize: 10,
+    padding: '1px 7px',
+    borderRadius: 12,
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+  },
+  iconBtn: {
+    width: 24,
+    height: 24,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 12,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+    borderRadius: 4,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePopover: {
+    position: 'absolute',
+    top: 28,
+    right: 0,
+    background: '#fff',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 8,
+    padding: 8,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+    zIndex: 50,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  dateInput: {
+    padding: '5px 8px',
+    fontSize: 12,
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    outline: 'none',
+  },
+  dateBtnRow: {
+    display: 'flex',
+    gap: 4,
+    justifyContent: 'flex-end',
+  },
+  dateClearBtn: {
+    padding: '3px 10px',
+    fontSize: 10,
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  dateDoneBtn: {
+    padding: '3px 12px',
+    fontSize: 10,
+    background: '#534AB7',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  modalBackdrop: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.4)',
+    zIndex: 1100,
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    overflow: 'auto',
+    padding: '40px 20px 80px',
+  },
+  modalDialog: {
+    background: '#fff',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 600,
+    boxShadow: '0 12px 40px rgba(0,0,0,0.18)',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+    background: 'var(--color-background-secondary)',
+  },
+  modalTitle: { fontSize: 13, fontWeight: 600 },
+  modalClose: {
+    width: 28,
+    height: 28,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 22,
+    color: 'var(--color-text-secondary)',
     cursor: 'pointer',
   },
 };

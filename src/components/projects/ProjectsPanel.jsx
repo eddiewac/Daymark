@@ -12,6 +12,9 @@ export default function ProjectsPanel({
   members,
   workspaceId,
   stationTemplates,
+  categories,
+  priorities,
+  statuses,
   onAdd,
   onUpdate,
   onDelete,
@@ -58,6 +61,9 @@ export default function ProjectsPanel({
         members={members}
         workspaceId={workspaceId}
         stationTemplates={stationTemplates}
+        categories={categories}
+        priorities={priorities}
+        statuses={statuses}
         onUpdateProject={onUpdate}
         onAddTask={onAddTask}
         onUpdateTask={onUpdateTask}

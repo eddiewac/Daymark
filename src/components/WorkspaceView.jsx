@@ -237,6 +237,9 @@ export default function WorkspaceView({
             members={members}
             workspaceId={workspaceId}
             stationTemplates={settings.stationTemplates || []}
+            categories={settings.categories}
+            priorities={settings.priorities}
+            statuses={settings.statuses}
             onAdd={addProject}
             onUpdate={updateProject}
             onDelete={deleteProject}

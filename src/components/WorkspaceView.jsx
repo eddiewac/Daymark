@@ -40,7 +40,26 @@ export default function WorkspaceView({
   time,
   onTimerStartedForTask,
 }) {
-  const [tab, setTab] = useState('tasks');
+  // Persist the active tab per workspace so refreshing doesn't bump you back.
+  // Stored under a key that includes the workspace id so different workspaces
+  // can remember different tabs (e.g. you might be on Tasks in one workspace
+  // but Status in another).
+  const tabStorageKey = `daymark-tab:${workspaceId || 'personal'}`;
+  const [tab, setTab] = useState(() => {
+    try {
+      const stored = localStorage.getItem(tabStorageKey);
+      // Validate that the stored value is one of the known tabs
+      if (stored && TABS.some((t) => t.key === stored)) return stored;
+    } catch {}
+    return 'tasks';
+  });
+
+  // Save the tab whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(tabStorageKey, tab);
+    } catch {}
+  }, [tab, tabStorageKey]);
   const [members, setMembers] = useState([]);
 
   // Focus box visibility — auto-opens when timer starts, closes on stop or manual close

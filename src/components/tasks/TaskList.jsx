@@ -42,7 +42,7 @@ export default function TaskList({
 }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [filter, setFilter] = useState('active'); // active | all | done
+  const [filter, setFilter] = useState('active'); // active | all | done | oos
   const [search, setSearch] = useState('');
 
   const initialPrefs = loadViewPrefs();
@@ -63,6 +63,7 @@ export default function TaskList({
     let list = tasks;
     if (filter === 'active') list = list.filter((t) => !t.done);
     else if (filter === 'done') list = list.filter((t) => t.done);
+    else if (filter === 'oos') list = list.filter((t) => t.outOfScope);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -100,16 +101,17 @@ export default function TaskList({
     <div style={styles.wrap}>
       <div style={styles.header}>
         <div style={styles.filters}>
-          {['active', 'all', 'done'].map((f) => (
+          {['active', 'all', 'done', 'oos'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               style={{
                 ...styles.filterBtn,
                 ...(filter === f ? styles.filterActive : {}),
+                ...(f === 'oos' && filter === f ? { background: '#e24b4a22', color: '#e24b4a' } : {}),
               }}
             >
-              {f[0].toUpperCase() + f.slice(1)}
+              {f === 'oos' ? 'Out of scope' : f[0].toUpperCase() + f.slice(1)}
             </button>
           ))}
           <input
@@ -355,6 +357,22 @@ function CompactRow({
           flexShrink: 0,
         }}>
           {task.project}
+        </span>
+      )}
+      {task.outOfScope && (
+        <span
+          title={task.outOfScopeNotes || (task.outOfScopeHours ? `${task.outOfScopeHours}h` : 'Out of scope')}
+          style={{
+            fontSize: 9,
+            padding: '1px 6px',
+            borderRadius: 12,
+            background: '#e24b4a22',
+            color: '#e24b4a',
+            fontWeight: 600,
+            flexShrink: 0,
+          }}
+        >
+          ⚠ OOS{task.outOfScopeHours ? ` · ${task.outOfScopeHours}h` : ''}
         </span>
       )}
       {task.priority && (
@@ -656,8 +674,23 @@ function KanbanCard({ task, projects, isDragging, onDragStart, onDragEnd, onClic
           {task.title}
         </div>
       </div>
-      {(task.project || task.priority || task.dueDate) && (
+      {(task.project || task.priority || task.dueDate || task.outOfScope) && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', paddingLeft: 22 }}>
+          {task.outOfScope && (
+            <span
+              title={task.outOfScopeNotes || (task.outOfScopeHours ? `${task.outOfScopeHours}h` : 'Out of scope')}
+              style={{
+                fontSize: 9,
+                padding: '1px 6px',
+                borderRadius: 12,
+                background: '#e24b4a22',
+                color: '#e24b4a',
+                fontWeight: 600,
+              }}
+            >
+              ⚠ OOS{task.outOfScopeHours ? ` · ${task.outOfScopeHours}h` : ''}
+            </span>
+          )}
           {task.project && (
             <span style={{
               fontSize: 9,
@@ -755,6 +788,7 @@ function TableView({ tasks, projects, members, onToggleDone, onEdit, onDelete })
           <th style={headerStyle} onClick={() => setSort('priority')}>Priority{arrow('priority')}</th>
           <th style={headerStyle} onClick={() => setSort('status')}>Status{arrow('status')}</th>
           <th style={headerStyle} onClick={() => setSort('dueDate')}>Due{arrow('dueDate')}</th>
+          <th style={headerStyle} onClick={() => setSort('outOfScope')}>OOS{arrow('outOfScope')}</th>
           <th style={{ ...headerStyle, cursor: 'default' }}>Tags</th>
           <th style={{ ...headerStyle, width: 60, cursor: 'default' }}></th>
         </tr>
@@ -805,6 +839,20 @@ function TableView({ tasks, projects, members, onToggleDone, onEdit, onDelete })
               <td style={cellStyle}>{t.status || (t.done ? 'Done' : '')}</td>
               <td style={{ ...cellStyle, color: overdue ? '#e24b4a' : 'var(--color-text-primary)', fontWeight: overdue ? 600 : 400 }}>
                 {t.dueDate || ''}
+              </td>
+              <td style={cellStyle} title={t.outOfScopeNotes || ''}>
+                {t.outOfScope ? (
+                  <span style={{
+                    fontSize: 10,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    background: '#e24b4a22',
+                    color: '#e24b4a',
+                    fontWeight: 600,
+                  }}>
+                    ⚠{t.outOfScopeHours ? ` ${t.outOfScopeHours}h` : ''}
+                  </span>
+                ) : ''}
               </td>
               <td style={cellStyle}>
                 <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>

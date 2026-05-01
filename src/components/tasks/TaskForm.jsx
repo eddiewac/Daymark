@@ -17,6 +17,9 @@ const blankForm = {
   taskNumber: '',
   assignedToId: '',
   assignedToEmail: '',
+  outOfScope: false,
+  outOfScopeHours: '',
+  outOfScopeNotes: '',
 };
 
 export default function TaskForm({
@@ -42,7 +45,18 @@ export default function TaskForm({
 
   const handleSave = () => {
     if (!form.title.trim()) return;
-    onSave({ ...form, title: form.title.trim() });
+    // Coerce hours field to a number (or null) for clean storage
+    const hoursRaw = form.outOfScopeHours;
+    const hoursNum =
+      hoursRaw === '' || hoursRaw == null
+        ? null
+        : Number(hoursRaw);
+    onSave({
+      ...form,
+      title: form.title.trim(),
+      outOfScopeHours: Number.isFinite(hoursNum) ? hoursNum : null,
+      outOfScopeNotes: (form.outOfScopeNotes || '').trim(),
+    });
   };
 
   return (
@@ -169,6 +183,56 @@ export default function TaskForm({
         />
       </div>
 
+      {/* Out-of-scope section */}
+      <div style={oosStyles.wrap}>
+        <label style={oosStyles.toggleLabel}>
+          <input
+            type="checkbox"
+            checked={!!form.outOfScope}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              set({
+                outOfScope: checked,
+                // Clear sub-fields when un-toggling
+                ...(checked ? {} : { outOfScopeHours: '', outOfScopeNotes: '' }),
+              });
+            }}
+          />
+          <span style={oosStyles.toggleText}>
+            Mark as out of scope
+            <span style={oosStyles.toggleHint}>
+              {' '}— work beyond contracted scope. Useful for billing variations.
+            </span>
+          </span>
+        </label>
+
+        {form.outOfScope && (
+          <div style={oosStyles.fields}>
+            <div style={oosStyles.row}>
+              <label style={oosStyles.subLabel}>Estimated extra hours</label>
+              <input
+                type="number"
+                step="0.25"
+                min="0"
+                value={form.outOfScopeHours ?? ''}
+                onChange={(e) => set({ outOfScopeHours: e.target.value })}
+                placeholder="e.g. 2.5"
+                style={oosStyles.numberInput}
+              />
+            </div>
+            <div>
+              <label style={oosStyles.subLabel}>Scope notes</label>
+              <input
+                value={form.outOfScopeNotes || ''}
+                onChange={(e) => set({ outOfScopeNotes: e.target.value })}
+                placeholder='e.g. "Client emailed 14 Apr — approved as variation"'
+                style={oosStyles.notesInput}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       <div style={styles.btnRow}>
         <button style={styles.primary} onClick={handleSave}>
           {initialTask?.id ? 'Save changes' : 'Add task'}
@@ -235,5 +299,65 @@ const styles = {
     borderRadius: 8,
     fontSize: 13,
     color: 'var(--color-text-secondary)',
+  },
+};
+
+const oosStyles = {
+  wrap: {
+    background: 'var(--color-background-secondary)',
+    borderRadius: 8,
+    padding: 10,
+    border: '0.5px solid var(--color-border-tertiary)',
+  },
+  toggleLabel: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 8,
+    cursor: 'pointer',
+    fontSize: 12,
+  },
+  toggleText: {
+    color: 'var(--color-text-primary)',
+    fontWeight: 500,
+  },
+  toggleHint: {
+    fontWeight: 400,
+    color: 'var(--color-text-secondary)',
+  },
+  fields: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTop: '0.5px dashed var(--color-border-tertiary)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  row: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  subLabel: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: 'var(--color-text-secondary)',
+    marginBottom: 4,
+  },
+  numberInput: {
+    width: 120,
+    padding: '5px 10px',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    fontSize: 12,
+    background: '#fff',
+    outline: 'none',
+  },
+  notesInput: {
+    width: '100%',
+    padding: '5px 10px',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    fontSize: 12,
+    background: '#fff',
+    outline: 'none',
   },
 };

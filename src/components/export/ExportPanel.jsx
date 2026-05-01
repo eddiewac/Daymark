@@ -410,6 +410,8 @@ export default function ExportPanel({ tasks, projects, blocks, workspaceId, work
           </section>
         )}
 
+        <OutOfScopeExportSection tasks={tasks} projects={projects} />
+
         <ImportSection
           workspaceId={workspaceId}
           workspaceName={workspaceName}
@@ -418,6 +420,233 @@ export default function ExportPanel({ tasks, projects, blocks, workspaceId, work
     </div>
   );
 }
+
+// ── OutOfScopeExportSection: per-project rollup of out-of-scope tasks ──────
+function OutOfScopeExportSection({ tasks, projects }) {
+  const [msg, setMsg] = useState('');
+  const oosFallbackRef = useRef(null);
+
+  // Group OOS tasks by project, compute per-project totals
+  const grouped = useMemo(() => {
+    const byProject = {};
+    let totalHours = 0;
+    let totalCount = 0;
+    for (const t of tasks || []) {
+      if (!t.outOfScope) continue;
+      const key = t.project || '(no project)';
+      if (!byProject[key]) byProject[key] = { tasks: [], hours: 0 };
+      byProject[key].tasks.push(t);
+      const h = Number(t.outOfScopeHours);
+      if (Number.isFinite(h)) byProject[key].hours += h;
+      totalHours += Number.isFinite(h) ? h : 0;
+      totalCount += 1;
+    }
+    // Sort: projects with most hours first
+    const ordered = Object.entries(byProject)
+      .map(([name, info]) => ({ name, ...info }))
+      .sort((a, b) => b.hours - a.hours);
+    return { byProject: ordered, totalHours, totalCount };
+  }, [tasks]);
+
+  const textReport = useMemo(() => {
+    if (grouped.totalCount === 0) return '';
+    const lines = [];
+    lines.push(`Out-of-scope summary`);
+    lines.push(`Generated ${new Date().toLocaleDateString()}`);
+    lines.push(``);
+    lines.push(
+      `Total: ${grouped.totalCount} task${grouped.totalCount === 1 ? '' : 's'}` +
+        (grouped.totalHours > 0 ? ` · ${grouped.totalHours} extra hours` : '')
+    );
+    lines.push(``);
+    for (const p of grouped.byProject) {
+      lines.push(`${p.name}`);
+      lines.push('—'.repeat(40));
+      if (p.hours > 0) {
+        lines.push(
+          `${p.tasks.length} task${p.tasks.length === 1 ? '' : 's'} · ${p.hours} hours`
+        );
+      } else {
+        lines.push(`${p.tasks.length} task${p.tasks.length === 1 ? '' : 's'}`);
+      }
+      lines.push(``);
+      for (const t of p.tasks) {
+        const status = t.done ? ' (completed)' : '';
+        const hours = t.outOfScopeHours ? ` [${t.outOfScopeHours}h]` : '';
+        lines.push(`  • ${t.title}${hours}${status}`);
+        if (t.outOfScopeNotes) lines.push(`      ${t.outOfScopeNotes}`);
+      }
+      lines.push(``);
+    }
+    return lines.join('\n');
+  }, [grouped]);
+
+  const csvReport = useMemo(() => {
+    if (grouped.totalCount === 0) return '';
+    const escape = (s) => {
+      const v = String(s ?? '');
+      if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+      return v;
+    };
+    const headers = [
+      'Project',
+      'Task',
+      'Status',
+      'Extra hours',
+      'Scope notes',
+      'Due date',
+    ];
+    const rows = [headers.map(escape).join(',')];
+    for (const p of grouped.byProject) {
+      for (const t of p.tasks) {
+        rows.push(
+          [
+            p.name,
+            t.title || '',
+            t.done ? 'Completed' : (t.status || 'Open'),
+            t.outOfScopeHours ?? '',
+            t.outOfScopeNotes || '',
+            t.dueDate || '',
+          ]
+            .map(escape)
+            .join(',')
+        );
+      }
+    }
+    return rows.join('\n');
+  }, [grouped]);
+
+  const copyText = async () => {
+    try {
+      await navigator.clipboard.writeText(textReport);
+      setMsg('Text report copied.');
+      setTimeout(() => setMsg(''), 3000);
+    } catch {
+      oosFallbackRef.current?.select();
+      setMsg('Auto-copy failed — select the box and copy manually.');
+      setTimeout(() => setMsg(''), 5000);
+    }
+  };
+
+  const downloadCsv = () => {
+    const blob = new Blob([csvReport], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `daymark-out-of-scope-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setMsg('CSV downloaded.');
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionTitle}>Out-of-scope summary</div>
+      <div style={styles.sectionSub}>
+        Per-project rollup of tasks marked out of scope. Useful for billing
+        variations or showing clients absorbed work.
+      </div>
+
+      {grouped.totalCount === 0 ? (
+        <div style={oosExportStyles.empty}>
+          No out-of-scope tasks in this workspace yet. Mark tasks as out of
+          scope from the task form to see them here.
+        </div>
+      ) : (
+        <>
+          <div style={oosExportStyles.summary}>
+            <strong>{grouped.totalCount}</strong> task
+            {grouped.totalCount === 1 ? '' : 's'} across{' '}
+            <strong>{grouped.byProject.length}</strong> project
+            {grouped.byProject.length === 1 ? '' : 's'}
+            {grouped.totalHours > 0 && (
+              <>
+                {' '}— <strong>{grouped.totalHours}</strong> extra hours estimated
+              </>
+            )}
+          </div>
+
+          <div style={oosExportStyles.btnRow}>
+            <button onClick={copyText} style={oosExportStyles.btn}>
+              📋 Copy text report
+            </button>
+            <button onClick={downloadCsv} style={oosExportStyles.btn}>
+              ⬇ Download CSV
+            </button>
+            {msg && <span style={oosExportStyles.msg}>{msg}</span>}
+          </div>
+
+          <textarea
+            ref={oosFallbackRef}
+            value={textReport}
+            readOnly
+            rows={10}
+            onClick={(e) => e.target.select()}
+            style={oosExportStyles.preview}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+const oosExportStyles = {
+  empty: {
+    padding: 16,
+    textAlign: 'center',
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    fontStyle: 'italic',
+    background: 'var(--color-background-secondary)',
+    borderRadius: 6,
+  },
+  summary: {
+    fontSize: 12,
+    color: 'var(--color-text-primary)',
+    padding: 10,
+    background: '#e24b4a11',
+    border: '0.5px solid #e24b4a44',
+    borderRadius: 8,
+    lineHeight: 1.5,
+  },
+  btnRow: {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  btn: {
+    padding: '6px 12px',
+    background: '#fff',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 6,
+    fontSize: 11,
+    cursor: 'pointer',
+    color: 'var(--color-text-primary)',
+  },
+  msg: {
+    fontSize: 11,
+    color: '#1d9e75',
+    fontWeight: 500,
+  },
+  preview: {
+    width: '100%',
+    padding: 8,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 6,
+    resize: 'vertical',
+    background: 'var(--color-background-secondary)',
+    outline: 'none',
+    lineHeight: 1.5,
+  },
+};
 
 // ── ImportSection: restore from legacy JSON ────────────────────────────────
 function ImportSection({ workspaceId, workspaceName }) {

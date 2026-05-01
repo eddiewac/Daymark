@@ -204,6 +204,9 @@ function mapTask(t) {
     links: Array.isArray(t.links) ? t.links : [],
     stationId: t.stationId || null,
     checklistProgress: t.checklistProgress || {},
+    outOfScope: !!t.outOfScope,
+    outOfScopeHours: t.outOfScopeHours ?? null,
+    outOfScopeNotes: t.outOfScopeNotes || '',
   };
 }
 

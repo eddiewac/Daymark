@@ -35,6 +35,11 @@ export default function ProjectDetail({
   const projectTasks = (tasks || []).filter((t) => t.project === project.name);
   const doneCount = projectTasks.filter((t) => t.done).length;
   const totalCount = projectTasks.length;
+  const oosTasks = projectTasks.filter((t) => t.outOfScope);
+  const oosHours = oosTasks.reduce((sum, t) => {
+    const h = Number(t.outOfScopeHours);
+    return sum + (Number.isFinite(h) ? h : 0);
+  }, 0);
 
   return (
     <div style={styles.wrap}>
@@ -112,6 +117,21 @@ export default function ProjectDetail({
             <div style={styles.taskMeta}>
               {doneCount} of {totalCount} tasks complete
             </div>
+          </div>
+        )}
+
+        {/* Out of scope summary */}
+        {oosTasks.length > 0 && (
+          <div style={oosBoxStyles.box}>
+            <span style={oosBoxStyles.icon}>⚠</span>
+            <span style={oosBoxStyles.text}>
+              <strong>{oosTasks.length}</strong> out-of-scope task{oosTasks.length === 1 ? '' : 's'}
+              {oosHours > 0 && (
+                <>
+                  {' '}· <strong>{oosHours}</strong> extra hour{oosHours === 1 ? '' : 's'} estimated
+                </>
+              )}
+            </span>
           </div>
         )}
 
@@ -376,4 +396,20 @@ const styles = {
     borderRadius: 8,
     fontSize: 12,
   },
+};
+
+const oosBoxStyles = {
+  box: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 10px',
+    background: '#e24b4a11',
+    border: '0.5px solid #e24b4a44',
+    borderRadius: 8,
+    fontSize: 11,
+    color: 'var(--color-text-primary)',
+  },
+  icon: { color: '#e24b4a', fontSize: 13 },
+  text: { lineHeight: 1.5 },
 };

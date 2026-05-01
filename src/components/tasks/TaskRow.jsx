@@ -81,6 +81,20 @@ export default function TaskRow({
         </div>
 
         <div style={styles.meta}>
+          {task.outOfScope && (
+            <span
+              style={{ ...styles.pill, background: '#e24b4a22', color: '#e24b4a', fontWeight: 600 }}
+              title={
+                task.outOfScopeNotes
+                  ? `Out of scope — ${task.outOfScopeNotes}${task.outOfScopeHours ? ` (${task.outOfScopeHours}h)` : ''}`
+                  : task.outOfScopeHours
+                  ? `Out of scope — ${task.outOfScopeHours}h`
+                  : 'Out of scope'
+              }
+            >
+              ⚠ OOS{task.outOfScopeHours ? ` · ${task.outOfScopeHours}h` : ''}
+            </span>
+          )}
           {task.project && (
             <span style={{ ...styles.pill, background: projColor + '22', color: projColor }}>
               {task.project}

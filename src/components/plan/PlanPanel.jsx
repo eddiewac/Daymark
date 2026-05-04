@@ -1,6 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { localDateStr, todayStr } from '../../lib/utils.js';
 import { projectColor } from '../../lib/constants.js';
+import {
+  historicalAverageWeeklyHours,
+  sumEstimateHours,
+  generateCapacityEmail,
+} from '../../lib/capacity.js';
 
 // ── Week helpers ─────────────────────────────────────────────────────────────
 function startOfWeek(d) {
@@ -19,6 +24,8 @@ function addDays(d, n) {
 }
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const DAY_NAMES_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DAY_COLORS = ['#534AB7', '#0F6E56', '#BA7517', '#185FA5', '#D4537E'];
 
 export default function PlanPanel({
   tasks,
@@ -26,10 +33,26 @@ export default function PlanPanel({
   loading,
   onUpdateTask,
   onToggleDone,
+  blocks,
+  currentUserId,
+  runningTimer,
+  onStartTimer,
+  onStopTimer,
 }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [showDone, setShowDone] = useState(false);
   const [dragOverDay, setDragOverDay] = useState(null);
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('daymark-plan-view') || 'calendar';
+    } catch {
+      return 'calendar';
+    }
+  });
+  const setView = (v) => {
+    setViewMode(v);
+    try { localStorage.setItem('daymark-plan-view', v); } catch {}
+  };
 
   // 5 weekdays Mon-Fri
   const days = useMemo(
@@ -139,10 +162,42 @@ export default function PlanPanel({
           />
           Show done
         </label>
+        <div style={planStyles.viewSwitch}>
+          {[
+            { key: 'calendar', label: '⌗ Calendar' },
+            { key: 'list', label: '☰ List' },
+          ].map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setView(v.key)}
+              style={{
+                ...planStyles.viewBtn,
+                ...(viewMode === v.key ? planStyles.viewBtnActive : {}),
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
         <div style={styles.empty}>Loading…</div>
+      ) : viewMode === 'list' ? (
+        <PlanListView
+          weekStart={weekStart}
+          dayKeys={dayKeys}
+          byDay={byDay}
+          overdue={overdue}
+          projects={projects}
+          blocks={blocks}
+          currentUserId={currentUserId}
+          runningTimer={runningTimer}
+          onUpdateTask={onUpdateTask}
+          onToggleDone={onToggleDone}
+          onStartTimer={onStartTimer}
+          onStopTimer={onStopTimer}
+        />
       ) : (
         <div style={styles.boardWrap}>
           {/* Overdue banner */}
@@ -213,6 +268,582 @@ export default function PlanPanel({
     </div>
   );
 }
+
+// ── PlanListView ─────────────────────────────────────────────────────────────
+// Day-by-day list of the selected week. Each task has:
+//   - checkbox
+//   - title
+//   - estimate quick-pick (0.5/1/2/4)
+//   - Track / Stop timer button
+// Above the days: a capacity stats bar + Generate-email button.
+function PlanListView({
+  weekStart,
+  dayKeys,
+  byDay,
+  overdue,
+  projects,
+  blocks,
+  currentUserId,
+  runningTimer,
+  onUpdateTask,
+  onToggleDone,
+  onStartTimer,
+  onStopTimer,
+}) {
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailDraft, setEmailDraft] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [copyMsg, setCopyMsg] = useState('');
+  const fallbackRef = useRef(null);
+
+  // All tasks in the visible week (open only — done filtered out at the parent)
+  const weekTasks = useMemo(
+    () => dayKeys.flatMap((k) => byDay[k] || []),
+    [dayKeys, byDay]
+  );
+
+  const histAvg = useMemo(
+    () => historicalAverageWeeklyHours(blocks, currentUserId),
+    [blocks, currentUserId]
+  );
+  const committedHrs = useMemo(
+    () => Math.round(sumEstimateHours(weekTasks) * 10) / 10,
+    [weekTasks]
+  );
+  const availableHrs = Math.max(0, Math.round((histAvg - committedHrs) * 10) / 10);
+
+  const overCapacity = committedHrs > histAvg;
+  const utilisationPct = histAvg > 0 ? Math.min(100, Math.round((committedHrs / histAvg) * 100)) : 0;
+
+  const weekLabel = `${weekStart.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  })} – ${addDays(weekStart, 4).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  })}`;
+
+  const handleGenerateEmail = () => {
+    const { body, subject } = generateCapacityEmail({
+      weekTasks,
+      dayLabels: DAY_NAMES_FULL,
+      dayKeys,
+      weekLabel,
+      histAvg,
+    });
+    setEmailDraft(body);
+    setEmailSubject(subject);
+    setEmailOpen(true);
+  };
+
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(emailDraft);
+      setCopyMsg('Copied!');
+      setTimeout(() => setCopyMsg(''), 3000);
+    } catch {
+      fallbackRef.current?.select();
+      setCopyMsg('Auto-copy failed — select the text above and copy manually.');
+      setTimeout(() => setCopyMsg(''), 5000);
+    }
+  };
+
+  const openMailto = () => {
+    const sub = encodeURIComponent(emailSubject);
+    const body = encodeURIComponent(emailDraft);
+    window.open(`mailto:?subject=${sub}&body=${body}`);
+  };
+
+  return (
+    <div style={listStyles.wrap}>
+      {/* Capacity strip */}
+      <div style={listStyles.capacityCard}>
+        <div style={listStyles.capacityRow}>
+          <Stat label="Avg capacity" value={`${histAvg}h`} color="#534AB7" hint="From last 4 weeks of time tracking" />
+          <Stat label="Scheduled" value={`${committedHrs}h`} color="#BA7517" hint="Sum of estimates for this week" />
+          <Stat
+            label="Headroom"
+            value={overCapacity ? '0h' : `${availableHrs}h`}
+            color={overCapacity ? '#e24b4a' : '#1d9e75'}
+            hint={overCapacity ? 'Already over capacity' : 'Available for ad-hoc work'}
+          />
+          <div style={{ flex: 1 }} />
+          <button onClick={handleGenerateEmail} style={listStyles.emailBtn}>
+            ✉️ Generate capacity email
+          </button>
+        </div>
+        {/* Utilisation bar */}
+        <div style={listStyles.barWrap}>
+          <div
+            style={{
+              ...listStyles.barFill,
+              width: `${utilisationPct}%`,
+              background: overCapacity ? '#e24b4a' : utilisationPct > 80 ? '#BA7517' : '#1d9e75',
+            }}
+          />
+        </div>
+        <div style={listStyles.barLabel}>
+          {overCapacity
+            ? `Over capacity by ${Math.round((committedHrs - histAvg) * 10) / 10}h`
+            : `${utilisationPct}% utilised`}
+        </div>
+      </div>
+
+      {/* Email draft panel */}
+      {emailOpen && (
+        <div style={listStyles.emailCard}>
+          <div style={listStyles.emailHeader}>
+            <span style={listStyles.emailHeaderTitle}>Capacity email — week of {weekLabel}</span>
+            <button onClick={() => setEmailOpen(false)} style={listStyles.emailClose}>×</button>
+          </div>
+          <textarea
+            ref={fallbackRef}
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
+            rows={14}
+            style={listStyles.emailTextarea}
+          />
+          <div style={listStyles.emailBtnRow}>
+            <button onClick={copyEmail} style={listStyles.emailPrimaryBtn}>
+              📋 Copy to clipboard
+            </button>
+            <button onClick={openMailto} style={listStyles.emailSecondaryBtn}>
+              ✉️ Open in mail
+            </button>
+            {copyMsg && <span style={listStyles.copyMsg}>{copyMsg}</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Overdue */}
+      {overdue.length > 0 && (
+        <div style={listStyles.overdueWrap}>
+          <div style={listStyles.overdueTitle}>
+            ⚠ {overdue.length} overdue task{overdue.length === 1 ? '' : 's'}
+          </div>
+          {overdue.map((t) => (
+            <PlanListRow
+              key={t.id}
+              task={t}
+              projects={projects}
+              currentUserId={currentUserId}
+              runningTimer={runningTimer}
+              onUpdateTask={onUpdateTask}
+              onToggleDone={onToggleDone}
+              onStartTimer={onStartTimer}
+              onStopTimer={onStopTimer}
+              overdue
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Day-by-day */}
+      {dayKeys.map((dk, i) => {
+        const dayTasks = byDay[dk] || [];
+        const dayHrs = Math.round(sumEstimateHours(dayTasks) * 10) / 10;
+        return (
+          <div key={dk} style={listStyles.dayBlock}>
+            <div style={{ ...listStyles.dayHeader, borderLeft: `3px solid ${DAY_COLORS[i]}` }}>
+              <span style={listStyles.dayName}>{DAY_NAMES_FULL[i]}</span>
+              <span style={listStyles.dayDate}>
+                {new Date(dk + 'T12:00:00').toLocaleDateString(undefined, {
+                  day: 'numeric',
+                  month: 'short',
+                })}
+              </span>
+              <div style={{ flex: 1 }} />
+              <span style={listStyles.dayHours}>
+                {dayTasks.length} task{dayTasks.length === 1 ? '' : 's'}
+                {dayHrs > 0 ? ` · ${dayHrs}h` : ''}
+              </span>
+            </div>
+            {dayTasks.length === 0 ? (
+              <div style={listStyles.emptyDay}>No tasks scheduled</div>
+            ) : (
+              dayTasks.map((t) => (
+                <PlanListRow
+                  key={t.id}
+                  task={t}
+                  projects={projects}
+                  currentUserId={currentUserId}
+                  runningTimer={runningTimer}
+                  onUpdateTask={onUpdateTask}
+                  onToggleDone={onToggleDone}
+                  onStartTimer={onStartTimer}
+                  onStopTimer={onStopTimer}
+                />
+              ))
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Stat({ label, value, color, hint }) {
+  return (
+    <div style={listStyles.stat} title={hint}>
+      <div style={{ ...listStyles.statValue, color }}>{value}</div>
+      <div style={listStyles.statLabel}>{label}</div>
+    </div>
+  );
+}
+
+// ── PlanListRow ──────────────────────────────────────────────────────────────
+// Single task row with checkbox, title, project chip, estimate quick-pick,
+// timer button.
+function PlanListRow({
+  task,
+  projects,
+  currentUserId,
+  runningTimer,
+  onUpdateTask,
+  onToggleDone,
+  onStartTimer,
+  onStopTimer,
+  overdue,
+}) {
+  const projColor = projectColor(task.project, projects);
+  const isTracking = runningTimer?.taskId === task.id;
+  const ESTIMATES = [0.5, 1, 2, 4];
+
+  return (
+    <div
+      style={{
+        ...listStyles.row,
+        opacity: task.done ? 0.55 : 1,
+        background: overdue ? '#e24b4a08' : '#fff',
+        borderLeft: `3px solid ${projColor}`,
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={!!task.done}
+        onChange={() => onToggleDone(task.id)}
+        style={listStyles.check}
+      />
+      <div style={listStyles.rowMain}>
+        <div
+          style={{
+            ...listStyles.title,
+            textDecoration: task.done ? 'line-through' : 'none',
+          }}
+        >
+          {task.title}
+        </div>
+        {task.project && (
+          <span style={{ ...listStyles.projChip, background: projColor + '22', color: projColor }}>
+            {task.project}
+          </span>
+        )}
+      </div>
+
+      {/* Estimate quick-pick */}
+      <div style={listStyles.estPick}>
+        {ESTIMATES.map((h) => (
+          <button
+            key={h}
+            onClick={() =>
+              onUpdateTask(task.id, {
+                estimate: task.estimate === h ? null : h,
+              })
+            }
+            style={{
+              ...listStyles.estBtn,
+              ...(task.estimate === h ? listStyles.estBtnActive : {}),
+            }}
+            title={`Set estimate to ${h}h`}
+          >
+            {h}h
+          </button>
+        ))}
+      </div>
+
+      {/* Timer */}
+      {!task.done && (
+        isTracking ? (
+          <button onClick={onStopTimer} style={listStyles.stopBtn}>
+            ■ Stop
+          </button>
+        ) : (
+          <button
+            onClick={() => onStartTimer(task)}
+            style={listStyles.trackBtn}
+            disabled={!!runningTimer}
+            title={runningTimer ? 'Stop the running timer first' : 'Start tracking'}
+          >
+            ▶ Track
+          </button>
+        )
+      )}
+    </div>
+  );
+}
+
+const planStyles = {
+  viewSwitch: {
+    display: 'flex',
+    background: 'var(--color-background-secondary)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 8,
+    padding: 2,
+    gap: 1,
+    marginLeft: 6,
+  },
+  viewBtn: {
+    padding: '4px 10px',
+    fontSize: 11,
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontWeight: 400,
+  },
+  viewBtnActive: {
+    background: '#fff',
+    color: 'var(--color-text-primary)',
+    fontWeight: 500,
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+  },
+};
+
+const listStyles = {
+  wrap: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '12px 14px 32px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  },
+  capacityCard: {
+    background: 'var(--color-background-secondary)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 10,
+    padding: 12,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  capacityRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  stat: {
+    textAlign: 'center',
+    cursor: 'help',
+  },
+  statValue: { fontSize: 18, fontWeight: 600 },
+  statLabel: { fontSize: 10, color: 'var(--color-text-secondary)' },
+  emailBtn: {
+    padding: '6px 14px',
+    background: '#534AB7',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  barWrap: {
+    height: 6,
+    background: 'var(--color-background-tertiary)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    transition: 'width 0.2s, background 0.2s',
+  },
+  barLabel: {
+    fontSize: 10,
+    color: 'var(--color-text-secondary)',
+    textAlign: 'right',
+  },
+  emailCard: {
+    background: '#fff',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 10,
+    padding: 12,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  emailHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  emailHeaderTitle: { fontSize: 12, fontWeight: 600 },
+  emailClose: {
+    width: 24,
+    height: 24,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 18,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+  },
+  emailTextarea: {
+    width: '100%',
+    padding: 10,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 6,
+    resize: 'vertical',
+    background: 'var(--color-background-secondary)',
+    outline: 'none',
+    lineHeight: 1.5,
+  },
+  emailBtnRow: {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+  },
+  emailPrimaryBtn: {
+    padding: '6px 14px',
+    background: '#534AB7',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+  emailSecondaryBtn: {
+    padding: '6px 14px',
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--color-text-primary)',
+    borderRadius: 6,
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+  copyMsg: { fontSize: 11, color: '#1d9e75', fontWeight: 500 },
+  overdueWrap: {
+    background: '#e24b4a11',
+    border: '0.5px solid #e24b4a44',
+    borderRadius: 10,
+    padding: 10,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  overdueTitle: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#e24b4a',
+    marginBottom: 4,
+  },
+  dayBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  dayHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 10px',
+    background: 'var(--color-background-secondary)',
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  dayName: { fontSize: 12, fontWeight: 600 },
+  dayDate: { fontSize: 11, color: 'var(--color-text-secondary)' },
+  dayHours: {
+    fontSize: 10,
+    color: 'var(--color-text-secondary)',
+    fontWeight: 500,
+  },
+  emptyDay: {
+    padding: '6px 14px',
+    fontSize: 11,
+    color: 'var(--color-text-tertiary)',
+    fontStyle: 'italic',
+  },
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 10px',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 6,
+  },
+  check: { cursor: 'pointer', flexShrink: 0 },
+  rowMain: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  title: {
+    fontSize: 12,
+    color: 'var(--color-text-primary)',
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  projChip: {
+    fontSize: 10,
+    padding: '1px 7px',
+    borderRadius: 12,
+    fontWeight: 500,
+    flexShrink: 0,
+  },
+  estPick: {
+    display: 'flex',
+    gap: 2,
+    flexShrink: 0,
+  },
+  estBtn: {
+    padding: '2px 6px',
+    fontSize: 10,
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-tertiary)',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 4,
+    cursor: 'pointer',
+    minWidth: 28,
+  },
+  estBtnActive: {
+    background: '#534AB7',
+    color: '#fff',
+    borderColor: '#534AB7',
+    fontWeight: 500,
+  },
+  trackBtn: {
+    padding: '3px 10px',
+    fontSize: 10,
+    background: 'transparent',
+    border: '0.5px solid #534AB7',
+    color: '#534AB7',
+    borderRadius: 4,
+    cursor: 'pointer',
+    flexShrink: 0,
+    fontWeight: 500,
+  },
+  stopBtn: {
+    padding: '3px 10px',
+    fontSize: 10,
+    background: '#e24b4a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 4,
+    cursor: 'pointer',
+    flexShrink: 0,
+    fontWeight: 500,
+  },
+};
 
 // ── DayColumn ────────────────────────────────────────────────────────────────
 function DayColumn({

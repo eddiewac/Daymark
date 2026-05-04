@@ -246,6 +246,11 @@ export default function WorkspaceView({
             loading={tasksLoading}
             onUpdateTask={updateTask}
             onToggleDone={toggleDone}
+            blocks={time.blocks}
+            currentUserId={time.currentUserId}
+            runningTimer={time.runningTimer}
+            onStartTimer={startTimer}
+            onStopTimer={time.requestStop}
           />
         )}
         {tab === 'projects' && (

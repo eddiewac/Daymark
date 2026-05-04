@@ -107,6 +107,14 @@ export default function TopBar({
 
       {timerIndicator}
 
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent('daymark-quick-capture'))}
+        style={styles.quickBtn}
+        title="Quick capture (Cmd/Ctrl+K)"
+      >
+        + New
+      </button>
+
       <button onClick={onOpenGoals} style={styles.goalsBtn} title="Personal goals">
         🎯 Goals
       </button>
@@ -185,6 +193,17 @@ const styles = {
     border: '0.5px dashed var(--color-border-primary)',
     borderRadius: 8,
     color: 'var(--color-text-secondary)',
+  },
+  quickBtn: {
+    padding: '5px 12px',
+    fontSize: 11,
+    background: '#534AB7',
+    border: 'none',
+    borderRadius: 8,
+    color: '#fff',
+    cursor: 'pointer',
+    marginRight: 8,
+    fontWeight: 500,
   },
   goalsBtn: {
     padding: '5px 12px',

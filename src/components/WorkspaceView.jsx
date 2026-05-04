@@ -20,9 +20,12 @@ import CongressesPanel from './congresses/CongressesPanel.jsx';
 import StatusRoundsPanel from './status/StatusRoundsPanel.jsx';
 import PriorityBanner from './priority/PriorityBanner.jsx';
 import PriorityModal from './priority/PriorityModal.jsx';
+import QuickCapture from './QuickCapture.jsx';
+import TodayView from './today/TodayView.jsx';
 import FocusBox from './FocusBox.jsx';
 
 const TABS = [
+  { key: 'today', label: 'Today' },
   { key: 'tasks', label: 'Tasks' },
   { key: 'plan', label: 'Plan' },
   { key: 'projects', label: 'Projects' },
@@ -126,6 +129,25 @@ export default function WorkspaceView({
 
   // Modal state for setting today's priority
   const [priorityModalOpen, setPriorityModalOpen] = useState(false);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+
+  // Listen for global quick-capture triggers (Cmd+K, "+ New" button in TopBar).
+  // Both fire the 'daymark-quick-capture' event so we don't need prop drilling.
+  useEffect(() => {
+    const onTrigger = () => setQuickCaptureOpen((v) => !v);
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setQuickCaptureOpen((v) => !v);
+      }
+    };
+    window.addEventListener('daymark-quick-capture', onTrigger);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('daymark-quick-capture', onTrigger);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
 
   // Load workspace members
   useEffect(() => {
@@ -205,6 +227,18 @@ export default function WorkspaceView({
       </div>
 
       <div style={styles.body}>
+        {tab === 'today' && (
+          <TodayView
+            tasks={allTasks}
+            projects={projects}
+            congresses={congresses}
+            todayPriority={priorityApi.today}
+            onOpenPriorityModal={() => setPriorityModalOpen(true)}
+            onJumpToTab={(t) => setTab(t)}
+            onJumpToProject={() => setTab('projects')}
+            onToggleDone={toggleDone}
+          />
+        )}
         {tab === 'tasks' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <PriorityBanner
@@ -392,6 +426,16 @@ export default function WorkspaceView({
           onClose={() => setPriorityModalOpen(false)}
         />
       )}
+
+      {/* Global quick capture (Cmd+K / Ctrl+K) */}
+      <QuickCapture
+        open={quickCaptureOpen}
+        onClose={() => setQuickCaptureOpen(false)}
+        onAddTask={addTask}
+        onAddProject={addProject}
+        projects={projects}
+        priorities={settings.priorities}
+      />
     </div>
   );
 }

@@ -34,6 +34,32 @@ export default function StationFocus({
   const stationTasks = (tasks || []).filter((t) => t.stationId === station.id);
   const doneCount = stationTasks.filter((t) => t.done).length;
 
+  // ── Next-station suggestion ─────────────────────────────────────────────
+  // When this station is marked done, surface a small prompt for the next
+  // station if it has no tasks yet.
+  const allStations = deliverable?.stations || [];
+  const stationIdx = allStations.findIndex((s) => s.id === station.id);
+  const nextStation =
+    stationIdx >= 0 && stationIdx + 1 < allStations.length
+      ? allStations[stationIdx + 1]
+      : null;
+  const nextHasTasks =
+    nextStation &&
+    (tasks || []).some((t) => t.stationId === nextStation.id);
+  const showNextPrompt = station.done && nextStation && !nextHasTasks;
+  const [nextTaskDraft, setNextTaskDraft] = useState('');
+  const [nextDismissed, setNextDismissed] = useState(false);
+
+  const addTaskToNext = async () => {
+    if (!nextTaskDraft.trim() || !nextStation) return;
+    await onAddTask({
+      title: nextTaskDraft.trim(),
+      project: project?.name || '',
+      stationId: nextStation.id,
+    });
+    setNextTaskDraft('');
+  };
+
   const updateStation = (patch) => onUpdateStation({ ...station, ...patch });
 
   const addTask = async () => {
@@ -185,6 +211,52 @@ export default function StationFocus({
                 </div>
               )}
             </div>
+
+            {/* Next-station suggestion */}
+            {showNextPrompt && !nextDismissed && (
+              <div style={nextPromptStyles.box}>
+                <div style={nextPromptStyles.header}>
+                  <span style={nextPromptStyles.headerLabel}>
+                    Next: <strong>{nextStation.name}</strong>
+                  </span>
+                  <button
+                    onClick={() => setNextDismissed(true)}
+                    style={nextPromptStyles.dismiss}
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div style={nextPromptStyles.hint}>
+                  Add the first task for this station — quickly captures momentum.
+                </div>
+                <div style={nextPromptStyles.row}>
+                  <input
+                    value={nextTaskDraft}
+                    onChange={(e) => setNextTaskDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addTaskToNext();
+                      if (e.key === 'Escape') setNextDismissed(true);
+                    }}
+                    placeholder={`Task for "${nextStation.name}"…`}
+                    style={nextPromptStyles.input}
+                    autoFocus
+                  />
+                  <button
+                    onClick={addTaskToNext}
+                    disabled={!nextTaskDraft.trim()}
+                    style={{
+                      ...nextPromptStyles.addBtn,
+                      background: color,
+                      opacity: nextTaskDraft.trim() ? 1 : 0.4,
+                      cursor: nextTaskDraft.trim() ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -771,5 +843,64 @@ const enrichedStyles = {
     fontSize: 22,
     color: 'var(--color-text-secondary)',
     cursor: 'pointer',
+  },
+};
+
+const nextPromptStyles = {
+  box: {
+    marginTop: 12,
+    padding: 12,
+    background: '#534AB708',
+    border: '0.5px dashed #534AB744',
+    borderRadius: 8,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerLabel: {
+    fontSize: 11,
+    color: '#534AB7',
+    flex: 1,
+  },
+  dismiss: {
+    width: 22,
+    height: 22,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 14,
+    color: 'var(--color-text-tertiary)',
+    cursor: 'pointer',
+    borderRadius: 4,
+  },
+  hint: {
+    fontSize: 10,
+    color: 'var(--color-text-secondary)',
+    fontStyle: 'italic',
+  },
+  row: {
+    display: 'flex',
+    gap: 6,
+    alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    padding: '5px 10px',
+    fontSize: 12,
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    outline: 'none',
+  },
+  addBtn: {
+    padding: '5px 14px',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 500,
   },
 };

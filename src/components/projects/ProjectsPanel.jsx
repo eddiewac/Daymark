@@ -128,6 +128,7 @@ export default function ProjectsPanel({
                       project={p}
                       allProjects={projects}
                       taskCount={taskCountFor(p.name)}
+                      projectTasks={(tasks || []).filter((t) => t.project === p.name)}
                       onClick={() => setActiveId(p.id)}
                     />
                   ))}
@@ -157,6 +158,7 @@ export default function ProjectsPanel({
                       project={p}
                       allProjects={projects}
                       taskCount={taskCountFor(p.name)}
+                      projectTasks={(tasks || []).filter((t) => t.project === p.name)}
                       onClick={() => setTrackingId(p.id)}
                     />
                   ))}

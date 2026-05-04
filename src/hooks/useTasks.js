@@ -237,6 +237,22 @@ export function useTasks(workspaceId, workspaceName) {
     [assignedTasks, workspaceId]
   );
 
+  // Helper: compute the next due date for a recurring task
+  // Returns "" if the task can't recur or there's no anchor date.
+  const nextRecurringDue = (task) => {
+    const r = task.recurring;
+    if (!r || r === 'none') return '';
+    // Anchor on the existing dueDate, or fall back to today
+    const anchorStr = task.dueDate || new Date().toISOString().slice(0, 10);
+    const d = new Date(anchorStr + 'T12:00:00');
+    if (Number.isNaN(d.getTime())) return '';
+    if (r === 'daily') d.setDate(d.getDate() + 1);
+    else if (r === 'weekly') d.setDate(d.getDate() + 7);
+    else if (r === 'monthly') d.setMonth(d.getMonth() + 1);
+    else return '';
+    return d.toISOString().slice(0, 10);
+  };
+
   const toggleDone = useCallback(
     async (taskId) => {
       const task =
@@ -254,8 +270,51 @@ export function useTasks(workspaceId, workspaceName) {
       );
 
       await toggleTaskDoneDb(taskId, nd, doneAt);
+
+      // If we just COMPLETED a recurring task, spawn the next instance.
+      // We don't spawn on un-complete (toggling back to open shouldn't duplicate).
+      if (nd && task.recurring && task.recurring !== 'none') {
+        const nextDue = nextRecurringDue(task);
+        if (nextDue) {
+          const next = {
+            id: uid(),
+            title: task.title,
+            priority: task.priority,
+            category: task.category,
+            project: task.project,
+            status: 'To do',
+            done: false,
+            due: '',
+            dueDate: nextDue,
+            reminder: '',
+            tags: [...(task.tags || [])],
+            recurring: task.recurring,
+            taskNumber: '',
+            expenditureType: task.expenditureType || '',
+            links: [...(task.links || [])],
+            stationId: task.stationId || null,
+            checklistProgress: {},
+            createdAt: Date.now(),
+            doneAt: null,
+            // Inherit assignee
+            assignedToId: task.assignedToId || null,
+            assignedToEmail: task.assignedToEmail || null,
+            // Inherit estimate so weekly recurring tasks keep their planning hours
+            estimate: task.estimate || null,
+            // Don't carry OOS — by default new instance starts clean
+            outOfScope: false,
+            outOfScopeHours: null,
+            outOfScopeNotes: '',
+          };
+          setTasks((prev) => [next, ...prev]);
+          await saveTask(next, workspaceId);
+          if (next.assignedToId && workspaceId) {
+            await assignTaskDb(next, next.assignedToId, workspaceId, workspaceName);
+          }
+        }
+      }
     },
-    [tasks, assignedTasks]
+    [tasks, assignedTasks, workspaceId, workspaceName]
   );
 
   const assignToMember = useCallback(

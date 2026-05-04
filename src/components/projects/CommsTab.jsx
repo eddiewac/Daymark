@@ -215,7 +215,16 @@ export default function CommsTab({ station, onUpdateStation }) {
             .map((comm) => {
               const col = comm.color || PILL_COLOR_CYCLE[0];
               const days = daysSince(comm.sentAt);
-              const overdue = comm.needsReply && !comm.replyReceived && days > 2;
+              const today = new Date().toISOString().slice(0, 10);
+              const expectOverdue =
+                comm.expectReplyBy &&
+                !comm.replyReceived &&
+                comm.expectReplyBy < today;
+              // Without expectReplyBy: fall back to >2 day rule
+              const overdue =
+                comm.needsReply &&
+                !comm.replyReceived &&
+                (expectOverdue || (!comm.expectReplyBy && days > 2));
               return (
                 <div key={comm.id} style={styles.logRow}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -248,7 +257,10 @@ export default function CommsTab({ station, onUpdateStation }) {
                               (overdue ? '#e24b4a' : '#ef9f27') + '22',
                           }}
                         >
-                          {overdue ? '⚠' : '⏳'} awaiting reply
+                          {overdue ? '⚠' : '⏳'}{' '}
+                          {expectOverdue
+                            ? 'reply overdue'
+                            : 'awaiting reply'}
                         </span>
                       )}
                       {comm.replyReceived && (
@@ -257,6 +269,49 @@ export default function CommsTab({ station, onUpdateStation }) {
                         </span>
                       )}
                     </div>
+                    {/* Expect-reply control (only for needs-reply, not yet received) */}
+                    {comm.needsReply && !comm.replyReceived && (
+                      <div style={styles.expectRow}>
+                        <span style={styles.expectLabel}>Expect reply by:</span>
+                        <input
+                          type="date"
+                          value={comm.expectReplyBy || ''}
+                          onChange={(e) =>
+                            onUpdateStation({
+                              ...station,
+                              comms: comms.map((c) =>
+                                c.id === comm.id
+                                  ? { ...c, expectReplyBy: e.target.value || null }
+                                  : c
+                              ),
+                            })
+                          }
+                          style={{
+                            ...styles.expectInput,
+                            color: expectOverdue ? '#e24b4a' : 'var(--color-text-primary)',
+                            borderColor: expectOverdue ? '#e24b4a44' : 'var(--color-border-tertiary)',
+                          }}
+                        />
+                        {comm.expectReplyBy && (
+                          <button
+                            onClick={() =>
+                              onUpdateStation({
+                                ...station,
+                                comms: comms.map((c) =>
+                                  c.id === comm.id
+                                    ? { ...c, expectReplyBy: null }
+                                    : c
+                                ),
+                              })
+                            }
+                            style={styles.expectClear}
+                            title="Clear"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {comm.needsReply && !comm.replyReceived && (
                     <button
@@ -422,5 +477,33 @@ const styles = {
     color: 'var(--color-text-tertiary)',
     fontSize: 14,
     cursor: 'pointer',
+  },
+  expectRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  expectLabel: {
+    fontSize: 10,
+    color: 'var(--color-text-secondary)',
+  },
+  expectInput: {
+    padding: '2px 6px',
+    fontSize: 10,
+    border: '0.5px solid',
+    borderRadius: 4,
+    background: '#fff',
+    outline: 'none',
+  },
+  expectClear: {
+    width: 18,
+    height: 18,
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--color-text-tertiary)',
+    fontSize: 13,
+    cursor: 'pointer',
+    borderRadius: 4,
   },
 };

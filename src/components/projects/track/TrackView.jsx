@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { projectColor } from '../../../lib/constants.js';
 import { uid } from '../../../lib/utils.js';
 import StationFocus from './StationFocus.jsx';
+import { stationLastActivityAt, relativeTime } from '../../../lib/stations.js';
 
 const DEFAULT_STATIONS = [
   { name: 'Draft 1' },
@@ -56,7 +57,9 @@ export default function TrackView({
       return {
         ...d,
         stations: (d.stations || []).map((s) =>
-          s.id === stationId ? { ...s, ...patch } : s
+          s.id === stationId
+            ? { ...s, ...patch, updatedAt: new Date().toISOString() }
+            : s
         ),
       };
     });
@@ -339,6 +342,31 @@ export default function TrackView({
                             {awaiting > 0 && (
                               <div style={styles.trainAwaiting}>⏳ {awaiting}</div>
                             )}
+                            {!s.done && (() => {
+                              const lastAct = stationLastActivityAt(s);
+                              if (!lastAct) return null;
+                              const daysSince = (Date.now() - lastAct) / 86400000;
+                              const rel = relativeTime(lastAct);
+                              if (!rel) return null;
+                              const isStale = daysSince > 7;
+                              return (
+                                <div
+                                  style={{
+                                    fontSize: 9,
+                                    color: isStale ? '#e24b4a' : 'var(--color-text-tertiary)',
+                                    fontWeight: isStale ? 600 : 400,
+                                    marginTop: 2,
+                                  }}
+                                  title={
+                                    isStale
+                                      ? `No activity for ${Math.floor(daysSince)} days`
+                                      : `Last activity ${rel}`
+                                  }
+                                >
+                                  {isStale ? `⚠ ${rel}` : rel}
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}

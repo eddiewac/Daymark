@@ -1,15 +1,36 @@
 import { projectColor } from '../../lib/constants.js';
+import { projectHealth } from '../../lib/stations.js';
 
 const STATUS_OPTIONS = ['', '🟢 On track', '🟡 At risk', '🔴 Off track'];
 
-export default function ProjectCard({ project, allProjects, taskCount, onClick }) {
+const HEALTH_COLOR = {
+  green: '#1d9e75',
+  amber: '#ef9f27',
+  red: '#e24b4a',
+};
+
+export default function ProjectCard({ project, allProjects, taskCount, projectTasks, onClick }) {
   const color = projectColor(project.name, allProjects);
   const delivCount = (project.deliverables || []).length;
   const congressCount = (project.congresses || []).length;
+  const health = projectHealth(project, projectTasks || []);
 
   return (
     <button onClick={onClick} style={{ ...styles.card, borderTop: `3px solid ${color}` }}>
-      <div style={styles.title}>{project.name || '(untitled)'}</div>
+      <div style={styles.titleRow}>
+        <div style={styles.title}>{project.name || '(untitled)'}</div>
+        <span
+          style={{
+            ...styles.healthDot,
+            background: HEALTH_COLOR[health.status] || HEALTH_COLOR.green,
+          }}
+          title={
+            health.reasons.length
+              ? health.reasons.join(' · ')
+              : 'No issues detected'
+          }
+        />
+      </div>
       {project.number && <div style={styles.number}>#{project.number}</div>}
       {project.status && (
         <div style={{ ...styles.status, color }}>{project.status}</div>
@@ -39,7 +60,18 @@ const styles = {
     flexDirection: 'column',
     gap: 4,
   },
-  title: { fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)' },
+  titleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: { fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1, minWidth: 0 },
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
   number: { fontSize: 11, color: 'var(--color-text-tertiary)' },
   status: { fontSize: 11, fontWeight: 500 },
   meta: {

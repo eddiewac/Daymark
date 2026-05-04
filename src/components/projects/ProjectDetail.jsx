@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { projectColor } from '../../lib/constants.js';
+import { generateProjectHandoff } from '../../lib/handoff.js';
 import DeliverableEditor from './DeliverableEditor.jsx';
 
 const STATUS_OPTIONS = ['', '🟢 On track', '🟡 At risk', '🔴 Off track'];
@@ -17,6 +18,42 @@ export default function ProjectDetail({
 }) {
   const [draft, setDraft] = useState(project);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [handoffText, setHandoffText] = useState('');
+  const [copyMsg, setCopyMsg] = useState('');
+  const handoffRef = useRef(null);
+
+  const openHandoff = () => {
+    setHandoffText(generateProjectHandoff(project, tasks));
+    setHandoffOpen(true);
+    setCopyMsg('');
+  };
+
+  const copyHandoff = async () => {
+    try {
+      await navigator.clipboard.writeText(handoffText);
+      setCopyMsg('Copied!');
+      setTimeout(() => setCopyMsg(''), 3000);
+    } catch {
+      handoffRef.current?.select();
+      setCopyMsg('Auto-copy failed — select and copy manually.');
+      setTimeout(() => setCopyMsg(''), 5000);
+    }
+  };
+
+  const downloadHandoff = () => {
+    const blob = new Blob([handoffText], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    const safeName = (project.name || 'project').replace(/[^a-z0-9-]+/gi, '-');
+    a.href = url;
+    a.download = `handoff-${safeName}-${stamp}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     setDraft(project);
@@ -51,6 +88,13 @@ export default function ProjectDetail({
           placeholder="Project name"
           style={styles.titleInput}
         />
+        <button
+          onClick={openHandoff}
+          style={styles.handoffBtn}
+          title="Generate a handoff document"
+        >
+          📋 Handoff
+        </button>
         {onTrack && (
           <button onClick={onTrack} style={styles.trackBtn} title="Open in Track view">
             🚂 Track
@@ -256,6 +300,53 @@ export default function ProjectDetail({
           )}
         </div>
       </div>
+
+      {handoffOpen && (
+        <div style={handoffStyles.backdrop} onClick={() => setHandoffOpen(false)}>
+          <div
+            style={handoffStyles.dialog}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={handoffStyles.header}>
+              <span style={handoffStyles.title}>
+                Handoff — {project.name || '(untitled)'}
+              </span>
+              <button
+                onClick={() => setHandoffOpen(false)}
+                style={handoffStyles.close}
+              >
+                ×
+              </button>
+            </div>
+            <div style={handoffStyles.hint}>
+              Markdown summary you can paste into Slack, email, or save for the next PM.
+            </div>
+            <textarea
+              ref={handoffRef}
+              value={handoffText}
+              onChange={(e) => setHandoffText(e.target.value)}
+              rows={20}
+              style={handoffStyles.textarea}
+            />
+            <div style={handoffStyles.btnRow}>
+              <button onClick={copyHandoff} style={handoffStyles.primaryBtn}>
+                📋 Copy
+              </button>
+              <button onClick={downloadHandoff} style={handoffStyles.secondaryBtn}>
+                ⬇ Download .md
+              </button>
+              {copyMsg && <span style={handoffStyles.msg}>{copyMsg}</span>}
+              <div style={{ flex: 1 }} />
+              <button
+                onClick={() => setHandoffOpen(false)}
+                style={handoffStyles.cancelBtn}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -296,6 +387,17 @@ const styles = {
     background: '#534AB711',
     color: '#534AB7',
     border: '0.5px solid #534AB7',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    marginRight: 8,
+    cursor: 'pointer',
+  },
+  handoffBtn: {
+    padding: '5px 12px',
+    background: 'transparent',
+    color: 'var(--color-text-secondary)',
+    border: '0.5px solid var(--color-border-primary)',
     borderRadius: 8,
     fontSize: 12,
     fontWeight: 500,
@@ -412,4 +514,94 @@ const oosBoxStyles = {
   },
   icon: { color: '#e24b4a', fontSize: 13 },
   text: { lineHeight: 1.5 },
+};
+
+const handoffStyles = {
+  backdrop: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.5)',
+    zIndex: 1300,
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    overflow: 'auto',
+    padding: '40px 20px 80px',
+  },
+  dialog: {
+    background: '#fff',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 720,
+    padding: 16,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    boxShadow: '0 12px 40px rgba(0,0,0,0.18)',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: { fontSize: 13, fontWeight: 600 },
+  close: {
+    width: 28,
+    height: 28,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 22,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+  },
+  hint: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+  },
+  textarea: {
+    width: '100%',
+    padding: 10,
+    fontSize: 11,
+    fontFamily: 'monospace',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 6,
+    resize: 'vertical',
+    outline: 'none',
+    background: 'var(--color-background-secondary)',
+    lineHeight: 1.5,
+  },
+  btnRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  primaryBtn: {
+    padding: '6px 14px',
+    background: '#534AB7',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 500,
+    cursor: 'pointer',
+  },
+  secondaryBtn: {
+    padding: '6px 14px',
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--color-text-primary)',
+    borderRadius: 6,
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+  cancelBtn: {
+    padding: '6px 14px',
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 6,
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+  msg: { fontSize: 11, color: '#1d9e75', fontWeight: 500 },
 };

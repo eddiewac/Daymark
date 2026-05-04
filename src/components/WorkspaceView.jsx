@@ -40,6 +40,10 @@ export default function WorkspaceView({
   time,
   onTimerStartedForTask,
 }) {
+  // Derive workspaceId early — needed by the tab persistence key below.
+  const workspaceId = activeWorkspace?.id || null;
+  const workspaceName = activeWorkspace?.name || 'Personal';
+
   // Persist the active tab per workspace so refreshing doesn't bump you back.
   // Stored under a key that includes the workspace id so different workspaces
   // can remember different tabs (e.g. you might be on Tasks in one workspace
@@ -64,9 +68,6 @@ export default function WorkspaceView({
 
   // Focus box visibility — auto-opens when timer starts, closes on stop or manual close
   const [focusOpen, setFocusOpen] = useState(false);
-
-  const workspaceId = activeWorkspace?.id || null;
-  const workspaceName = activeWorkspace?.name || 'Personal';
 
   const {
     allTasks,

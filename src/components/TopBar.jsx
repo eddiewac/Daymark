@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
+import { DaymarkWordmark } from './Logo.jsx';
 import { createWorkspace, setStoredActiveWorkspaceId } from '../lib/workspaces.js';
 
 export default function TopBar({
@@ -42,7 +43,7 @@ export default function TopBar({
   return (
     <header style={styles.bar}>
       <div style={styles.logo}>
-        Day<span style={{ color: '#534AB7' }}>mark</span>
+        <DaymarkWordmark height={22} />
       </div>
 
       <div style={styles.divider} />
@@ -155,7 +156,7 @@ const styles = {
     borderBottom: '0.5px solid var(--color-border-secondary)',
     position: 'relative',
   },
-  logo: { fontSize: 16, fontWeight: 600 },
+  logo: { display: 'flex', alignItems: 'center' },
   divider: {
     width: 1,
     height: 16,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
+import { DaymarkWordmark } from './Logo.jsx';
 
 export default function Auth() {
   const [mode, setMode] = useState('login');
@@ -57,7 +58,7 @@ export default function Auth() {
     <div style={styles.wrap}>
       <div style={styles.card}>
         <div style={styles.logo}>
-          Day<span style={{ color: '#534AB7' }}>mark</span>
+          <DaymarkWordmark height={36} />
         </div>
         <div style={styles.sub}>
           {mode === 'login' ? 'Sign in to your account' : 'Create your Daymark account'}
@@ -169,9 +170,9 @@ const styles = {
     boxShadow: '0 4px 24px rgba(0,0,0,0.04)',
   },
   logo: {
-    fontSize: 24,
-    fontWeight: 600,
-    marginBottom: 4,
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   sub: {
     fontSize: 13,

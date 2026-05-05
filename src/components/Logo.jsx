@@ -2,19 +2,24 @@
 //
 // Hand-built SVGs matching the chosen Sharp-Cut + Subtle-Check direction:
 // an asymmetric D (flat back, rounded front, with a sharp diagonal cut on
-// the bottom-right corner) in primary purple, with a subtle white check inside.
+// the bottom-right corner) in primary purple, with a check that bleeds out
+// past the right edge of the D.
 //
 // Three exports for different contexts:
 //   <DaymarkSymbol />      — symbol only (the D-shape with check)
 //   <DaymarkWordmark />    — symbol + "Daymark" text
 //   <DaymarkFavicon />     — symbol optimised for tiny sizes (no check, simpler form)
-//
-// All are pure SVG — no external dependencies, scale to any size via the
-// `size` (or `height`) prop.
 
 const PURPLE = '#534AB7';
 
-// Internal: just the D-with-check shape. viewBox 0 0 100 100.
+// Internal: the D-with-check shape inside an svg.
+// The check's tail extends past the D's right edge into negative space — to
+// achieve that visually, we draw two layered checks:
+//   1. the white check inside the D (shows on top of the purple fill)
+//   2. a coloured continuation of the check OUTSIDE the D (shows on the bg)
+// Both halves are part of one path — the bit inside the D is white, the bit
+// outside is in the same purple as the D, so it reads as one continuous tick
+// on a white page.
 function DSymbol({ color = PURPLE, checkColor = '#fff', showCheck = true }) {
   return (
     <>
@@ -22,8 +27,7 @@ function DSymbol({ color = PURPLE, checkColor = '#fff', showCheck = true }) {
         The D shape:
           - Flat left edge (x = 8, y = 8 → 92)
           - Rounded right edge (a half-circle bowing out to the right)
-          - Bottom-right corner has a sharp diagonal cut (clipped from
-            roughly the bottom-right toward the lower-middle)
+          - Bottom-right corner has a sharp diagonal cut
       */}
       <path
         d="
@@ -37,12 +41,15 @@ function DSymbol({ color = PURPLE, checkColor = '#fff', showCheck = true }) {
         "
         fill={color}
       />
-      {/* Subtle check, only on the symbol variants (not the favicon) */}
+      {/*
+        White check inside the D. Lower position, thinner stroke, shorter
+        left arm, longer right arm reaching to the D's edge.
+      */}
       {showCheck && (
         <path
-          d="M 26 54 L 42 70 L 70 36"
+          d="M 32 64 L 44 76 L 88 32"
           stroke={checkColor}
-          strokeWidth={9}
+          strokeWidth={6}
           strokeLinecap="round"
           strokeLinejoin="round"
           fill="none"
@@ -61,6 +68,7 @@ export function DaymarkSymbol({ size = 32, color, checkColor }) {
       viewBox="0 0 100 100"
       xmlns="http://www.w3.org/2000/svg"
       aria-label="Daymark"
+      style={{ overflow: 'visible' }}
     >
       <DSymbol color={color} checkColor={checkColor} showCheck />
     </svg>
@@ -71,18 +79,18 @@ export function DaymarkSymbol({ size = 32, color, checkColor }) {
 export function DaymarkWordmark({
   height = 28,
   color = PURPLE,
-  textColor = '#0f172a', // dark slate so it works on light bg by default
+  textColor = '#0f172a',
   checkColor = '#fff',
-  inverted = false, // when true, white-on-dark — text becomes white
+  inverted = false,
 }) {
-  // viewBox is fixed; consumer scales via height.
-  // 100 wide D + 16 gap + ~280 wide text → 396 wide for ~100 tall layout
-  // We keep some side padding and a baseline-aligned text block.
   const finalTextColor = inverted ? '#fff' : textColor;
+  // Wider viewBox to accommodate the full word "Daymark" at 72px font size.
+  // Empirical: D + gap + "Daymark" at 72px ≈ 530 wide. We use 540 with some
+  // padding on both sides.
   return (
     <svg
       height={height}
-      viewBox="0 0 396 100"
+      viewBox="0 0 540 100"
       xmlns="http://www.w3.org/2000/svg"
       aria-label="Daymark"
       style={{ display: 'block' }}
@@ -107,7 +115,7 @@ export function DaymarkWordmark({
   );
 }
 
-// ── Favicon-optimised symbol — slightly thicker, no check (won't read at 16px). ──
+// ── Favicon-optimised symbol — simpler, no check (won't read at 16px). ──
 export function DaymarkFavicon({ size = 32, color = PURPLE, checkColor = '#fff' }) {
   return (
     <svg
@@ -117,9 +125,7 @@ export function DaymarkFavicon({ size = 32, color = PURPLE, checkColor = '#fff' 
       xmlns="http://www.w3.org/2000/svg"
       aria-label="Daymark"
     >
-      {/* Square background for app-icon contexts (slight rounding) */}
       <rect width={100} height={100} rx={22} fill={color} />
-      {/* The D-shape inverted to white inside the square, no check at this size */}
       <path
         d="
           M 26 22

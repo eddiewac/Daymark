@@ -40,9 +40,27 @@ export default function HelpPanel({ open, onClose }) {
             <DefRow term="Tasks" def="Your individual to-dos. List, kanban, or table view. Filterable by project, priority, status, etc." />
             <DefRow term="Plan" def="Weekly planning. Calendar (drag tasks) or List (with timer + estimate-setting). Generates a capacity email for your team." />
             <DefRow term="Projects" def="Where projects, deliverables, stations, and comms live. Card grid, Gantt timeline, or full-screen Track view." />
+            <DefRow term="Notes" def="Notes linked to specific projects — research, meeting outputs, briefs. Lives with the project, surfaces in handoffs." />
+            <DefRow term="Notepad" def="Freeform scratchpad for things not yet structured. Paste in emails, brainstorm, jot ideas. Convert sections into tasks or projects when ready." />
             <DefRow term="Status" def="Weekly project status updates, archived per round." />
             <DefRow term="Time" def="Block-based time tracking. Reports break down hours by project, week, or month." />
             <DefRow term="Congresses" def="Calendar of upcoming medical congresses, optionally linked to projects." />
+          </Section>
+
+          <Section title="A common workflow">
+            <p>
+              Many PMs use the <strong>Notepad</strong> as an inbox-triage surface:
+              paste a batch of emails in, scan through, and as you find work that
+              needs tracking, convert sections into tasks or projects. The original
+              text stays in the notepad as a record while the structured items
+              flow into Tasks and Projects with the context attached.
+            </p>
+            <p>
+              Once a task or project exists, use <strong>Notes</strong> for the
+              ongoing record — meeting outputs, briefs, decisions. Notes are
+              linked to the project and surface in the project's handoff export
+              when you eventually pass it on.
+            </p>
           </Section>
 
           <Section title="Five minutes to try it">

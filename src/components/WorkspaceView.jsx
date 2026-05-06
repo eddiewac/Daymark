@@ -21,6 +21,7 @@ import StatusRoundsPanel from './status/StatusRoundsPanel.jsx';
 import PriorityBanner from './priority/PriorityBanner.jsx';
 import PriorityModal from './priority/PriorityModal.jsx';
 import QuickCapture from './QuickCapture.jsx';
+import HelpPanel from './HelpPanel.jsx';
 import TodayView from './today/TodayView.jsx';
 import FocusBox from './FocusBox.jsx';
 
@@ -130,11 +131,13 @@ export default function WorkspaceView({
   // Modal state for setting today's priority
   const [priorityModalOpen, setPriorityModalOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Listen for global quick-capture triggers (Cmd+K, "+ New" button in TopBar).
   // Both fire the 'daymark-quick-capture' event so we don't need prop drilling.
   useEffect(() => {
     const onTrigger = () => setQuickCaptureOpen((v) => !v);
+    const onHelp = () => setHelpOpen(true);
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
@@ -142,9 +145,11 @@ export default function WorkspaceView({
       }
     };
     window.addEventListener('daymark-quick-capture', onTrigger);
+    window.addEventListener('daymark-help', onHelp);
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('daymark-quick-capture', onTrigger);
+      window.removeEventListener('daymark-help', onHelp);
       window.removeEventListener('keydown', onKey);
     };
   }, []);
@@ -436,6 +441,9 @@ export default function WorkspaceView({
         projects={projects}
         priorities={settings.priorities}
       />
+
+      {/* Help panel (? in top bar) */}
+      <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

@@ -278,18 +278,78 @@ export default function TodayView({
           </Section>
         )}
 
-        {/* All clear */}
-        {totalItems === 0 && !todayPriority?.primary && (
-          <div style={styles.allClear}>
-            <div style={styles.allClearTitle}>👌 All clear</div>
-            <div style={styles.allClearText}>
-              Nothing overdue, nothing stale, no upcoming congresses, no priority set yet.
+        {/* First-time welcome OR all-clear — depends on whether the user has any data yet */}
+        {totalItems === 0 && !todayPriority?.primary && (() => {
+          const isFirstTime = (tasks || []).length === 0 && (projects || []).length === 0;
+
+          if (isFirstTime) {
+            return (
+              <div style={styles.welcome}>
+                <div style={styles.welcomeTitle}>👋 Welcome to Daymark</div>
+                <div style={styles.welcomeText}>
+                  Let's get you set up. Three things to try, in order:
+                </div>
+                <div style={styles.welcomeSteps}>
+                  <button
+                    onClick={() => onJumpToTab('projects')}
+                    style={styles.welcomeStep}
+                  >
+                    <div style={styles.welcomeStepNum}>1</div>
+                    <div style={styles.welcomeStepBody}>
+                      <div style={styles.welcomeStepTitle}>Create your first project</div>
+                      <div style={styles.welcomeStepDesc}>
+                        Projects hold deliverables, stations, comms, and tasks. The core unit of work.
+                      </div>
+                    </div>
+                    <div style={styles.welcomeStepArrow}>→</div>
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      window.dispatchEvent(new CustomEvent('daymark-quick-capture'))
+                    }
+                    style={styles.welcomeStep}
+                  >
+                    <div style={styles.welcomeStepNum}>2</div>
+                    <div style={styles.welcomeStepBody}>
+                      <div style={styles.welcomeStepTitle}>Add a task</div>
+                      <div style={styles.welcomeStepDesc}>
+                        Press <kbd style={styles.kbd}>Cmd</kbd>+<kbd style={styles.kbd}>K</kbd> from anywhere to add tasks fast.
+                      </div>
+                    </div>
+                    <div style={styles.welcomeStepArrow}>→</div>
+                  </button>
+
+                  <button onClick={onOpenPriorityModal} style={styles.welcomeStep}>
+                    <div style={styles.welcomeStepNum}>3</div>
+                    <div style={styles.welcomeStepBody}>
+                      <div style={styles.welcomeStepTitle}>Set today's priority</div>
+                      <div style={styles.welcomeStepDesc}>
+                        Pick the one thing that most matters today. Pinned to the top of your day.
+                      </div>
+                    </div>
+                    <div style={styles.welcomeStepArrow}>→</div>
+                  </button>
+                </div>
+                <div style={styles.welcomeFooter}>
+                  Need a deeper tour? Click the <strong>?</strong> in the top bar any time.
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div style={styles.allClear}>
+              <div style={styles.allClearTitle}>👌 All clear</div>
+              <div style={styles.allClearText}>
+                Nothing overdue, nothing stale, no upcoming congresses, no priority set yet.
+              </div>
+              <button onClick={onOpenPriorityModal} style={styles.allClearBtn}>
+                Set today's priority
+              </button>
             </div>
-            <button onClick={onOpenPriorityModal} style={styles.allClearBtn}>
-              Set today's priority
-            </button>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
@@ -536,6 +596,85 @@ const styles = {
     fontSize: 12,
     fontWeight: 500,
     cursor: 'pointer',
+  },
+  welcome: {
+    background: '#fff',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 12,
+    padding: 24,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  welcomeTitle: {
+    fontSize: 18,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+  },
+  welcomeText: {
+    fontSize: 12,
+    color: 'var(--color-text-secondary)',
+  },
+  welcomeSteps: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    marginTop: 4,
+  },
+  welcomeStep: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    background: 'var(--color-background-secondary)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 10,
+    cursor: 'pointer',
+    textAlign: 'left',
+    transition: 'all 0.15s',
+  },
+  welcomeStepNum: {
+    width: 28,
+    height: 28,
+    borderRadius: '50%',
+    background: '#534AB7',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 600,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  welcomeStepBody: { flex: 1, minWidth: 0 },
+  welcomeStepTitle: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+  },
+  welcomeStepDesc: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    marginTop: 2,
+  },
+  welcomeStepArrow: {
+    fontSize: 16,
+    color: '#534AB7',
+    flexShrink: 0,
+  },
+  welcomeFooter: {
+    fontSize: 11,
+    color: 'var(--color-text-tertiary)',
+    fontStyle: 'italic',
+    paddingTop: 4,
+  },
+  kbd: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    padding: '1px 5px',
+    background: '#fff',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 3,
   },
 };
 

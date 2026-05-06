@@ -116,6 +116,14 @@ export default function TopBar({
         + New
       </button>
 
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent('daymark-help'))}
+        style={styles.helpBtn}
+        title="Help"
+      >
+        ?
+      </button>
+
       <button onClick={onOpenGoals} style={styles.goalsBtn} title="Personal goals">
         🎯 Goals
       </button>
@@ -205,6 +213,22 @@ const styles = {
     cursor: 'pointer',
     marginRight: 8,
     fontWeight: 500,
+  },
+  helpBtn: {
+    width: 26,
+    height: 26,
+    fontSize: 13,
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 13,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+    marginRight: 8,
+    fontWeight: 600,
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   goalsBtn: {
     padding: '5px 12px',

@@ -208,7 +208,7 @@ export default function TaskList({
         ) : visible.length === 0 ? (
           <div style={styles.empty}>
             {tasks.length === 0
-              ? 'No tasks yet. Click + Add task to create one.'
+              ? 'No tasks yet. Press Cmd/Ctrl+K to add one fast, or click + Add task above.'
               : 'No tasks match the current filter.'}
           </div>
         ) : viewMode === 'list' ? (

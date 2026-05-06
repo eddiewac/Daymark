@@ -278,9 +278,12 @@ export default function TodayView({
           </Section>
         )}
 
-        {/* First-time welcome — appears whenever the workspace is genuinely empty
-            (no tasks, no projects), independent of totalItems or priority state. */}
-        {(tasks || []).length === 0 && (projects || []).length === 0 && (
+        {/* First-time welcome — appears when the user hasn't created any
+            projects yet. We deliberately don't check tasks because, for the
+            personal workspace, allTasks includes tasks assigned to the user
+            from team workspaces, which would falsely make a fresh user look
+            "established". Projects don't have that cross-workspace bleed. */}
+        {(projects || []).length === 0 && (
           <div style={styles.welcome}>
             <div style={styles.welcomeTitle}>👋 Welcome to Daymark</div>
             <div style={styles.welcomeText}>
@@ -334,10 +337,11 @@ export default function TodayView({
           </div>
         )}
 
-        {/* All clear — for users who have data but nothing pressing right now */}
+        {/* All clear — for users who have started building (have at least one project)
+            but nothing pressing right now */}
         {totalItems === 0 &&
           !todayPriority?.primary &&
-          ((tasks || []).length > 0 || (projects || []).length > 0) && (
+          (projects || []).length > 0 && (
             <div style={styles.allClear}>
               <div style={styles.allClearTitle}>👌 All clear</div>
               <div style={styles.allClearText}>

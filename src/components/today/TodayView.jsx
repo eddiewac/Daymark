@@ -278,67 +278,66 @@ export default function TodayView({
           </Section>
         )}
 
-        {/* First-time welcome OR all-clear — depends on whether the user has any data yet */}
-        {totalItems === 0 && !todayPriority?.primary && (() => {
-          const isFirstTime = (tasks || []).length === 0 && (projects || []).length === 0;
-
-          if (isFirstTime) {
-            return (
-              <div style={styles.welcome}>
-                <div style={styles.welcomeTitle}>👋 Welcome to Daymark</div>
-                <div style={styles.welcomeText}>
-                  Let's get you set up. Three things to try, in order:
+        {/* First-time welcome — appears whenever the workspace is genuinely empty
+            (no tasks, no projects), independent of totalItems or priority state. */}
+        {(tasks || []).length === 0 && (projects || []).length === 0 && (
+          <div style={styles.welcome}>
+            <div style={styles.welcomeTitle}>👋 Welcome to Daymark</div>
+            <div style={styles.welcomeText}>
+              Let's get you set up. Three things to try, in order:
+            </div>
+            <div style={styles.welcomeSteps}>
+              <button
+                onClick={() => onJumpToTab('projects')}
+                style={styles.welcomeStep}
+              >
+                <div style={styles.welcomeStepNum}>1</div>
+                <div style={styles.welcomeStepBody}>
+                  <div style={styles.welcomeStepTitle}>Create your first project</div>
+                  <div style={styles.welcomeStepDesc}>
+                    Projects hold deliverables, stations, comms, and tasks. The core unit of work.
+                  </div>
                 </div>
-                <div style={styles.welcomeSteps}>
-                  <button
-                    onClick={() => onJumpToTab('projects')}
-                    style={styles.welcomeStep}
-                  >
-                    <div style={styles.welcomeStepNum}>1</div>
-                    <div style={styles.welcomeStepBody}>
-                      <div style={styles.welcomeStepTitle}>Create your first project</div>
-                      <div style={styles.welcomeStepDesc}>
-                        Projects hold deliverables, stations, comms, and tasks. The core unit of work.
-                      </div>
-                    </div>
-                    <div style={styles.welcomeStepArrow}>→</div>
-                  </button>
+                <div style={styles.welcomeStepArrow}>→</div>
+              </button>
 
-                  <button
-                    onClick={() =>
-                      window.dispatchEvent(new CustomEvent('daymark-quick-capture'))
-                    }
-                    style={styles.welcomeStep}
-                  >
-                    <div style={styles.welcomeStepNum}>2</div>
-                    <div style={styles.welcomeStepBody}>
-                      <div style={styles.welcomeStepTitle}>Add a task</div>
-                      <div style={styles.welcomeStepDesc}>
-                        Press <kbd style={styles.kbd}>Cmd</kbd>+<kbd style={styles.kbd}>K</kbd> from anywhere to add tasks fast.
-                      </div>
-                    </div>
-                    <div style={styles.welcomeStepArrow}>→</div>
-                  </button>
-
-                  <button onClick={onOpenPriorityModal} style={styles.welcomeStep}>
-                    <div style={styles.welcomeStepNum}>3</div>
-                    <div style={styles.welcomeStepBody}>
-                      <div style={styles.welcomeStepTitle}>Set today's priority</div>
-                      <div style={styles.welcomeStepDesc}>
-                        Pick the one thing that most matters today. Pinned to the top of your day.
-                      </div>
-                    </div>
-                    <div style={styles.welcomeStepArrow}>→</div>
-                  </button>
+              <button
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent('daymark-quick-capture'))
+                }
+                style={styles.welcomeStep}
+              >
+                <div style={styles.welcomeStepNum}>2</div>
+                <div style={styles.welcomeStepBody}>
+                  <div style={styles.welcomeStepTitle}>Add a task</div>
+                  <div style={styles.welcomeStepDesc}>
+                    Press <kbd style={styles.kbd}>Cmd</kbd>+<kbd style={styles.kbd}>K</kbd> from anywhere to add tasks fast.
+                  </div>
                 </div>
-                <div style={styles.welcomeFooter}>
-                  Need a deeper tour? Click the <strong>?</strong> in the top bar any time.
-                </div>
-              </div>
-            );
-          }
+                <div style={styles.welcomeStepArrow}>→</div>
+              </button>
 
-          return (
+              <button onClick={onOpenPriorityModal} style={styles.welcomeStep}>
+                <div style={styles.welcomeStepNum}>3</div>
+                <div style={styles.welcomeStepBody}>
+                  <div style={styles.welcomeStepTitle}>Set today's priority</div>
+                  <div style={styles.welcomeStepDesc}>
+                    Pick the one thing that most matters today. Pinned to the top of your day.
+                  </div>
+                </div>
+                <div style={styles.welcomeStepArrow}>→</div>
+              </button>
+            </div>
+            <div style={styles.welcomeFooter}>
+              Need a deeper tour? Click the <strong>?</strong> in the top bar any time.
+            </div>
+          </div>
+        )}
+
+        {/* All clear — for users who have data but nothing pressing right now */}
+        {totalItems === 0 &&
+          !todayPriority?.primary &&
+          ((tasks || []).length > 0 || (projects || []).length > 0) && (
             <div style={styles.allClear}>
               <div style={styles.allClearTitle}>👌 All clear</div>
               <div style={styles.allClearText}>
@@ -348,8 +347,7 @@ export default function TodayView({
                 Set today's priority
               </button>
             </div>
-          );
-        })()}
+          )}
       </div>
     </div>
   );

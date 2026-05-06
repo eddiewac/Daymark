@@ -25,16 +25,6 @@ export default function HelpPanel({ open, onClose }) {
         </div>
 
         <div style={styles.body}>
-          <Section title="What it is">
-            <p>
-              Daymark is project management for medical communications agencies.
-              The structure reflects how medcomms work flows: deliverables progress
-              through stations (e.g. Draft → Internal review → MLR → Approved),
-              comms with stakeholders are tracked at each stage, and your week is
-              planned around capacity and congresses.
-            </p>
-          </Section>
-
           <Section title="The tabs">
             <DefRow term="Today" def="One screen showing what needs your attention now: priority, overdue, due today, awaiting replies, stale stations, congresses." />
             <DefRow term="Tasks" def="Your individual to-dos. List, kanban, or table view. Filterable by project, priority, status, etc." />

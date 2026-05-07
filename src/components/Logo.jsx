@@ -75,6 +75,28 @@ export function DaymarkSymbol({ size = 32, color, checkColor }) {
   );
 }
 
+// ── Hook: read current data-theme and re-render on changes ────────────────
+import { useState as useStateHook, useEffect as useEffectHook } from 'react';
+
+function useCurrentTheme() {
+  const [theme, setTheme] = useStateHook(() => {
+    if (typeof document === 'undefined') return 'light';
+    return document.documentElement.getAttribute('data-theme') || 'light';
+  });
+
+  useEffectHook(() => {
+    if (typeof document === 'undefined') return;
+    const html = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setTheme(html.getAttribute('data-theme') || 'light');
+    });
+    observer.observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+
+  return theme;
+}
+
 // ── Wordmark — D-symbol + "Daymark" text. Width auto from height. ──────────
 export function DaymarkWordmark({
   height = 28,
@@ -83,10 +105,19 @@ export function DaymarkWordmark({
   checkColor = '#fff',
   inverted = false,
 }) {
-  const finalTextColor = inverted ? '#fff' : textColor;
-  // Wider viewBox to accommodate the full word "Daymark" at 72px font size.
-  // Empirical: D + gap + "Daymark" at 72px ≈ 530 wide. We use 540 with some
-  // padding on both sides.
+  const theme = useCurrentTheme();
+  const isKaspa = theme === 'kaspa';
+
+  // In Kaspa theme: text is light (on dark bg), accent is Kaspa teal,
+  // and the "k" in Daymark is rendered as a backwards K.
+  const finalTextColor = isKaspa
+    ? '#e6edf3'
+    : inverted
+    ? '#fff'
+    : textColor;
+  const finalAccent = isKaspa ? '#70c7ba' : (inverted ? '#fff' : color);
+  const finalCheckColor = isKaspa ? '#0d1117' : (inverted ? color : checkColor);
+
   return (
     <svg
       height={height}
@@ -96,21 +127,60 @@ export function DaymarkWordmark({
       style={{ display: 'block' }}
     >
       <DSymbol
-        color={inverted ? '#fff' : color}
-        checkColor={inverted ? color : checkColor}
+        color={finalAccent}
+        checkColor={finalCheckColor}
         showCheck
       />
-      <text
-        x={120}
-        y={74}
-        fontFamily="'Roboto Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-        fontSize={72}
-        fontWeight={600}
-        fill={finalTextColor}
-        letterSpacing={-1}
-      >
-        Daymark
-      </text>
+      {isKaspa ? (
+        // "Daymar" as text, then a hand-drawn backwards K
+        <>
+          <text
+            x={120}
+            y={74}
+            fontFamily="'Roboto Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            fontSize={72}
+            fontWeight={600}
+            fill={finalTextColor}
+            letterSpacing={-1}
+          >
+            Daymar
+          </text>
+          {/*
+            Backwards K — drawn as a single filled path on the right.
+            Composed of three strokes, mirrored horizontally vs a normal K:
+              - vertical stem on the RIGHT (instead of left)
+              - upper diagonal going from top-right down to mid-right
+              - lower diagonal going from mid-right down to bottom-right
+            Positioning: place after "Daymar" which ends at roughly x=440 at 72px.
+          */}
+          <g transform="translate(440, 22)">
+            {/* Right-side vertical stem of the K */}
+            <rect x="42" y="0" width="10" height="60" fill={finalTextColor} />
+            {/* Upper diagonal — top-left to middle-right */}
+            <polygon
+              points="42,30 12,0 0,0 36,30"
+              fill={finalTextColor}
+            />
+            {/* Lower diagonal — middle-right to bottom-left */}
+            <polygon
+              points="42,30 12,60 0,60 36,30"
+              fill={finalTextColor}
+            />
+          </g>
+        </>
+      ) : (
+        <text
+          x={120}
+          y={74}
+          fontFamily="'Roboto Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+          fontSize={72}
+          fontWeight={600}
+          fill={finalTextColor}
+          letterSpacing={-1}
+        >
+          Daymark
+        </text>
+      )}
     </svg>
   );
 }

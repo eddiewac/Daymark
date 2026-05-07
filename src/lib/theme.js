@@ -15,22 +15,36 @@ const STORAGE_KEY = 'daymark-theme';
 
 // Resolve a stored mode into the actual data-theme value to apply.
 function resolveTheme(mode) {
+  if (mode === 'kaspa') return 'kaspa';
   if (mode === 'comfort') return 'comfort';
   if (mode === 'light') return 'light';
   // 'system' or unrecognised → consult OS preference
   if (typeof window !== 'undefined' && window.matchMedia) {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     // Dark theme not yet built; fall back to light when the system says dark.
-    // When dark theme ships, change this to: return prefersDark ? 'dark' : 'light';
     return prefersDark ? 'light' : 'light';
   }
   return 'light';
 }
 
 export function getStoredThemeMode() {
+  // 1. URL param wins — `?theme=kaspa` (or any other registered theme)
+  if (typeof window !== 'undefined' && window.location) {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get('theme');
+      if (fromUrl === 'kaspa' || fromUrl === 'comfort' || fromUrl === 'light' || fromUrl === 'system') {
+        // Persist URL choice so it survives navigation within the app
+        try {
+          localStorage.setItem(STORAGE_KEY, fromUrl);
+        } catch {}
+        return fromUrl;
+      }
+    } catch {}
+  }
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'light' || v === 'comfort' || v === 'system') return v;
+    if (v === 'light' || v === 'comfort' || v === 'system' || v === 'kaspa') return v;
   } catch {}
   return 'light';
 }

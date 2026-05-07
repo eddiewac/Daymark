@@ -312,13 +312,14 @@ export default function TrackView({
                             )}
                             <button
                               onClick={() => setFocusKey(`${d.id}:${s.id}`)}
+                              data-kaspa-block
                               style={{
                                 ...styles.trainNode,
                                 background: isDone
                                   ? color
                                   : isCurrent
-                                  ? '#fff'
-                                  : '#fff',
+                                  ? 'var(--bg-surface)'
+                                  : 'var(--bg-surface)',
                                 borderColor: isDone || isCurrent ? color : 'var(--color-border-primary)',
                                 color: isDone ? '#fff' : isCurrent ? color : 'var(--color-text-secondary)',
                                 fontWeight: isCurrent || isDone ? 600 : 400,

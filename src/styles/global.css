@@ -141,6 +141,93 @@
   --color-warning: var(--warning);
 }
 
+/* ─── Kaspa theme (hidden, accessed via ?theme=kaspa) ─────────────────────
+   Dark blockdag-explorer aesthetic. Primary accent is Kaspa teal.
+   Not exposed in Settings; activated via URL param or localStorage. */
+[data-theme="kaspa"] {
+  /* Backgrounds — deep dark with subtle teal tint */
+  --bg-page: #0d1117;
+  --bg-surface: #161b22;
+  --bg-surface-alt: #1c232c;
+  --bg-surface-muted: #11161d;
+  --bg-input: #1c232c;
+  --bg-modal-overlay: rgba(0, 0, 0, 0.75);
+  --bg-hover: rgba(112, 199, 186, 0.06);
+
+  /* Text — light with cool tint */
+  --text-primary: #e6edf3;
+  --text-secondary: #8b97a3;
+  --text-tertiary: #5c6671;
+  --text-on-accent: #0d1117;
+  --text-link: #70c7ba;
+
+  /* Borders — subtle, dark */
+  --border-primary: #30363d;
+  --border-secondary: #21262d;
+  --border-tertiary: #1c2129;
+
+  /* Brand / accent — Kaspa teal */
+  --accent: #70c7ba;
+  --accent-hover: #5fb0a4;
+  --accent-soft: rgba(112, 199, 186, 0.1);
+  --accent-soft-border: rgba(112, 199, 186, 0.35);
+
+  /* Semantic — adjusted for dark backgrounds */
+  --success: #56d364;
+  --success-soft: rgba(86, 211, 100, 0.1);
+  --success-soft-border: rgba(86, 211, 100, 0.3);
+  --warning: #e3b341;
+  --warning-soft: rgba(227, 179, 65, 0.13);
+  --danger: #f85149;
+  --danger-soft: rgba(248, 81, 73, 0.1);
+  --danger-soft-border: rgba(248, 81, 73, 0.3);
+  --info: #58a6ff;
+
+  /* Shadows — teal-tinted glow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.7);
+
+  /* Backwards-compat aliases */
+  --color-background-primary: var(--bg-surface);
+  --color-background-secondary: var(--bg-surface-alt);
+  --color-background-tertiary: var(--bg-surface-muted);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-border-primary: var(--border-primary);
+  --color-border-secondary: var(--border-secondary);
+  --color-border-tertiary: var(--border-tertiary);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+/* Block-style station cards when in Kaspa theme.
+   Adds a subtle glow, sharper corners, and a hash-like decoration. */
+[data-theme="kaspa"] [data-kaspa-block] {
+  background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt)) !important;
+  border: 1px solid var(--accent-soft-border) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 0 0 1px rgba(112, 199, 186, 0.1), 0 4px 12px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+[data-theme="kaspa"] [data-kaspa-block]::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  opacity: 0.7;
+}
+
 * {
   box-sizing: border-box;
 }

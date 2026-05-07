@@ -49,7 +49,7 @@ export default function ProjectCard({ project, allProjects, taskCount, projectTa
 
 const styles = {
   card: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 10,
     padding: '12px 14px',

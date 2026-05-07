@@ -171,7 +171,7 @@ const styles = {
   wrap: {
     flex: 1,
     display: 'flex',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     overflow: 'hidden',
   },
   sidebar: {
@@ -193,7 +193,7 @@ const styles = {
     borderRadius: 8,
     fontSize: 12,
     outline: 'none',
-    background: '#fff',
+    background: 'var(--bg-surface)',
   },
   scrollList: { flex: 1, overflowY: 'auto', padding: 10 },
   section: { marginBottom: 14 },

@@ -193,7 +193,7 @@ const styles = {
     padding: '14vh 20px 80px',
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 12,
     width: '100%',
     maxWidth: 520,
@@ -246,7 +246,7 @@ const styles = {
     fontSize: 11,
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   dateInput: {
@@ -254,7 +254,7 @@ const styles = {
     fontSize: 11,
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   textarea: {
@@ -262,7 +262,7 @@ const styles = {
     fontSize: 12,
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
     resize: 'vertical',
     fontFamily: 'inherit',

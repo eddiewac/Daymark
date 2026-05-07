@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getStoredThemeMode, setThemeMode } from '../../lib/theme.js';
 
 function fmtRel(ts) {
   if (!ts) return '';
@@ -80,8 +81,10 @@ export default function SettingsPanel({
 
             {/* User preferences — these apply across all workspaces */}
             {userPrefs && onUpdateUserPrefs && (
-              <section style={styles.section}>
-                <div style={styles.sectionTitle}>Daily triage</div>
+              <>
+                <ThemeSection />
+                <section style={styles.section}>
+                  <div style={styles.sectionTitle}>Daily triage</div>
                 <div style={styles.sectionHint}>
                   These settings are personal — they apply across all your
                   workspaces.
@@ -105,6 +108,7 @@ export default function SettingsPanel({
                   </div>
                 </label>
               </section>
+              </>
             )}
           </>
         )}
@@ -119,7 +123,7 @@ const prefsToggleStyles = {
     gap: 10,
     alignItems: 'flex-start',
     padding: 10,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 8,
     cursor: 'pointer',
@@ -697,7 +701,7 @@ function TagChecklistRow({ tag, items, onRename, onUpdateItems, onRemove }) {
 }
 
 const styles = {
-  wrap: { flex: 1, background: '#fff', display: 'flex', flexDirection: 'column' },
+  wrap: { flex: 1, background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column' },
   scroll: { flex: 1, overflowY: 'auto', padding: 14 },
   intro: {
     background: 'var(--color-background-secondary)',
@@ -737,7 +741,7 @@ const styles = {
     alignItems: 'center',
     gap: 4,
     padding: '4px 6px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 6,
   },
@@ -786,7 +790,7 @@ const styles = {
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   addBtn: {
@@ -800,7 +804,7 @@ const styles = {
   },
   tagList: { display: 'flex', flexDirection: 'column', gap: 14 },
   tagBlock: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 8,
     padding: 10,
@@ -857,5 +861,128 @@ const styles = {
     flexDirection: 'column',
     gap: 4,
     marginBottom: 8,
+  },
+};
+
+// ── ThemeSection ────────────────────────────────────────────────────────────
+// Three-option theme picker: System, Light, Comfort. Applies immediately and
+// persists in localStorage. Lives in the cross-workspace user-prefs area.
+function ThemeSection() {
+  const [mode, setMode] = useState(() => getStoredThemeMode());
+
+  const choose = (next) => {
+    setMode(next);
+    setThemeMode(next);
+  };
+
+  const options = [
+    {
+      value: 'system',
+      label: 'System',
+      desc: 'Match your operating system preference.',
+    },
+    {
+      value: 'light',
+      label: 'Light',
+      desc: 'Crisp white interface. The default.',
+    },
+    {
+      value: 'comfort',
+      label: 'Comfort',
+      desc: 'Warmer cream tones with softer contrast — easier on eyes for long sessions.',
+    },
+  ];
+
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionTitle}>Appearance</div>
+      <div style={styles.sectionHint}>
+        Personal preference — applies across all your workspaces.
+      </div>
+      <div style={themeStyles.options}>
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => choose(opt.value)}
+            style={{
+              ...themeStyles.option,
+              ...(mode === opt.value ? themeStyles.optionActive : {}),
+            }}
+          >
+            <div style={themeStyles.optionLabel}>
+              <span
+                style={{
+                  ...themeStyles.radio,
+                  ...(mode === opt.value ? themeStyles.radioActive : {}),
+                }}
+              >
+                {mode === opt.value && <span style={themeStyles.radioDot} />}
+              </span>
+              <span style={themeStyles.optionTitle}>{opt.label}</span>
+            </div>
+            <div style={themeStyles.optionDesc}>{opt.desc}</div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const themeStyles = {
+  options: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    marginTop: 8,
+  },
+  option: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    padding: '10px 12px',
+    background: 'var(--bg-surface)',
+    border: '0.5px solid var(--border-tertiary)',
+    borderRadius: 8,
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+  optionActive: {
+    borderColor: 'var(--accent)',
+    background: 'var(--accent-soft)',
+  },
+  optionLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  optionTitle: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+  },
+  optionDesc: {
+    fontSize: 11,
+    color: 'var(--text-secondary)',
+    paddingLeft: 24,
+  },
+  radio: {
+    width: 14,
+    height: 14,
+    borderRadius: '50%',
+    border: '0.5px solid var(--border-primary)',
+    background: 'var(--bg-surface)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  radioActive: {
+    borderColor: 'var(--accent)',
+  },
+  radioDot: {
+    width: 7,
+    height: 7,
+    borderRadius: '50%',
+    background: 'var(--accent)',
   },
 };

@@ -363,7 +363,7 @@ const styles = {
     padding: 20,
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 12,
     width: '100%',
     maxWidth: 480,
@@ -414,7 +414,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   primaryBtn: {
@@ -444,7 +444,7 @@ const styles = {
     alignItems: 'center',
     gap: 8,
     padding: '6px 10px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 6,
   },
   listEmail: {
@@ -515,7 +515,7 @@ const dangerStyles = {
     border: '0.5px solid #e24b4a55',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   deleteBtn: {

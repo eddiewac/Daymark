@@ -175,7 +175,7 @@ const styles = {
     top: 'calc(100% + 4px)',
     left: 0,
     right: 0,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 8,
     boxShadow: '0 4px 12px rgba(0,0,0,0.08)',

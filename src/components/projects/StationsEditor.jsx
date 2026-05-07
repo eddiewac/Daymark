@@ -601,7 +601,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 4,
     fontSize: 11,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   textarea: {
@@ -609,7 +609,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 4,
     fontSize: 11,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
     resize: 'vertical',
     fontFamily: 'inherit',

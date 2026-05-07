@@ -410,7 +410,7 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     overflow: 'hidden',
   },
   header: {
@@ -441,7 +441,7 @@ const styles = {
   trainScroll: { flex: 1, overflowY: 'auto', padding: 20 },
   deliverables: { display: 'flex', flexDirection: 'column', gap: 24 },
   deliv: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 10,
     padding: '14px 18px',

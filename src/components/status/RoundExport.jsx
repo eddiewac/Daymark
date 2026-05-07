@@ -136,7 +136,7 @@ const styles = {
     padding: 20,
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 12,
     width: '100%',
     maxWidth: 720,

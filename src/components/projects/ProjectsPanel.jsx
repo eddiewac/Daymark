@@ -197,7 +197,7 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     overflow: 'hidden',
   },
   header: {
@@ -216,7 +216,7 @@ const styles = {
     borderRadius: 6,
     color: 'var(--color-text-secondary)',
   },
-  viewBtnActive: { background: '#fff', color: 'var(--color-text-primary)', fontWeight: 500 },
+  viewBtnActive: { background: 'var(--bg-surface)', color: 'var(--color-text-primary)', fontWeight: 500 },
   search: {
     flex: 1,
     maxWidth: 280,

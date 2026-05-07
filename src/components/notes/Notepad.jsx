@@ -427,7 +427,7 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     overflow: 'hidden',
   },
   header: {
@@ -492,7 +492,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 13,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   textarea: {
@@ -500,7 +500,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
     fontFamily: 'inherit',
     resize: 'vertical',
@@ -512,7 +512,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   miniLabel: {

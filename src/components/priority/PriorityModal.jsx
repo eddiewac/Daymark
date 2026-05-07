@@ -245,7 +245,7 @@ const styles = {
     padding: '40px 20px 80px',
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 12,
     width: '100%',
     maxWidth: 580,
@@ -284,7 +284,7 @@ const styles = {
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 8,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   legend: {

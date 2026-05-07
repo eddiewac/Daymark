@@ -603,7 +603,7 @@ const planStyles = {
     fontWeight: 400,
   },
   viewBtnActive: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     color: 'var(--color-text-primary)',
     fontWeight: 500,
     boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
@@ -667,7 +667,7 @@ const listStyles = {
     textAlign: 'right',
   },
   emailCard: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 10,
     padding: 12,
@@ -981,7 +981,7 @@ function TaskCard({ task, projects, onToggleDone, overdue }) {
 const styles = {
   wrap: {
     flex: 1,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -997,7 +997,7 @@ const styles = {
     width: 28,
     height: 28,
     border: '0.5px solid var(--color-border-secondary)',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 6,
     fontSize: 14,
     cursor: 'pointer',

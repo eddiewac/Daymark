@@ -603,7 +603,7 @@ function fmtMonth(dateStr) {
 const styles = {
   wrap: {
     flex: 1,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -630,7 +630,7 @@ const styles = {
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 8,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   primaryBtn: {
@@ -671,7 +671,7 @@ const styles = {
   },
   filterChip: {
     padding: '4px 10px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
     color: 'var(--color-text-secondary)',
     borderRadius: 14,
@@ -776,7 +776,7 @@ const formStyles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
     fontFamily: 'inherit',
   },
@@ -816,7 +816,7 @@ const formStyles = {
 
 const cardStyles = {
   wrap: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 10,
     padding: 12,

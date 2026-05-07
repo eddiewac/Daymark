@@ -156,7 +156,7 @@ const styles = {
     right: 0,
     bottom: 0,
     width: 'min(480px, 90vw)',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     boxShadow: '-12px 0 40px rgba(0,0,0,0.18)',
     display: 'flex',
     flexDirection: 'column',

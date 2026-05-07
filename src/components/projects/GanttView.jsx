@@ -168,7 +168,7 @@ export default function GanttView({ projects, congresses }) {
               style={{
                 ...styles.labelRow,
                 height: ROW_H,
-                background: i % 2 === 0 ? '#fff' : '#faf9f7',
+                background: i % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface-muted)',
                 paddingLeft:
                   r.kind === 'project' ? 10 : r.kind === 'deliverable' ? 24 : 38,
                 fontWeight: r.kind === 'project' ? 600 : 400,
@@ -234,7 +234,7 @@ export default function GanttView({ projects, congresses }) {
                     left: 0,
                     width: totalW,
                     height: ROW_H,
-                    background: i % 2 === 0 ? '#fff' : '#faf9f7',
+                    background: i % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-surface-muted)',
                   }}
                 />
               ))}
@@ -381,7 +381,7 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     overflow: 'hidden',
   },
   toolbar: {
@@ -406,7 +406,7 @@ const styles = {
     fontWeight: 600,
     color: 'var(--color-text-secondary)',
     textTransform: 'uppercase',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     position: 'sticky',
     top: 0,
     borderBottom: '0.5px solid var(--color-border-tertiary)',
@@ -426,7 +426,7 @@ const styles = {
   header: {
     position: 'sticky',
     top: 0,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     zIndex: 10,
     borderBottom: '0.5px solid var(--color-border-tertiary)',
   },

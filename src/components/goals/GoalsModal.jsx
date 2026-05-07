@@ -328,7 +328,7 @@ const styles = {
     padding: '40px 20px 80px',
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 12,
     width: '100%',
     maxWidth: 640,
@@ -407,7 +407,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 13,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   textarea: {
@@ -415,7 +415,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
     resize: 'vertical',
     fontFamily: 'inherit',
@@ -444,7 +444,7 @@ const styles = {
 
 const goalStyles = {
   card: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 10,
     padding: 12,
@@ -556,7 +556,7 @@ const evidenceStyles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 4,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   removeBtn: {

@@ -237,7 +237,7 @@ const styles = {
     padding: '40px 20px 80px',
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 12,
     width: '100%',
     maxWidth: 540,
@@ -352,7 +352,7 @@ const styles = {
     border: '0.5px solid #e24b4a55',
     borderRadius: 8,
     fontSize: 13,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   btnRow: {

@@ -493,7 +493,7 @@ const styles = {
     fontSize: 10,
     border: '0.5px solid',
     borderRadius: 4,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   expectClear: {

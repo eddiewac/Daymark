@@ -207,7 +207,7 @@ const styles = {
     flex: 1,
     display: 'flex',
     minHeight: 0,
-    background: '#fff',
+    background: 'var(--bg-surface)',
   },
   list: {
     width: 280,

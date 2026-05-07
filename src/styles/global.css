@@ -1,17 +1,144 @@
-:root {
-  --color-background-primary: #ffffff;
-  --color-background-secondary: #f7f6f3;
-  --color-background-tertiary: #faf9f7;
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #888780;
-  --color-text-tertiary: #b9b8b3;
-  --color-border-primary: #d8d5d0;
-  --color-border-secondary: #e8e5e0;
-  --color-border-tertiary: #f2f0ed;
-  --color-accent: #534AB7;
-  --color-danger: #e24b4a;
-  --color-success: #1d9e75;
-  --color-warning: #ef9f27;
+/* ─────────────────────────────────────────────────────────────────────────
+   Daymark theme tokens
+
+   Three themes defined here: light (default), comfort (warmer, easier on
+   eyes for long sessions), and a placeholder for dark (commented out for
+   now — to be activated later).
+
+   Architecture:
+   - Define semantic tokens (e.g. --bg-surface, --text-primary) that
+     components reference. Don't reference raw colour hex codes from
+     component code.
+   - Each theme overrides the same set of tokens with different values.
+   - Theme is applied via [data-theme="<name>"] on <html>.
+   - System preference (prefers-color-scheme) is handled by the JS theme
+     manager (see lib/theme.js), which sets data-theme accordingly.
+
+   To add a new theme later: copy the [data-theme="comfort"] block, change
+   the values. No component code needs to change.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg-page: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-surface-alt: #f7f6f3;
+  --bg-surface-muted: #faf9f7;
+  --bg-input: #ffffff;
+  --bg-modal-overlay: rgba(0, 0, 0, 0.5);
+  --bg-hover: rgba(0, 0, 0, 0.04);
+
+  /* Text */
+  --text-primary: #1a1a1a;
+  --text-secondary: #888780;
+  --text-tertiary: #b9b8b3;
+  --text-on-accent: #ffffff;
+  --text-link: #534AB7;
+
+  /* Borders */
+  --border-primary: #d8d5d0;
+  --border-secondary: #e8e5e0;
+  --border-tertiary: #f2f0ed;
+
+  /* Brand / accent */
+  --accent: #534AB7;
+  --accent-hover: #443c9c;
+  --accent-soft: rgba(83, 74, 183, 0.08);
+  --accent-soft-border: rgba(83, 74, 183, 0.27);
+
+  /* Semantic */
+  --success: #1d9e75;
+  --success-soft: rgba(29, 158, 117, 0.07);
+  --success-soft-border: rgba(29, 158, 117, 0.27);
+  --warning: #ef9f27;
+  --warning-soft: rgba(239, 159, 39, 0.13);
+  --danger: #e24b4a;
+  --danger-soft: rgba(226, 75, 74, 0.07);
+  --danger-soft-border: rgba(226, 75, 74, 0.27);
+  --info: #185FA5;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.18);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.25);
+
+  /* Backwards-compatibility aliases — existing code uses these names */
+  --color-background-primary: var(--bg-surface);
+  --color-background-secondary: var(--bg-surface-alt);
+  --color-background-tertiary: var(--bg-surface-muted);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-border-primary: var(--border-primary);
+  --color-border-secondary: var(--border-secondary);
+  --color-border-tertiary: var(--border-tertiary);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+[data-theme="comfort"] {
+  /* Backgrounds — subtle warm cream */
+  --bg-page: #faf6ef;
+  --bg-surface: #fcf9f3;
+  --bg-surface-alt: #f3eee4;
+  --bg-surface-muted: #f7f2e8;
+  --bg-input: #fcf9f3;
+  --bg-modal-overlay: rgba(50, 40, 25, 0.45);
+  --bg-hover: rgba(80, 60, 30, 0.05);
+
+  /* Text — warm dark grey, not pure black */
+  --text-primary: #2c2820;
+  --text-secondary: #807a6e;
+  --text-tertiary: #b3ad9f;
+  --text-on-accent: #ffffff;
+  --text-link: #5d56a8;
+
+  /* Borders — softer, warmer */
+  --border-primary: #d4ccba;
+  --border-secondary: #e6dfcd;
+  --border-tertiary: #efe8d6;
+
+  /* Brand / accent — slightly muted */
+  --accent: #5d56a8;
+  --accent-hover: #4d4793;
+  --accent-soft: rgba(93, 86, 168, 0.09);
+  --accent-soft-border: rgba(93, 86, 168, 0.25);
+
+  /* Semantic — slightly muted versions */
+  --success: #2d8c6a;
+  --success-soft: rgba(45, 140, 106, 0.09);
+  --success-soft-border: rgba(45, 140, 106, 0.27);
+  --warning: #d68e2a;
+  --warning-soft: rgba(214, 142, 42, 0.13);
+  --danger: #c94645;
+  --danger-soft: rgba(201, 70, 69, 0.08);
+  --danger-soft-border: rgba(201, 70, 69, 0.27);
+  --info: #2766a3;
+
+  /* Shadows — warmer */
+  --shadow-sm: 0 1px 2px rgba(80, 60, 30, 0.05);
+  --shadow-md: 0 4px 12px rgba(80, 60, 30, 0.07);
+  --shadow-lg: 0 12px 40px rgba(80, 60, 30, 0.16);
+  --shadow-xl: 0 24px 60px rgba(80, 60, 30, 0.22);
+
+  /* Backwards-compat aliases */
+  --color-background-primary: var(--bg-surface);
+  --color-background-secondary: var(--bg-surface-alt);
+  --color-background-tertiary: var(--bg-surface-muted);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-border-primary: var(--border-primary);
+  --color-border-secondary: var(--border-secondary);
+  --color-border-tertiary: var(--border-tertiary);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
 }
 
 * {
@@ -27,10 +154,11 @@ html, body, #root {
 body {
   font-family: 'Roboto Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
-  color: var(--color-text-primary);
-  background: var(--color-background-primary);
+  color: var(--text-primary);
+  background: var(--bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 button, input, select, textarea {
@@ -41,7 +169,7 @@ button, input, select, textarea {
 
 button { cursor: pointer; }
 
-a { color: var(--color-accent); }
+a { color: var(--text-link); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }

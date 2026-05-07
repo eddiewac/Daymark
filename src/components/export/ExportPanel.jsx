@@ -622,7 +622,7 @@ const oosExportStyles = {
   },
   btn: {
     padding: '6px 12px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,
     fontSize: 11,
@@ -835,7 +835,7 @@ function ImportSection({ workspaceId, workspaceName }) {
 const styles = {
   wrap: {
     flex: 1,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
@@ -874,7 +874,7 @@ const styles = {
     width: 28,
     height: 28,
     border: '0.5px solid var(--color-border-secondary)',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 6,
     fontSize: 14,
     cursor: 'pointer',
@@ -894,7 +894,7 @@ const styles = {
     padding: '4px 8px',
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     fontSize: 12,
   },
   weekLabel: { fontSize: 12, color: 'var(--color-text-secondary)' },
@@ -950,7 +950,7 @@ const styles = {
     alignItems: 'center',
     gap: 6,
     padding: '5px 8px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 6,
   },
@@ -1027,7 +1027,7 @@ const styles = {
     borderBottom: '0.5px solid var(--color-border-secondary)',
     fontWeight: 500,
     color: 'var(--color-text-secondary)',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     whiteSpace: 'nowrap',
   },
   previewTd: {
@@ -1049,7 +1049,7 @@ const styles = {
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 6,
     resize: 'vertical',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
 };
@@ -1064,7 +1064,7 @@ const importStyles = {
     padding: '8px',
     border: '0.5px dashed var(--color-border-primary)',
     borderRadius: 6,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     fontSize: 12,
   },
   error: {
@@ -1073,7 +1073,7 @@ const importStyles = {
     fontWeight: 500,
   },
   preview: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 8,
     padding: 12,

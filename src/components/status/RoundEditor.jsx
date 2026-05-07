@@ -616,7 +616,7 @@ const styles = {
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   titleInput: {
@@ -631,7 +631,7 @@ const styles = {
   headerActions: { display: 'flex', gap: 6, alignItems: 'center' },
   actionBtn: {
     padding: '5px 12px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-primary)',
     color: 'var(--color-text-secondary)',
     borderRadius: 6,
@@ -710,7 +710,7 @@ const styles = {
 
 const entryStyles = {
   wrap: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 8,
     padding: 10,
@@ -831,7 +831,7 @@ const actionStyles = {
     alignItems: 'center',
     gap: 6,
     padding: '3px 6px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 4,
   },
   checkbox: {
@@ -898,7 +898,7 @@ const addPickerStyles = {
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   addBtn: {

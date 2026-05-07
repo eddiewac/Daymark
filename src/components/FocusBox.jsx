@@ -320,7 +320,7 @@ const styles = {
     padding: '40px 20px 80px 20px',
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 14,
     width: '100%',
     maxWidth: 580,
@@ -446,7 +446,7 @@ const styles = {
     padding: '8px 10px',
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 8,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     fontSize: 12,
     lineHeight: 1.5,
     fontFamily: 'inherit',
@@ -460,7 +460,7 @@ const styles = {
   },
   addNoteBtn: {
     padding: '3px 10px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-primary)',
     color: 'var(--color-text-secondary)',
     borderRadius: 6,
@@ -472,7 +472,7 @@ const styles = {
     flexDirection: 'column',
     gap: 6,
     padding: 10,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -511,7 +511,7 @@ const styles = {
     textAlign: 'center',
   },
   noteCard: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 8,
     padding: 10,
     borderLeft: '3px solid #534AB7',
@@ -537,7 +537,7 @@ const styles = {
 
 const checklistStyles = {
   wrap: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 8,
     padding: 10,
     marginBottom: 8,

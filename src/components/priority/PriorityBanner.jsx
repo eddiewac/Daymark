@@ -270,7 +270,7 @@ const rowStyles = {
     alignItems: 'center',
     gap: 8,
     padding: '6px 10px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 6,
     marginBottom: 4,
   },

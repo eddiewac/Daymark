@@ -141,13 +141,17 @@ export function useNotes(workspaceId) {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const addNote = useCallback(
-    async ({ title = '', body = '', projectId = null, projectName = null }, isTeam = false) => {
+    async (
+      { title = '', body = '', projectId = null, projectName = null, taskIds = [] } = {},
+      isTeam = false
+    ) => {
       const newNote = {
         id: uid(),
         title,
         body,
         projectId,
         projectName,
+        taskIds: Array.isArray(taskIds) ? taskIds : [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };

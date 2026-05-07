@@ -519,7 +519,7 @@ const styles = {
     alignItems: 'center',
     gap: 4,
     padding: '8px 14px',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
     overflowX: 'auto',
   },

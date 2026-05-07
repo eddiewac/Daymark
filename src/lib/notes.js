@@ -2,7 +2,10 @@ import { supabase, getCurrentUser } from './supabase.js';
 
 // Notes use the same row pattern as tasks/projects:
 //   id, user_id, workspace_id (null = personal), data (jsonb), updated_at
-// data shape: { title, body, projectId, projectName, createdAt, updatedAt }
+// data shape: {
+//   title, body, projectId, projectName, taskIds[], createdAt, updatedAt
+// }
+// taskIds is an array of task ids this note is linked to (multi-tag).
 
 // Loads BOTH personal and team notes when in a team workspace.
 // In personal workspace, only personal notes.

@@ -288,7 +288,7 @@ const styles = {
     position: 'absolute',
     right: 0,
     top: 28,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 8,
     minWidth: 180,

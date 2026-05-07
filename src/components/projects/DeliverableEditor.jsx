@@ -206,7 +206,7 @@ const styles = {
     padding: '2px 4px',
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 4,
-    background: '#fff',
+    background: 'var(--bg-surface)',
   },
   dash: { fontSize: 11, color: 'var(--color-text-tertiary)' },
   expandBtn: {

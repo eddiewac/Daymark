@@ -129,7 +129,7 @@ const styles = {
     justifyContent: 'center',
   },
   dialog: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     borderRadius: 12,
     padding: 18,
     minWidth: 360,
@@ -175,7 +175,7 @@ const styles = {
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 8,
     fontSize: 13,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   arrow: { fontSize: 16, color: 'var(--color-text-tertiary)', paddingBottom: 8 },

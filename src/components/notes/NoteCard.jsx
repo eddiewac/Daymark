@@ -59,7 +59,7 @@ export default function NoteCard({ note, projects, isActive, onClick }) {
 const styles = {
   card: {
     width: '100%',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 8,
     padding: '10px 12px',

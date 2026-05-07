@@ -639,7 +639,7 @@ function KanbanCard({ task, projects, isDragging, onDragStart, onDragEnd, onClic
       onDragEnd={onDragEnd}
       onClick={onClick}
       style={{
-        background: '#fff',
+        background: 'var(--bg-surface)',
         border: '0.5px solid var(--color-border-tertiary)',
         borderLeft: `3px solid ${projColor}`,
         borderRadius: 6,
@@ -888,7 +888,7 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    background: '#fff',
+    background: 'var(--bg-surface)',
     overflow: 'hidden',
   },
   header: {
@@ -957,7 +957,7 @@ const styles = {
     fontWeight: 400,
   },
   viewBtnActive: {
-    background: '#fff',
+    background: 'var(--bg-surface)',
     color: 'var(--color-text-primary)',
     fontWeight: 500,
     boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
@@ -975,7 +975,7 @@ const styles = {
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
     fontSize: 11,
-    background: '#fff',
+    background: 'var(--bg-surface)',
     outline: 'none',
   },
   listScroll: { flex: 1, overflowY: 'auto' },

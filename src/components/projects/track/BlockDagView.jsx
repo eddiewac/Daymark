@@ -125,7 +125,7 @@ export default function BlockDagView({
               markerHeight="6"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#70c7ba" opacity="0.7" />
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3a9b8e" opacity="0.7" />
             </marker>
 
             {/* Pattern for the block backgrounds — subtle grid */}
@@ -140,7 +140,7 @@ export default function BlockDagView({
               <path
                 d="M 20 0 L 0 0 0 20"
                 fill="none"
-                stroke="rgba(112, 199, 186, 0.04)"
+                stroke="rgba(58, 155, 142, 0.06)"
                 strokeWidth="1"
               />
             </pattern>
@@ -158,10 +158,10 @@ export default function BlockDagView({
               <path
                 key={`e-${i}`}
                 d={path}
-                stroke={e.confirmed ? '#70c7ba' : '#2a4a4e'}
+                stroke={e.confirmed ? '#3a9b8e' : '#a5c8c2'}
                 strokeWidth={e.confirmed ? 2 : 1.5}
                 fill="none"
-                opacity={e.confirmed ? 0.85 : 0.5}
+                opacity={e.confirmed ? 0.85 : 0.55}
                 filter={e.confirmed ? 'url(#kaspa-edge-glow)' : undefined}
                 markerEnd="url(#kaspa-arrow)"
               />
@@ -207,8 +207,8 @@ function BlockNode({ station, deliverableName, color, onClick }) {
         width={BLOCK_WIDTH}
         height={BLOCK_HEIGHT}
         rx="4"
-        fill={isDone ? 'rgba(112, 199, 186, 0.15)' : 'rgba(20, 39, 45, 0.7)'}
-        stroke={isDone ? '#70c7ba' : 'rgba(112, 199, 186, 0.3)'}
+        fill={isDone ? 'rgba(58, 155, 142, 0.18)' : '#ffffff'}
+        stroke={isDone ? '#3a9b8e' : 'rgba(58, 155, 142, 0.4)'}
         strokeWidth="1"
       />
 
@@ -217,7 +217,7 @@ function BlockNode({ station, deliverableName, color, onClick }) {
         cx={BLOCK_WIDTH - 10}
         cy={10}
         r="3"
-        fill="#70c7ba"
+        fill="#3a9b8e"
         opacity={isDone ? 1 : 0.4}
       >
         {isDone && (
@@ -230,16 +230,16 @@ function BlockNode({ station, deliverableName, color, onClick }) {
         )}
       </circle>
 
-      {/* Inner glow gradient for done blocks */}
+      {/* Inner glow stroke for done blocks */}
       {isDone && (
         <rect
           width={BLOCK_WIDTH}
           height={BLOCK_HEIGHT}
           rx="4"
           fill="none"
-          stroke="#70c7ba"
+          stroke="#3a9b8e"
           strokeWidth="0.5"
-          opacity="0.6"
+          opacity="0.5"
         />
       )}
 
@@ -249,8 +249,8 @@ function BlockNode({ station, deliverableName, color, onClick }) {
         y="14"
         fontFamily="monospace"
         fontSize="8"
-        fill="#70c7ba"
-        opacity="0.6"
+        fill="#3a9b8e"
+        opacity="0.7"
       >
         0x{hash}
       </text>
@@ -262,7 +262,7 @@ function BlockNode({ station, deliverableName, color, onClick }) {
         fontFamily="'Roboto Flex', -apple-system, sans-serif"
         fontSize="11"
         fontWeight="600"
-        fill={isDone ? '#e6f6f3' : '#8ab8b3'}
+        fill={isDone ? '#0f2e2a' : '#4a6b67'}
         textAnchor="middle"
       >
         {truncate(station.name, 18)}
@@ -274,7 +274,7 @@ function BlockNode({ station, deliverableName, color, onClick }) {
         y={50}
         fontFamily="'Roboto Flex', -apple-system, sans-serif"
         fontSize="9"
-        fill={isDone ? '#70c7ba' : '#5a807c'}
+        fill={isDone ? '#3a9b8e' : '#7a9a96'}
         textAnchor="middle"
       >
         {isDone ? '✓ confirmed' : rel || 'pending'}
@@ -286,9 +286,9 @@ function BlockNode({ station, deliverableName, color, onClick }) {
         y={62}
         fontFamily="'Roboto Flex', -apple-system, sans-serif"
         fontSize="8"
-        fill="#5a807c"
+        fill="#7a9a96"
         textAnchor="middle"
-        opacity="0.7"
+        opacity="0.8"
       >
         {truncate(deliverableName, 22)}
       </text>
@@ -315,7 +315,7 @@ const styles = {
     padding: '12px 18px',
     borderBottom: '1px solid var(--border-secondary)',
     background:
-      'linear-gradient(180deg, rgba(112, 199, 186, 0.06), transparent)',
+      'linear-gradient(180deg, rgba(58, 155, 142, 0.08), transparent)',
   },
   headerTitle: { display: 'flex', alignItems: 'baseline', gap: 8 },
   headerLabel: {
@@ -324,7 +324,7 @@ const styles = {
     color: 'var(--accent)',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    opacity: 0.8,
+    opacity: 0.85,
   },
   headerProject: {
     fontSize: 14,
@@ -340,8 +340,8 @@ const styles = {
     fontFamily: 'monospace',
     color: 'var(--text-secondary)',
     padding: '3px 8px',
-    background: 'rgba(112, 199, 186, 0.08)',
-    border: '1px solid rgba(112, 199, 186, 0.2)',
+    background: 'rgba(58, 155, 142, 0.1)',
+    border: '1px solid rgba(58, 155, 142, 0.25)',
     borderRadius: 3,
   },
   statDot: {
@@ -349,7 +349,7 @@ const styles = {
     height: 6,
     borderRadius: '50%',
     background: 'var(--accent)',
-    boxShadow: '0 0 6px var(--accent)',
+    boxShadow: '0 0 6px rgba(58, 155, 142, 0.5)',
   },
   scroll: {
     flex: 1,

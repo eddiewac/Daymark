@@ -89,15 +89,15 @@ export function DaymarkWordmark({
   const theme = useCurrentTheme();
   const isKaspa = theme === 'kaspa';
 
-  // In Kaspa theme: text is light (on dark bg), accent is Kaspa teal,
+  // In Kaspa theme: text is dark teal (on pale teal bg), accent is deeper Kaspa teal,
   // and the "k" in Daymark is rendered as a backwards K.
   const finalTextColor = isKaspa
-    ? '#e6edf3'
+    ? '#0f2e2a'
     : inverted
     ? '#fff'
     : textColor;
-  const finalAccent = isKaspa ? '#70c7ba' : (inverted ? '#fff' : color);
-  const finalCheckColor = isKaspa ? '#0d1117' : (inverted ? color : checkColor);
+  const finalAccent = isKaspa ? '#3a9b8e' : (inverted ? '#fff' : color);
+  const finalCheckColor = isKaspa ? '#ffffff' : (inverted ? color : checkColor);
 
   return (
     <svg
@@ -157,7 +157,7 @@ export function DaymarkWordmark({
             />
 
             {/* Small teal accent dot at the K's pivot point — block confirmation indicator */}
-            <circle cx="39" cy="30" r="3" fill="#70c7ba" opacity="0.9">
+            <circle cx="39" cy="30" r="3" fill="#3a9b8e" opacity="0.9">
               <animate
                 attributeName="opacity"
                 values="0.9;0.4;0.9"

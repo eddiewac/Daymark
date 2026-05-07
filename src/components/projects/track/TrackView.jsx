@@ -119,6 +119,9 @@ export default function TrackView({
     if (d && s) focused = { deliverable: d, station: s };
   }
 
+  const currentTheme = useCurrentTheme();
+  const isKaspa = currentTheme === 'kaspa';
+
   // If focused, show the focus view
   if (focused) {
     return (
@@ -158,9 +161,6 @@ export default function TrackView({
       (s.comms || []).filter((c) => c.needsReply && !c.replyReceived).length,
     0
   );
-
-  const currentTheme = useCurrentTheme();
-  const isKaspa = currentTheme === 'kaspa';
 
   return (
     <div style={styles.wrap}>

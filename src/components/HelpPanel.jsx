@@ -97,8 +97,8 @@ export default function HelpPanel({ open, onClose }) {
               The most useful feedback at this stage: <strong>where it didn't
               make sense</strong>, <strong>what's missing for how your team
               works</strong>, and <strong>what's wrong</strong>. Email me at{' '}
-              <a href="mailto:eddie@getdaymark.com" style={styles.link}>
-                eddie@getdaymark.com
+              <a href="mailto:support@getdaymark.com" style={styles.link}>
+                support@getdaymark.com
               </a>
               .
             </p>

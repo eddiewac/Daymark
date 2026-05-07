@@ -220,7 +220,7 @@ export default function ProjectDetail({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {congresses.map((c) => {
                 const linked = (draft.congresses || []).includes(c.id);
-                const color = c.color || '#534AB7';
+                const color = c.color || 'var(--accent)';
                 return (
                   <button
                     key={c.id}
@@ -384,8 +384,8 @@ const styles = {
   },
   trackBtn: {
     padding: '5px 12px',
-    background: '#534AB711',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     border: '0.5px solid #534AB7',
     borderRadius: 8,
     fontSize: 12,
@@ -577,7 +577,7 @@ const handoffStyles = {
   },
   primaryBtn: {
     padding: '6px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

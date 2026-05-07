@@ -795,7 +795,7 @@ const styles = {
   },
   addBtn: {
     padding: '5px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -815,7 +815,7 @@ const styles = {
     gap: 4,
     marginBottom: 8,
   },
-  tagPrefix: { fontSize: 13, color: '#534AB7', fontWeight: 600 },
+  tagPrefix: { fontSize: 13, color: 'var(--accent)', fontWeight: 600 },
   tagInput: {
     flex: 1,
     padding: '4px 8px',
@@ -824,7 +824,7 @@ const styles = {
     fontSize: 13,
     fontWeight: 500,
     background: 'var(--color-background-tertiary)',
-    color: '#534AB7',
+    color: 'var(--accent)',
     outline: 'none',
   },
   removeTagBtn: {

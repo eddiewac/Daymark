@@ -96,7 +96,7 @@ export default function PriorityModal({
 
         <div style={styles.legend}>
           <span style={styles.legendItem}>
-            <span style={{ ...styles.legendDot, background: '#534AB7' }} />
+            <span style={{ ...styles.legendDot, background: 'var(--accent)' }} />
             Primary
           </span>
           <span style={styles.legendItem}>
@@ -132,12 +132,12 @@ export default function PriorityModal({
                     ...styles.row,
                     borderLeft: `3px solid ${projColor}`,
                     background: isPrimary
-                      ? '#534AB711'
+                      ? 'var(--accent-soft)'
                       : isStretch
-                      ? '#534AB708'
+                      ? 'var(--accent-soft)'
                       : '#fff',
                     borderColor: isPrimary
-                      ? '#534AB7'
+                      ? 'var(--accent)'
                       : 'var(--color-border-tertiary)',
                   }}
                 >
@@ -146,7 +146,7 @@ export default function PriorityModal({
                       style={{
                         ...styles.rowTitle,
                         color: isPrimary
-                          ? '#534AB7'
+                          ? 'var(--accent)'
                           : 'var(--color-text-primary)',
                         fontWeight: isPrimary ? 600 : 400,
                       }}
@@ -172,9 +172,9 @@ export default function PriorityModal({
                       onClick={() => togglePrimary(t.id)}
                       style={{
                         ...styles.actionBtn,
-                        background: isPrimary ? '#534AB7' : 'transparent',
-                        color: isPrimary ? '#fff' : '#534AB7',
-                        borderColor: '#534AB7',
+                        background: isPrimary ? 'var(--accent)' : 'transparent',
+                        color: isPrimary ? '#fff' : 'var(--accent)',
+                        borderColor: 'var(--accent)',
                       }}
                     >
                       {isPrimary ? '✓ Primary' : 'Primary'}
@@ -187,9 +187,9 @@ export default function PriorityModal({
                       }
                       style={{
                         ...styles.actionBtn,
-                        background: isStretch ? '#534AB7' : 'transparent',
-                        color: isStretch ? '#fff' : '#534AB7',
-                        borderColor: '#534AB7',
+                        background: isStretch ? 'var(--accent)' : 'transparent',
+                        color: isStretch ? '#fff' : 'var(--accent)',
+                        borderColor: 'var(--accent)',
                         opacity:
                           isPrimary ||
                           (!isStretch && stretchIds.length >= 2)
@@ -346,8 +346,8 @@ const styles = {
     fontWeight: 600,
   },
   todayBadge: {
-    background: '#534AB722',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     padding: '0 6px',
     borderRadius: 8,
     fontSize: 9,
@@ -380,7 +380,7 @@ const styles = {
   },
   saveBtn: {
     padding: '6px 18px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

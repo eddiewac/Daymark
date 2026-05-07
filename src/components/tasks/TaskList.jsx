@@ -406,7 +406,7 @@ function CompactRow({
             onClick={() => onStartTimer(task)}
             style={{
               padding: '1px 8px', fontSize: 10, background: 'transparent',
-              border: '0.5px solid #534AB7', color: '#534AB7', borderRadius: 4,
+              border: '0.5px solid #534AB7', color: 'var(--accent)', borderRadius: 4,
               cursor: 'pointer', flexShrink: 0,
             }}
           >
@@ -561,7 +561,7 @@ function KanbanView({
               minWidth: 240,
               maxWidth: 280,
               flex: '0 0 auto',
-              background: isOver ? '#534AB711' : 'var(--color-background-secondary)',
+              background: isOver ? 'var(--accent-soft)' : 'var(--color-background-secondary)',
               border: `0.5px ${isOver ? 'dashed #534AB7' : 'solid var(--color-border-tertiary)'}`,
               borderRadius: 10,
               padding: 8,
@@ -909,8 +909,8 @@ const styles = {
     color: 'var(--color-text-secondary)',
   },
   filterActive: {
-    background: '#534AB711',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
   search: {
@@ -925,7 +925,7 @@ const styles = {
   },
   addBtn: {
     padding: '5px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,

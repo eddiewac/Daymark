@@ -218,7 +218,7 @@ const styles = {
     width: '100%',
     marginTop: 16,
     padding: '10px 0',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,

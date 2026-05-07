@@ -196,7 +196,7 @@ const styles = {
   sectionTitle: {
     fontSize: 11,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -232,7 +232,7 @@ const styles = {
     width: 22,
     height: 22,
     borderRadius: '50%',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     fontSize: 11,
     fontWeight: 600,
@@ -258,5 +258,5 @@ const styles = {
     borderRadius: 3,
     margin: '0 2px',
   },
-  link: { color: '#534AB7', textDecoration: 'none' },
+  link: { color: 'var(--accent)', textDecoration: 'none' },
 };

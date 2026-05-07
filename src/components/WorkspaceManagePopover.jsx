@@ -419,7 +419,7 @@ const styles = {
   },
   primaryBtn: {
     padding: '6px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -551,8 +551,8 @@ const billingStyles = {
     padding: 10,
   },
   bannerTrial: {
-    background: '#534AB711',
-    border: '0.5px solid #534AB744',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 8,
     padding: 10,
   },
@@ -591,7 +591,7 @@ const billingStyles = {
   },
   upgradeBtn: {
     padding: '7px 16px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,

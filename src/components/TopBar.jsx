@@ -180,8 +180,8 @@ const styles = {
     color: 'var(--color-text-secondary)',
   },
   tabActive: {
-    background: '#534AB711',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
   manageBtn: {
@@ -206,7 +206,7 @@ const styles = {
   quickBtn: {
     padding: '5px 12px',
     fontSize: 11,
-    background: '#534AB7',
+    background: 'var(--accent)',
     border: 'none',
     borderRadius: 8,
     color: '#fff',
@@ -262,7 +262,7 @@ const styles = {
   },
   popoverBtn: {
     padding: '4px 10px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

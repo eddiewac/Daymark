@@ -128,7 +128,7 @@ const styles = {
     width: 48,
     height: 48,
     borderRadius: '50%',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     fontSize: 20,
@@ -162,7 +162,7 @@ const styles = {
   title: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
   },
   manageBtn: {
     padding: '2px 8px',
@@ -205,7 +205,7 @@ const styles = {
   },
   submitBtn: {
     padding: '5px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

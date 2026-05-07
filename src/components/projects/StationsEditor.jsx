@@ -153,7 +153,7 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
                 <div
                   style={{
                     ...styles.trainConnector,
-                    background: isPast ? '#534AB7' : 'var(--color-border-tertiary)',
+                    background: isPast ? 'var(--accent)' : 'var(--color-border-tertiary)',
                   }}
                 />
               )}
@@ -161,9 +161,9 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
                 onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
                 style={{
                   ...styles.trainNode,
-                  background: isDone ? '#534AB7' : isCurrent ? '#fff' : '#fff',
-                  borderColor: isDone || isCurrent ? '#534AB7' : 'var(--color-border-primary)',
-                  color: isDone ? '#fff' : isCurrent ? '#534AB7' : 'var(--color-text-secondary)',
+                  background: isDone ? 'var(--accent)' : isCurrent ? '#fff' : '#fff',
+                  borderColor: isDone || isCurrent ? 'var(--accent)' : 'var(--color-border-primary)',
+                  color: isDone ? '#fff' : isCurrent ? 'var(--accent)' : 'var(--color-text-secondary)',
                   fontWeight: isCurrent || isDone ? 600 : 400,
                 }}
                 title={s.name}
@@ -173,7 +173,7 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
               <div
                 style={{
                   ...styles.trainLabel,
-                  color: isCurrent ? '#534AB7' : 'var(--color-text-secondary)',
+                  color: isCurrent ? 'var(--accent)' : 'var(--color-text-secondary)',
                   fontWeight: isCurrent ? 500 : 400,
                 }}
               >
@@ -194,7 +194,7 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
               key={s.id}
               style={{
                 ...styles.row,
-                background: isCurrent ? '#534AB708' : 'var(--color-background-tertiary)',
+                background: isCurrent ? 'var(--accent-soft)' : 'var(--color-background-tertiary)',
                 borderLeft: isCurrent ? '3px solid #534AB7' : '3px solid transparent',
               }}
             >
@@ -203,8 +203,8 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
                   onClick={() => toggleDone(s.id)}
                   style={{
                     ...styles.check,
-                    background: s.done ? '#534AB7' : 'transparent',
-                    borderColor: s.done ? '#534AB7' : 'var(--color-border-primary)',
+                    background: s.done ? 'var(--accent)' : 'transparent',
+                    borderColor: s.done ? 'var(--accent)' : 'var(--color-border-primary)',
                   }}
                   title="Mark complete"
                 >
@@ -452,7 +452,7 @@ const styles = {
   },
   primaryBtn: {
     padding: '6px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -589,7 +589,7 @@ const styles = {
     cursor: 'pointer',
   },
   subTabActive: {
-    color: '#534AB7',
+    color: 'var(--accent)',
     borderBottom: '2px solid #534AB7',
     fontWeight: 500,
   },

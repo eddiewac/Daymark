@@ -71,8 +71,8 @@ const styles = {
     transition: 'background 0.1s',
   },
   cardActive: {
-    background: '#534AB708',
-    borderColor: '#534AB7',
+    background: 'var(--accent-soft)',
+    borderColor: 'var(--accent)',
   },
   titleRow: { display: 'flex', justifyContent: 'space-between', gap: 6 },
   title: {
@@ -116,8 +116,8 @@ const styles = {
     fontSize: 10,
     padding: '1px 7px',
     borderRadius: 10,
-    background: '#534AB711',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
 };

@@ -175,7 +175,7 @@ const styles = {
   },
   primaryBtn: {
     padding: '7px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,

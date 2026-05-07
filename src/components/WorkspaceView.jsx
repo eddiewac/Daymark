@@ -536,8 +536,8 @@ const styles = {
     gap: 4,
   },
   tabActive: {
-    background: '#534AB711',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
   tabDisabled: { opacity: 0.5, cursor: 'not-allowed' },

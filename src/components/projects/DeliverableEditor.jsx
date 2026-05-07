@@ -57,8 +57,8 @@ export default function DeliverableEditor({ deliverables, onChange, stationTempl
                 onClick={() => update(d.id, { done: !d.done })}
                 style={{
                   ...styles.check,
-                  background: d.done ? '#534AB7' : 'transparent',
-                  borderColor: d.done ? '#534AB7' : 'var(--color-border-primary)',
+                  background: d.done ? 'var(--accent)' : 'transparent',
+                  borderColor: d.done ? 'var(--accent)' : 'var(--color-border-primary)',
                 }}
               >
                 {d.done && (
@@ -197,8 +197,8 @@ const styles = {
     fontSize: 10,
     padding: '1px 7px',
     borderRadius: 10,
-    background: '#534AB711',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
   dateInput: {

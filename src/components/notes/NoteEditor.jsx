@@ -219,9 +219,9 @@ const styles = {
   },
   moveBtn: {
     padding: '5px 10px',
-    background: '#534AB711',
-    color: '#534AB7',
-    border: '0.5px solid #534AB744',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 8,
     fontSize: 11,
     fontWeight: 500,

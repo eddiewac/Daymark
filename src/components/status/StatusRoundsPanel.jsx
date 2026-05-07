@@ -160,15 +160,15 @@ function RoundListItem({ round, active, onClick }) {
       onClick={onClick}
       style={{
         ...listItemStyles.wrap,
-        background: active ? '#534AB711' : '#fff',
-        borderColor: active ? '#534AB7' : 'var(--color-border-tertiary)',
+        background: active ? 'var(--accent-soft)' : '#fff',
+        borderColor: active ? 'var(--accent)' : 'var(--color-border-tertiary)',
       }}
     >
       <div style={listItemStyles.dateRow}>
         <span
           style={{
             ...listItemStyles.dateLabel,
-            color: active ? '#534AB7' : 'var(--color-text-primary)',
+            color: active ? 'var(--accent)' : 'var(--color-text-primary)',
             fontWeight: active ? 600 : 500,
           }}
         >
@@ -227,7 +227,7 @@ const styles = {
   listTitle: { fontSize: 13, fontWeight: 600 },
   newBtn: {
     padding: '4px 10px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

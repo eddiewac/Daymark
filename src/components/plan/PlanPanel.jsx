@@ -25,7 +25,7 @@ function addDays(d, n) {
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const DAY_NAMES_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const DAY_COLORS = ['#534AB7', '#0F6E56', '#BA7517', '#185FA5', '#D4537E'];
+const DAY_COLORS = ['var(--accent)', '#0F6E56', '#BA7517', '#185FA5', '#D4537E'];
 
 export default function PlanPanel({
   tasks,
@@ -642,7 +642,7 @@ const listStyles = {
   statLabel: { fontSize: 10, color: 'var(--color-text-secondary)' },
   emailBtn: {
     padding: '6px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,
@@ -709,7 +709,7 @@ const listStyles = {
   },
   emailPrimaryBtn: {
     padding: '6px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -816,9 +816,9 @@ const listStyles = {
     minWidth: 28,
   },
   estBtnActive: {
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
-    borderColor: '#534AB7',
+    borderColor: 'var(--accent)',
     fontWeight: 500,
   },
   trackBtn: {
@@ -826,7 +826,7 @@ const listStyles = {
     fontSize: 10,
     background: 'transparent',
     border: '0.5px solid #534AB7',
-    color: '#534AB7',
+    color: 'var(--accent)',
     borderRadius: 4,
     cursor: 'pointer',
     flexShrink: 0,
@@ -882,7 +882,7 @@ function DayColumn({
         <div
           style={{
             ...colStyles.title,
-            color: isToday ? '#534AB7' : 'var(--color-text-primary)',
+            color: isToday ? 'var(--accent)' : 'var(--color-text-primary)',
           }}
         >
           {title}
@@ -939,8 +939,8 @@ function TaskCard({ task, projects, onToggleDone, overdue }) {
         }}
         style={{
           ...cardStyles.checkbox,
-          background: task.done ? '#534AB7' : 'transparent',
-          borderColor: task.done ? '#534AB7' : 'var(--color-border-primary)',
+          background: task.done ? 'var(--accent)' : 'transparent',
+          borderColor: task.done ? 'var(--accent)' : 'var(--color-border-primary)',
         }}
       >
         {task.done && (
@@ -1005,7 +1005,7 @@ const styles = {
   },
   todayBtn: {
     padding: '4px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -1081,11 +1081,11 @@ const colStyles = {
     transition: 'border-color 80ms ease',
   },
   colToday: {
-    background: '#534AB708',
+    background: 'var(--accent-soft)',
   },
   colDropping: {
     border: '0.5px dashed #534AB7',
-    background: '#534AB711',
+    background: 'var(--accent-soft)',
   },
   header: {
     display: 'flex',

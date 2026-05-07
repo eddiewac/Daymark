@@ -79,8 +79,8 @@ export default function PendingInvitesBanner({ session, onAccepted }) {
 
 const styles = {
   bar: {
-    background: '#534AB711',
-    borderBottom: '0.5px solid #534AB744',
+    background: 'var(--accent-soft)',
+    borderBottom: '0.5px solid var(--accent-soft-border)',
     padding: '8px 14px',
     display: 'flex',
     alignItems: 'center',
@@ -90,7 +90,7 @@ const styles = {
   },
   label: {
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
   },
   row: {
     display: 'flex',
@@ -102,7 +102,7 @@ const styles = {
   },
   accept: {
     padding: '3px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

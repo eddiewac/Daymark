@@ -373,19 +373,19 @@ export default function Notepad({
             ...styles.feedback,
             background:
               feedback.type === 'task'
-                ? '#534AB711'
+                ? 'var(--accent-soft)'
                 : feedback.type === 'project'
                 ? '#0F6E5611'
                 : '#BA751711',
             color:
               feedback.type === 'task'
-                ? '#534AB7'
+                ? 'var(--accent)'
                 : feedback.type === 'project'
                 ? '#0F6E56'
                 : '#BA7517',
             borderColor:
               feedback.type === 'task'
-                ? '#534AB744'
+                ? 'var(--accent-soft-border)'
                 : feedback.type === 'project'
                 ? '#0F6E5644'
                 : '#BA751744',
@@ -445,7 +445,7 @@ const styles = {
     alignItems: 'center',
     gap: 8,
     padding: '8px 18px',
-    background: '#534AB708',
+    background: 'var(--accent-soft)',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
     flexWrap: 'wrap',
   },
@@ -461,9 +461,9 @@ const styles = {
   },
   convertBtn: {
     padding: '4px 10px',
-    background: '#534AB711',
-    color: '#534AB7',
-    border: '0.5px solid #534AB744',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 6,
     fontSize: 11,
     fontWeight: 500,
@@ -477,13 +477,13 @@ const styles = {
     padding: 14,
     margin: '12px 18px',
     background: 'var(--color-background-secondary)',
-    border: '0.5px solid #534AB744',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 10,
   },
   convertHeader: {
     fontSize: 11,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -532,7 +532,7 @@ const styles = {
   btnRow: { display: 'flex', gap: 6, marginTop: 4 },
   primaryBtn: {
     padding: '6px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

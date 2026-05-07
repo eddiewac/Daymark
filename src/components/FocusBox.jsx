@@ -19,7 +19,7 @@ export default function FocusBox({
 }) {
   if (!task) return null;
 
-  const projColor = project ? projectColor(project.name, [project]) : '#534AB7';
+  const projColor = project ? projectColor(project.name, [project]) : 'var(--accent)';
   const taskTags = task.tags || [];
 
   // Build the list of checklists to show: only those whose tag matches a task tag
@@ -152,8 +152,8 @@ function ChecklistBlock({ tag, items, progress, onToggle }) {
                 onClick={() => onToggle(i, !checked)}
                 style={{
                   ...checklistStyles.check,
-                  background: checked ? '#534AB7' : 'transparent',
-                  borderColor: checked ? '#534AB7' : 'var(--color-border-primary)',
+                  background: checked ? 'var(--accent)' : 'transparent',
+                  borderColor: checked ? 'var(--accent)' : 'var(--color-border-primary)',
                 }}
               >
                 {checked && (
@@ -351,8 +351,8 @@ const styles = {
     cursor: 'pointer',
   },
   taskCard: {
-    background: '#534AB711',
-    border: '0.5px solid #534AB733',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 12,
     padding: 14,
     display: 'flex',
@@ -362,7 +362,7 @@ const styles = {
   nowTracking: {
     fontSize: 10,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -371,8 +371,8 @@ const styles = {
     fontSize: 10,
     padding: '2px 8px',
     borderRadius: 12,
-    background: '#534AB711',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
   },
   taskTitle: {
     fontSize: 17,
@@ -403,7 +403,7 @@ const styles = {
     flex: 1,
     fontSize: 26,
     fontWeight: 500,
-    color: '#534AB7',
+    color: 'var(--accent)',
     fontVariantNumeric: 'tabular-nums',
     fontFamily: 'monospace',
   },
@@ -494,7 +494,7 @@ const styles = {
   },
   saveNoteBtn: {
     padding: '6px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -552,7 +552,7 @@ const checklistStyles = {
   tag: {
     fontSize: 11,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
   },
   progress: {
     fontSize: 10,

@@ -10,7 +10,7 @@
 //   <DaymarkWordmark />    — symbol + "Daymark" text
 //   <DaymarkFavicon />     — symbol optimised for tiny sizes (no check, simpler form)
 
-const PURPLE = '#534AB7';
+const PURPLE = 'var(--accent)';
 
 // Internal: the D-with-check shape inside an svg.
 // The check's tail extends past the D's right edge into negative space — to
@@ -76,26 +76,7 @@ export function DaymarkSymbol({ size = 32, color, checkColor }) {
 }
 
 // ── Hook: read current data-theme and re-render on changes ────────────────
-import { useState as useStateHook, useEffect as useEffectHook } from 'react';
-
-function useCurrentTheme() {
-  const [theme, setTheme] = useStateHook(() => {
-    if (typeof document === 'undefined') return 'light';
-    return document.documentElement.getAttribute('data-theme') || 'light';
-  });
-
-  useEffectHook(() => {
-    if (typeof document === 'undefined') return;
-    const html = document.documentElement;
-    const observer = new MutationObserver(() => {
-      setTheme(html.getAttribute('data-theme') || 'light');
-    });
-    observer.observe(html, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => observer.disconnect();
-  }, []);
-
-  return theme;
-}
+import { useCurrentTheme } from '../hooks/useCurrentTheme.js';
 
 // ── Wordmark — D-symbol + "Daymark" text. Width auto from height. ──────────
 export function DaymarkWordmark({
@@ -132,7 +113,7 @@ export function DaymarkWordmark({
         showCheck
       />
       {isKaspa ? (
-        // "Daymar" as text, then a hand-drawn backwards K
+        // "Daymar" as text, then a Kaspa-style angular K
         <>
           <text
             x={120}
@@ -146,26 +127,41 @@ export function DaymarkWordmark({
             Daymar
           </text>
           {/*
-            Backwards K — drawn as a single filled path on the right.
-            Composed of three strokes, mirrored horizontally vs a normal K:
-              - vertical stem on the RIGHT (instead of left)
-              - upper diagonal going from top-right down to mid-right
-              - lower diagonal going from mid-right down to bottom-right
-            Positioning: place after "Daymar" which ends at roughly x=440 at 72px.
+            Kaspa-style K — three angular elements forming a stylised K with
+            sharp diagonals (suggesting block confirmation). Drawn as filled
+            shapes with a teal gradient feel, matching Kaspa's branding.
+
+            Composition:
+              - Vertical stem on the left
+              - Upper-right diagonal "block" angling out and up
+              - Lower-right diagonal "block" angling out and down
+            Both diagonals have sharp inner edges that meet at a central point.
           */}
           <g transform="translate(440, 22)">
-            {/* Right-side vertical stem of the K */}
-            <rect x="42" y="0" width="10" height="60" fill={finalTextColor} />
-            {/* Upper diagonal — top-left to middle-right */}
+            {/* Left vertical stem */}
+            <rect x="0" y="0" width="11" height="60" fill={finalTextColor} />
+
+            {/* Upper diagonal — angular, like a confirmed block */}
             <polygon
-              points="42,30 12,0 0,0 36,30"
+              points="11,30 11,18 38,0 50,0 22,28"
               fill={finalTextColor}
             />
-            {/* Lower diagonal — middle-right to bottom-left */}
+
+            {/* Lower diagonal — angular, mirroring the upper */}
             <polygon
-              points="42,30 12,60 0,60 36,30"
+              points="11,30 11,42 38,60 50,60 22,32"
               fill={finalTextColor}
             />
+
+            {/* Small teal accent dot at the K's pivot point — block confirmation indicator */}
+            <circle cx="14" cy="30" r="3" fill="#70c7ba" opacity="0.9">
+              <animate
+                attributeName="opacity"
+                values="0.9;0.4;0.9"
+                dur="2s"
+                repeatCount="indefinite"
+              />
+            </circle>
           </g>
         </>
       ) : (

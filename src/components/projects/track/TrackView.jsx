@@ -3,6 +3,8 @@ import { projectColor } from '../../../lib/constants.js';
 import { uid } from '../../../lib/utils.js';
 import StationFocus from './StationFocus.jsx';
 import { stationLastActivityAt, relativeTime } from '../../../lib/stations.js';
+import { useCurrentTheme } from '../../../hooks/useCurrentTheme.js';
+import BlockDagView from './BlockDagView.jsx';
 
 const DEFAULT_STATIONS = [
   { name: 'Draft 1' },
@@ -157,6 +159,9 @@ export default function TrackView({
     0
   );
 
+  const currentTheme = useCurrentTheme();
+  const isKaspa = currentTheme === 'kaspa';
+
   return (
     <div style={styles.wrap}>
       {/* Header */}
@@ -187,7 +192,16 @@ export default function TrackView({
         </div>
       </div>
 
-      {/* Train body */}
+      {/* Body — BlockDag for Kaspa theme, train for everything else */}
+      {isKaspa && deliverables.length > 0 ? (
+        <BlockDagView
+          project={project}
+          allProjects={allProjects}
+          deliverables={deliverables}
+          tasks={tasks}
+          onOpenStation={(delivId, stationId) => setFocusKey(`${delivId}:${stationId}`)}
+        />
+      ) : (
       <div style={styles.trainScroll}>
         {deliverables.length === 0 ? (
           <div style={styles.empty}>
@@ -402,6 +416,7 @@ export default function TrackView({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

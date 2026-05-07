@@ -199,7 +199,7 @@ function PreviewContent({ preview, userEmail }) {
             {willTransfer.map((w) => (
               <li key={w.id}>
                 <strong>{w.name}</strong> → new owner:{' '}
-                <span style={{ color: '#534AB7' }}>
+                <span style={{ color: 'var(--accent)' }}>
                   {w.new_owner_email || '(another member)'}
                 </span>
               </li>
@@ -315,15 +315,15 @@ const styles = {
     marginBottom: 4,
   },
   transferBlock: {
-    background: '#534AB711',
-    border: '0.5px solid #534AB744',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 8,
     padding: 10,
   },
   transferTitle: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
   },
   transferSub: {
     fontSize: 11,
@@ -398,7 +398,7 @@ const styles = {
   },
   doneBtn: {
     padding: '8px 18px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,

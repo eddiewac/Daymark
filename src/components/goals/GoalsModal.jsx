@@ -368,7 +368,7 @@ const styles = {
   },
   primaryBtn: {
     padding: '6px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -401,7 +401,7 @@ const styles = {
     flexDirection: 'column',
     gap: 8,
   },
-  editorTitle: { fontSize: 12, fontWeight: 600, color: '#534AB7' },
+  editorTitle: { fontSize: 12, fontWeight: 600, color: 'var(--accent)' },
   input: {
     padding: '6px 10px',
     border: '0.5px solid var(--color-border-primary)',
@@ -504,7 +504,7 @@ const goalStyles = {
   },
   evidenceBtn: {
     padding: '5px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -514,7 +514,7 @@ const goalStyles = {
   expandBtn: {
     background: 'transparent',
     border: 'none',
-    color: '#534AB7',
+    color: 'var(--accent)',
     fontSize: 11,
     cursor: 'pointer',
     padding: 0,

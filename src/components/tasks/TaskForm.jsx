@@ -256,7 +256,7 @@ const styles = {
     borderBottom: '0.5px solid var(--color-border-tertiary)',
     background: 'var(--color-background-secondary)',
   },
-  editingHdr: { fontSize: 11, color: '#534AB7', fontWeight: 500 },
+  editingHdr: { fontSize: 11, color: 'var(--accent)', fontWeight: 500 },
   titleInput: {
     padding: '8px 10px',
     border: '0.5px solid var(--color-border-primary)',
@@ -285,7 +285,7 @@ const styles = {
   primary: {
     flex: 1,
     padding: '7px 0',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,

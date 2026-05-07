@@ -124,8 +124,8 @@ function PriorityTaskRow({ task, projects, isPrimary, onToggleDone }) {
         onClick={() => onToggleDone(task.id)}
         style={{
           ...rowStyles.checkbox,
-          background: task.done ? '#534AB7' : 'transparent',
-          borderColor: task.done ? '#534AB7' : 'var(--color-border-primary)',
+          background: task.done ? 'var(--accent)' : 'transparent',
+          borderColor: task.done ? 'var(--accent)' : 'var(--color-border-primary)',
         }}
       >
         {task.done && (
@@ -166,8 +166,8 @@ const styles = {
     justifyContent: 'space-between',
     gap: 10,
     padding: '10px 14px',
-    background: '#534AB711',
-    border: '0.5px solid #534AB744',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 10,
     margin: '10px 14px 0',
     flexWrap: 'wrap',
@@ -186,7 +186,7 @@ const styles = {
   bannerActions: { display: 'flex', gap: 6, alignItems: 'center' },
   bannerSetBtn: {
     padding: '5px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -207,8 +207,8 @@ const styles = {
   pinned: {
     margin: '10px 14px 0',
     padding: 12,
-    background: 'linear-gradient(180deg, #534AB711, #534AB708)',
-    border: '0.5px solid #534AB744',
+    background: 'linear-gradient(180deg, var(--accent-soft), var(--accent-soft))',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 10,
   },
   pinnedHeader: {
@@ -221,14 +221,14 @@ const styles = {
     flex: 1,
     fontSize: 11,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
     letterSpacing: 0.3,
   },
   changeBtn: {
     padding: '3px 10px',
     background: 'transparent',
     border: '0.5px solid #534AB7',
-    color: '#534AB7',
+    color: 'var(--accent)',
     borderRadius: 6,
     fontSize: 10,
     cursor: 'pointer',
@@ -252,7 +252,7 @@ const styles = {
   stretchSection: {
     marginTop: 10,
     paddingTop: 8,
-    borderTop: '0.5px dashed #534AB744',
+    borderTop: '0.5px dashed var(--accent-soft-border)',
   },
   stretchLabel: {
     fontSize: 10,

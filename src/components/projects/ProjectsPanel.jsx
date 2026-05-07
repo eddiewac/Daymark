@@ -228,7 +228,7 @@ const styles = {
   },
   addBtn: {
     padding: '5px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,
@@ -239,8 +239,8 @@ const styles = {
   gridScroll: { flex: 1, overflowY: 'auto', padding: 16 },
   trackHelp: {
     padding: '10px 14px',
-    background: '#534AB708',
-    border: '0.5px solid #534AB733',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid var(--accent-soft-border)',
     borderRadius: 8,
     fontSize: 12,
     color: 'var(--color-text-secondary)',

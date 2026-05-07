@@ -801,7 +801,7 @@ const enrichedStyles = {
   dateDoneBtn: {
     padding: '3px 12px',
     fontSize: 10,
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -850,8 +850,8 @@ const nextPromptStyles = {
   box: {
     marginTop: 12,
     padding: 12,
-    background: '#534AB708',
-    border: '0.5px dashed #534AB744',
+    background: 'var(--accent-soft)',
+    border: '0.5px dashed var(--accent-soft-border)',
     borderRadius: 8,
     display: 'flex',
     flexDirection: 'column',
@@ -864,7 +864,7 @@ const nextPromptStyles = {
   },
   headerLabel: {
     fontSize: 11,
-    color: '#534AB7',
+    color: 'var(--accent)',
     flex: 1,
   },
   dismiss: {

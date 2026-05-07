@@ -464,8 +464,8 @@ function ActionRow({ action, onUpdate, onRemove, onPromote }) {
         onClick={() => onUpdate({ done: !action.done })}
         style={{
           ...actionStyles.checkbox,
-          background: action.done ? '#534AB7' : 'transparent',
-          borderColor: action.done ? '#534AB7' : 'var(--color-border-primary)',
+          background: action.done ? 'var(--accent)' : 'transparent',
+          borderColor: action.done ? 'var(--accent)' : 'var(--color-border-primary)',
         }}
       >
         {action.done && (
@@ -567,7 +567,7 @@ function AddProjectPicker({ projects, onAdd }) {
 
 // ── FilterChip ───────────────────────────────────────────────────────────────
 function FilterChip({ active, onClick, label, color }) {
-  const baseColor = color || '#534AB7';
+  const baseColor = color || 'var(--accent)';
   return (
     <button
       onClick={onClick}
@@ -796,7 +796,7 @@ const entryStyles = {
     padding: '2px 8px',
     background: 'transparent',
     border: '0.5px solid #534AB7',
-    color: '#534AB7',
+    color: 'var(--accent)',
     borderRadius: 6,
     fontSize: 10,
     cursor: 'pointer',
@@ -857,7 +857,7 @@ const actionStyles = {
     padding: '2px 8px',
     background: 'transparent',
     border: '0.5px solid #534AB7',
-    color: '#534AB7',
+    color: 'var(--accent)',
     borderRadius: 4,
     fontSize: 10,
   },
@@ -903,7 +903,7 @@ const addPickerStyles = {
   },
   addBtn: {
     padding: '5px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

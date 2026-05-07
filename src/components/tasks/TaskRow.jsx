@@ -41,7 +41,7 @@ export default function TaskRow({
     <div
       style={{
         ...styles.row,
-        background: isAssigned ? '#534AB708' : 'transparent',
+        background: isAssigned ? 'var(--accent-soft)' : 'transparent',
         borderLeft: isAssigned ? '3px solid #534AB7' : '3px solid transparent',
       }}
     >
@@ -49,8 +49,8 @@ export default function TaskRow({
         onClick={() => onToggleDone(task.id)}
         style={{
           ...styles.check,
-          border: `1.5px solid ${task.done ? '#534AB7' : priColor}`,
-          background: task.done ? '#534AB7' : 'transparent',
+          border: `1.5px solid ${task.done ? 'var(--accent)' : priColor}`,
+          background: task.done ? 'var(--accent)' : 'transparent',
         }}
         title="Toggle done"
       >
@@ -253,8 +253,8 @@ const styles = {
     fontSize: 10,
     padding: '1px 7px',
     borderRadius: 10,
-    background: '#534AB722',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
   assignedBadge: {

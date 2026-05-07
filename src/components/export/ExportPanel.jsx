@@ -383,7 +383,7 @@ export default function ExportPanel({ tasks, projects, blocks, workspaceId, work
                   })}
                   <tr style={styles.totalsRow}>
                     {buildTotalsRow().map((c, j) => (
-                      <td key={j} style={{ ...styles.previewTd, fontWeight: 600, color: '#534AB7' }}>{c || ''}</td>
+                      <td key={j} style={{ ...styles.previewTd, fontWeight: 600, color: 'var(--accent)' }}>{c || ''}</td>
                     ))}
                   </tr>
                 </tbody>
@@ -882,7 +882,7 @@ const styles = {
   },
   todayBtn: {
     padding: '4px 10px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -900,7 +900,7 @@ const styles = {
   weekLabel: { fontSize: 12, color: 'var(--color-text-secondary)' },
   primaryBtn: {
     padding: '7px 14px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,
@@ -974,7 +974,7 @@ const styles = {
   addBtn: {
     width: 22,
     height: 22,
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     fontSize: 13,
@@ -1002,7 +1002,7 @@ const styles = {
     marginTop: 8,
     background: 'transparent',
     border: 'none',
-    color: '#534AB7',
+    color: 'var(--accent)',
     fontSize: 11,
     cursor: 'pointer',
     padding: 0,
@@ -1038,8 +1038,8 @@ const styles = {
   },
   zebraRow: { background: '#fafafa' },
   totalsRow: {
-    background: '#534AB711',
-    borderTop: '1px solid #534AB744',
+    background: 'var(--accent-soft)',
+    borderTop: '1px solid var(--accent-soft-border)',
   },
   fallback: {
     width: '100%',

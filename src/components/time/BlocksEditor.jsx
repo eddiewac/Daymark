@@ -376,7 +376,7 @@ const styles = {
   timeSep: { fontSize: 12, color: 'var(--color-text-tertiary)' },
   hoursDisplay: {
     fontSize: 11,
-    color: '#534AB7',
+    color: 'var(--accent)',
     fontWeight: 500,
     fontFamily: 'monospace',
     marginLeft: 6,
@@ -443,7 +443,7 @@ const styles = {
   },
   addBtn: {
     padding: '5px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

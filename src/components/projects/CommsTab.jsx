@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { uid } from '../../lib/utils.js';
 
 const PILL_COLOR_CYCLE = [
-  '#534AB7', '#D85A30', '#0F6E56', '#185FA5',
+  'var(--accent)', '#D85A30', '#0F6E56', '#185FA5',
   '#BA7517', '#D4537E', '#378ADD', '#639922', '#888780',
 ];
 
 export const DEFAULT_COMM_PILLS = [
-  { label: 'Adjudication / handoff', color: '#534AB7', needsReply: true },
+  { label: 'Adjudication / handoff', color: 'var(--accent)', needsReply: true },
   { label: 'Chaser', color: '#ef9f27', needsReply: true },
   { label: 'Client review request', color: '#D85A30', needsReply: true },
   { label: 'Approval sent', color: '#1d9e75', needsReply: false },
@@ -369,7 +369,7 @@ const styles = {
     border: 'none',
     cursor: 'pointer',
     fontSize: 10,
-    color: '#534AB7',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
   pillsRow: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
@@ -407,7 +407,7 @@ const styles = {
   addPillSave: {
     fontSize: 11,
     padding: '3px 10px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

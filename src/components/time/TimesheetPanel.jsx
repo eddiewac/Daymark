@@ -245,7 +245,7 @@ export default function TimesheetPanel({
                               cursor: canTrack ? 'pointer' : 'not-allowed',
                               color: canTrack
                                 ? cellHours > 0
-                                  ? '#534AB7'
+                                  ? 'var(--accent)'
                                   : 'var(--color-text-tertiary)'
                                 : 'var(--color-text-tertiary)',
                             }}
@@ -304,7 +304,7 @@ export default function TimesheetPanel({
                     ...styles.td,
                     ...styles.totalCol,
                     fontWeight: 700,
-                    background: '#534AB708',
+                    background: 'var(--accent-soft)',
                   }}
                 >
                   {weekTotal > 0 ? weekTotal.toFixed(2) : ''}
@@ -358,7 +358,7 @@ const styles = {
   },
   todayBtn: {
     padding: '4px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -397,14 +397,14 @@ const styles = {
     top: 0,
     zIndex: 5,
   },
-  thToday: { background: '#534AB711', color: '#534AB7' },
+  thToday: { background: 'var(--accent-soft)', color: 'var(--accent)' },
   thDate: { fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: 2 },
   td: {
     padding: '0 4px',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
     verticalAlign: 'middle',
   },
-  tdToday: { background: '#534AB704' },
+  tdToday: { background: 'var(--accent-soft)' },
   taskCol: { width: '38%', textAlign: 'left', paddingLeft: 14, paddingRight: 8 },
   dayCol: { width: '7%', minWidth: 78 },
   totalCol: { width: '8%', minWidth: 70, textAlign: 'center', fontFamily: 'monospace' },
@@ -439,7 +439,7 @@ const styles = {
     borderRadius: 4,
   },
   cellBtnFilled: {
-    background: '#534AB708',
+    background: 'var(--accent-soft)',
     fontWeight: 500,
   },
   blockCount: {
@@ -449,7 +449,7 @@ const styles = {
     fontSize: 9,
     padding: '0 4px',
     borderRadius: 6,
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     fontFamily: 'inherit',
   },
@@ -459,5 +459,5 @@ const styles = {
     textAlign: 'center',
     padding: '8px 4px',
   },
-  totalRow: { background: '#534AB704' },
+  totalRow: { background: 'var(--accent-soft)' },
 };

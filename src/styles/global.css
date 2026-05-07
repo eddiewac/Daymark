@@ -142,52 +142,53 @@
 }
 
 /* ─── Kaspa theme (hidden, accessed via ?theme=kaspa) ─────────────────────
-   Dark blockdag-explorer aesthetic. Primary accent is Kaspa teal.
+   Bold blockdag-explorer aesthetic. Primary accent is Kaspa teal — used
+   liberally throughout to make it feel distinctly Kaspa-themed.
    Not exposed in Settings; activated via URL param or localStorage. */
 [data-theme="kaspa"] {
   /* Backgrounds — deep dark with subtle teal tint */
-  --bg-page: #0d1117;
-  --bg-surface: #161b22;
-  --bg-surface-alt: #1c232c;
-  --bg-surface-muted: #11161d;
-  --bg-input: #1c232c;
-  --bg-modal-overlay: rgba(0, 0, 0, 0.75);
-  --bg-hover: rgba(112, 199, 186, 0.06);
+  --bg-page: #0a1416;
+  --bg-surface: #0f1c20;
+  --bg-surface-alt: #14272d;
+  --bg-surface-muted: #0c1a1e;
+  --bg-input: #14272d;
+  --bg-modal-overlay: rgba(0, 10, 12, 0.8);
+  --bg-hover: rgba(112, 199, 186, 0.1);
 
-  /* Text — light with cool tint */
-  --text-primary: #e6edf3;
-  --text-secondary: #8b97a3;
-  --text-tertiary: #5c6671;
-  --text-on-accent: #0d1117;
+  /* Text — light with teal tint */
+  --text-primary: #e6f6f3;
+  --text-secondary: #8ab8b3;
+  --text-tertiary: #5a807c;
+  --text-on-accent: #0a1416;
   --text-link: #70c7ba;
 
-  /* Borders — subtle, dark */
-  --border-primary: #30363d;
-  --border-secondary: #21262d;
-  --border-tertiary: #1c2129;
+  /* Borders — teal-tinted */
+  --border-primary: #2a4a4e;
+  --border-secondary: #1d3438;
+  --border-tertiary: #15282c;
 
-  /* Brand / accent — Kaspa teal */
+  /* Brand / accent — Kaspa teal, brighter */
   --accent: #70c7ba;
-  --accent-hover: #5fb0a4;
-  --accent-soft: rgba(112, 199, 186, 0.1);
-  --accent-soft-border: rgba(112, 199, 186, 0.35);
+  --accent-hover: #8fdfd2;
+  --accent-soft: rgba(112, 199, 186, 0.14);
+  --accent-soft-border: rgba(112, 199, 186, 0.45);
 
   /* Semantic — adjusted for dark backgrounds */
   --success: #56d364;
-  --success-soft: rgba(86, 211, 100, 0.1);
-  --success-soft-border: rgba(86, 211, 100, 0.3);
+  --success-soft: rgba(86, 211, 100, 0.13);
+  --success-soft-border: rgba(86, 211, 100, 0.35);
   --warning: #e3b341;
-  --warning-soft: rgba(227, 179, 65, 0.13);
+  --warning-soft: rgba(227, 179, 65, 0.15);
   --danger: #f85149;
-  --danger-soft: rgba(248, 81, 73, 0.1);
-  --danger-soft-border: rgba(248, 81, 73, 0.3);
+  --danger-soft: rgba(248, 81, 73, 0.13);
+  --danger-soft-border: rgba(248, 81, 73, 0.35);
   --info: #58a6ff;
 
-  /* Shadows — teal-tinted glow */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6);
-  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.7);
+  /* Shadows — strong teal-tinted glow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(112, 199, 186, 0.06);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(112, 199, 186, 0.08);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(112, 199, 186, 0.1);
+  --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 32px rgba(112, 199, 186, 0.15);
 
   /* Backwards-compat aliases */
   --color-background-primary: var(--bg-surface);
@@ -205,13 +206,30 @@
   --color-warning: var(--warning);
 }
 
+/* Kaspa-mode global flourishes — applied across the whole app to make it
+   feel distinctly Kaspa-themed, not just dark. */
+[data-theme="kaspa"] body {
+  background-image:
+    radial-gradient(circle at 0% 0%, rgba(112, 199, 186, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(112, 199, 186, 0.04) 0%, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Tab indicator gets a teal glow when active */
+[data-theme="kaspa"] button[style*="border-bottom"] {
+  text-shadow: 0 0 8px rgba(112, 199, 186, 0.3);
+}
+
 /* Block-style station cards when in Kaspa theme.
    Adds a subtle glow, sharper corners, and a hash-like decoration. */
 [data-theme="kaspa"] [data-kaspa-block] {
   background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt)) !important;
   border: 1px solid var(--accent-soft-border) !important;
   border-radius: 4px !important;
-  box-shadow: 0 0 0 1px rgba(112, 199, 186, 0.1), 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(112, 199, 186, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(112, 199, 186, 0.1) !important;
   position: relative;
 }
 
@@ -224,8 +242,27 @@
   height: 5px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 6px var(--accent);
-  opacity: 0.7;
+  box-shadow: 0 0 8px var(--accent);
+  opacity: 0.9;
+  animation: kaspa-pulse 2s ease-in-out infinite;
+}
+
+@keyframes kaspa-pulse {
+  0%, 100% { opacity: 0.9; box-shadow: 0 0 8px var(--accent); }
+  50%      { opacity: 0.5; box-shadow: 0 0 4px var(--accent); }
+}
+
+/* Buttons in Kaspa theme get a subtle teal glow on hover */
+[data-theme="kaspa"] button:not(:disabled):hover {
+  box-shadow: 0 0 12px rgba(112, 199, 186, 0.2);
+}
+
+/* Inputs in Kaspa theme get a teal focus ring */
+[data-theme="kaspa"] input:focus,
+[data-theme="kaspa"] textarea:focus,
+[data-theme="kaspa"] select:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 
 * {

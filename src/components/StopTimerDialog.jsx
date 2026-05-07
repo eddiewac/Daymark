@@ -212,7 +212,7 @@ const styles = {
   },
   saveBtn: {
     padding: '6px 16px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,

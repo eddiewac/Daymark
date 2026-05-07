@@ -212,7 +212,7 @@ const styles = {
     fontSize: 12,
     borderBottom: '0.5px solid var(--color-border-tertiary)',
   },
-  optionSelected: { background: '#534AB708' },
+  optionSelected: { background: 'var(--accent-soft)' },
   checkBox: {
     width: 14,
     height: 14,
@@ -222,7 +222,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#534AB7',
+    color: 'var(--accent)',
     flexShrink: 0,
   },
   optTitle: {

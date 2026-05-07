@@ -56,7 +56,7 @@ function BlockRow({ entry, onUpdate, onDelete }) {
       <span
         style={{
           ...blockStyles.hours,
-          color: valid ? '#534AB7' : '#e24b4a',
+          color: valid ? 'var(--accent)' : '#e24b4a',
         }}
       >
         {valid ? `${liveHours.toFixed(2)}h` : 'invalid'}
@@ -243,13 +243,13 @@ const cellStyles = {
     textAlign: 'center',
   },
   filled: {
-    background: '#534AB708',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     fontWeight: 500,
   },
   openBtn: {
-    background: '#534AB722',
-    color: '#534AB7',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
     boxShadow: '0 0 0 1px #534AB7',
   },
   readonly: {
@@ -307,7 +307,7 @@ const cellStyles = {
   },
   doneBtn: {
     padding: '4px 12px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,

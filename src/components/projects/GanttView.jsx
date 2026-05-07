@@ -135,7 +135,7 @@ export default function GanttView({ projects, congresses }) {
   const congressMarkers = (congresses || [])
     .filter((c) => linkedCongressIds.has(c.id))
     .flatMap((c) => {
-      const col = c.color || '#534AB7';
+      const col = c.color || 'var(--accent)';
       const m = [];
       const add = (key, label, type) => {
         const d = toDate(c[key]);
@@ -311,7 +311,7 @@ export default function GanttView({ projects, congresses }) {
 
               {/* Bars */}
               {rows.map((r, i) => {
-                let s = null, e = null, name = '', col = '#534AB7', isDone = false, isStation = false;
+                let s = null, e = null, name = '', col = 'var(--accent)', isDone = false, isStation = false;
 
                 if (r.kind === 'deliverable') {
                   s = toDate(r.deliverable.startDate);

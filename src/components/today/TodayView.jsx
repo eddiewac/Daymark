@@ -411,7 +411,7 @@ function Section({ title, children, empty, tone, hint, jumpLabel, onJump }) {
       : tone === 'amber'
       ? '#ef9f27'
       : tone === 'purple'
-      ? '#534AB7'
+      ? 'var(--accent)'
       : 'var(--color-text-primary)';
 
   return (
@@ -543,7 +543,7 @@ const timerStyles = {
     fontSize: 10,
     background: 'transparent',
     border: '0.5px solid #534AB7',
-    color: '#534AB7',
+    color: 'var(--accent)',
     borderRadius: 4,
     flexShrink: 0,
     fontWeight: 500,
@@ -673,7 +673,7 @@ const styles = {
   smallAction: {
     padding: '3px 10px',
     fontSize: 11,
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 6,
@@ -700,7 +700,7 @@ const styles = {
   allClearText: { fontSize: 12, color: 'var(--color-text-secondary)' },
   allClearBtn: {
     padding: '6px 16px',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     border: 'none',
     borderRadius: 8,
@@ -748,7 +748,7 @@ const styles = {
     width: 28,
     height: 28,
     borderRadius: '50%',
-    background: '#534AB7',
+    background: 'var(--accent)',
     color: '#fff',
     fontSize: 12,
     fontWeight: 600,
@@ -770,7 +770,7 @@ const styles = {
   },
   welcomeStepArrow: {
     fontSize: 16,
-    color: '#534AB7',
+    color: 'var(--accent)',
     flexShrink: 0,
   },
   welcomeFooter: {
@@ -784,8 +784,8 @@ const styles = {
     alignItems: 'center',
     gap: 12,
     padding: 14,
-    background: '#534AB708',
-    border: '0.5px dashed #534AB744',
+    background: 'var(--accent-soft)',
+    border: '0.5px dashed var(--accent-soft-border)',
     borderRadius: 10,
     textAlign: 'left',
     transition: 'all 0.15s',
@@ -799,7 +799,7 @@ const styles = {
   demoTitle: {
     fontSize: 12,
     fontWeight: 600,
-    color: '#534AB7',
+    color: 'var(--accent)',
   },
   demoDesc: {
     fontSize: 11,

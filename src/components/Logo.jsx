@@ -127,34 +127,37 @@ export function DaymarkWordmark({
             Daymar
           </text>
           {/*
-            Kaspa-style K — three angular elements forming a stylised K with
-            sharp diagonals (suggesting block confirmation). Drawn as filled
-            shapes with a teal gradient feel, matching Kaspa's branding.
+            Kaspa-style K — MIRRORED orientation (vertical stem on the RIGHT,
+            diagonals fanning to the LEFT). This matches the actual Kaspa
+            brand identity. Three angular elements forming a stylised
+            backwards K with sharp diagonals (suggesting block confirmation).
 
-            Composition:
-              - Vertical stem on the left
-              - Upper-right diagonal "block" angling out and up
-              - Lower-right diagonal "block" angling out and down
-            Both diagonals have sharp inner edges that meet at a central point.
+            Composition (mirrored from a normal K):
+              - Vertical stem on the right
+              - Upper diagonal "block" angling out to the upper-left
+              - Lower diagonal "block" angling out to the lower-left
+            Both diagonals have sharp inner edges meeting at a central point.
+
+            Position: pulled in close to "Daymar" so there's no gap.
           */}
-          <g transform="translate(440, 22)">
-            {/* Left vertical stem */}
-            <rect x="0" y="0" width="11" height="60" fill={finalTextColor} />
+          <g transform="translate(395, 22)">
+            {/* Right-side vertical stem */}
+            <rect x="42" y="0" width="11" height="60" fill={finalTextColor} />
 
-            {/* Upper diagonal — angular, like a confirmed block */}
+            {/* Upper diagonal — angular, fans up and to the left */}
             <polygon
-              points="11,30 11,18 38,0 50,0 22,28"
+              points="42,30 42,18 15,0 3,0 31,28"
               fill={finalTextColor}
             />
 
-            {/* Lower diagonal — angular, mirroring the upper */}
+            {/* Lower diagonal — angular, fans down and to the left */}
             <polygon
-              points="11,30 11,42 38,60 50,60 22,32"
+              points="42,30 42,42 15,60 3,60 31,32"
               fill={finalTextColor}
             />
 
             {/* Small teal accent dot at the K's pivot point — block confirmation indicator */}
-            <circle cx="14" cy="30" r="3" fill="#70c7ba" opacity="0.9">
+            <circle cx="39" cy="30" r="3" fill="#70c7ba" opacity="0.9">
               <animate
                 attributeName="opacity"
                 values="0.9;0.4;0.9"

@@ -35,6 +35,8 @@ export default function TodayView({
   runningTimer,
   onStartTimer,
   onStopTimer,
+  onSeedDemo,
+  seedingDemo,
 }) {
   const today = todayStr();
 
@@ -346,6 +348,31 @@ export default function TodayView({
                 <div style={styles.welcomeStepArrow}>→</div>
               </button>
             </div>
+
+            {/* Demo workspace callout — separated visually from the three numbered steps */}
+            {onSeedDemo && (
+              <button
+                onClick={onSeedDemo}
+                disabled={seedingDemo}
+                style={{
+                  ...styles.demoCallout,
+                  opacity: seedingDemo ? 0.6 : 1,
+                  cursor: seedingDemo ? 'wait' : 'pointer',
+                }}
+              >
+                <div style={styles.demoIcon}>📚</div>
+                <div style={styles.demoBody}>
+                  <div style={styles.demoTitle}>
+                    {seedingDemo ? 'Setting up demo workspace…' : 'Or — see Daymark with realistic example data'}
+                  </div>
+                  <div style={styles.demoDesc}>
+                    Creates a separate "Daymark demo" workspace with three example medcomms projects, comms logs, and tasks at different stages. Switch to it any time. Delete when you're done.
+                  </div>
+                </div>
+                <div style={styles.welcomeStepArrow}>→</div>
+              </button>
+            )}
+
             <div style={styles.welcomeFooter}>
               Need a deeper tour? Click the <strong>?</strong> in the top bar any time.
             </div>
@@ -751,6 +778,34 @@ const styles = {
     color: 'var(--color-text-tertiary)',
     fontStyle: 'italic',
     paddingTop: 4,
+  },
+  demoCallout: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    background: '#534AB708',
+    border: '0.5px dashed #534AB744',
+    borderRadius: 10,
+    textAlign: 'left',
+    transition: 'all 0.15s',
+    marginTop: 8,
+  },
+  demoIcon: {
+    fontSize: 20,
+    flexShrink: 0,
+  },
+  demoBody: { flex: 1, minWidth: 0 },
+  demoTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#534AB7',
+  },
+  demoDesc: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    marginTop: 2,
+    lineHeight: 1.4,
   },
   kbd: {
     fontFamily: 'monospace',

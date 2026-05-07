@@ -7,7 +7,9 @@ import { useCongresses } from '../hooks/useCongresses.js';
 import { useStatusRounds } from '../hooks/useStatusRounds.js';
 import { usePriority } from '../hooks/usePriority.js';
 import { useUserPrefs } from '../hooks/useUserPrefs.js';
-import { loadWorkspaceMembers } from '../lib/workspaces.js';
+import { loadWorkspaceMembers, deleteWorkspace, setStoredActiveWorkspaceId } from '../lib/workspaces.js';
+import { seedDemoWorkspace, isDemoWorkspace } from '../lib/demoSeed.js';
+import DemoWorkspaceBanner from './DemoWorkspaceBanner.jsx';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
@@ -132,6 +134,52 @@ export default function WorkspaceView({
   const [priorityModalOpen, setPriorityModalOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [seedingDemo, setSeedingDemo] = useState(false);
+  const [isDemo, setIsDemo] = useState(false);
+
+  // Check whether the current workspace is the demo
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!workspaceId) {
+        setIsDemo(false);
+        return;
+      }
+      const flag = await isDemoWorkspace(workspaceId);
+      if (!cancelled) setIsDemo(flag);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
+  const handleSeedDemo = async () => {
+    if (seedingDemo) return;
+    setSeedingDemo(true);
+    try {
+      const ws = await seedDemoWorkspace();
+      // Set the new demo workspace as active and reload to enter it cleanly
+      setStoredActiveWorkspaceId(ws.id);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to seed demo workspace:', err);
+      alert('Sorry — the demo workspace couldn\'t be created. Please try again or check your connection.');
+      setSeedingDemo(false);
+    }
+  };
+
+  const handleDeleteDemo = async () => {
+    if (!workspaceId) return;
+    try {
+      await deleteWorkspace(workspaceId);
+      // After deletion, drop back to personal workspace
+      setStoredActiveWorkspaceId(null);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to delete demo workspace:', err);
+      alert('Sorry — the demo workspace couldn\'t be deleted. Please try again.');
+    }
+  };
 
   // Listen for global quick-capture triggers (Cmd+K, "+ New" button in TopBar).
   // Both fire the 'daymark-quick-capture' event so we don't need prop drilling.
@@ -202,6 +250,12 @@ export default function WorkspaceView({
 
   return (
     <div style={styles.wrap}>
+      {isDemo && (
+        <DemoWorkspaceBanner
+          workspaceName={workspaceName}
+          onDelete={handleDeleteDemo}
+        />
+      )}
       <div style={styles.tabBar}>
         {TABS.map((t) => (
           <button
@@ -245,6 +299,8 @@ export default function WorkspaceView({
             runningTimer={time.runningTimer}
             onStartTimer={startTimer}
             onStopTimer={time.requestStop}
+            onSeedDemo={handleSeedDemo}
+            seedingDemo={seedingDemo}
           />
         )}
         {tab === 'tasks' && (

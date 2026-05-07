@@ -242,6 +242,9 @@ export default function WorkspaceView({
             onJumpToTab={(t) => setTab(t)}
             onJumpToProject={() => setTab('projects')}
             onToggleDone={toggleDone}
+            runningTimer={time.runningTimer}
+            onStartTimer={startTimer}
+            onStopTimer={time.requestStop}
           />
         )}
         {tab === 'tasks' && (

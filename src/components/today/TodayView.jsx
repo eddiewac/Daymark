@@ -32,6 +32,9 @@ export default function TodayView({
   onJumpToTab,
   onJumpToProject,
   onToggleDone,
+  runningTimer,
+  onStartTimer,
+  onStopTimer,
 }) {
   const today = todayStr();
 
@@ -150,6 +153,9 @@ export default function TodayView({
                   task={primary}
                   projects={projects}
                   onToggleDone={onToggleDone}
+                  runningTimer={runningTimer}
+                  onStartTimer={onStartTimer}
+                  onStopTimer={onStopTimer}
                   isPrimary
                 />
                 {stretchTasks.map((t) => (
@@ -158,6 +164,9 @@ export default function TodayView({
                     task={t}
                     projects={projects}
                     onToggleDone={onToggleDone}
+                    runningTimer={runningTimer}
+                    onStartTimer={onStartTimer}
+                    onStopTimer={onStopTimer}
                   />
                 ))}
               </div>
@@ -179,6 +188,9 @@ export default function TodayView({
                 task={t}
                 projects={projects}
                 onToggleDone={onToggleDone}
+                runningTimer={runningTimer}
+                onStartTimer={onStartTimer}
+                onStopTimer={onStopTimer}
                 showDate
               />
             ))}
@@ -204,6 +216,9 @@ export default function TodayView({
                 task={t}
                 projects={projects}
                 onToggleDone={onToggleDone}
+                runningTimer={runningTimer}
+                onStartTimer={onStartTimer}
+                onStopTimer={onStopTimer}
               />
             ))}
           </Section>
@@ -390,7 +405,7 @@ function Section({ title, children, empty, tone, hint, jumpLabel, onJump }) {
 }
 
 // ── Mini row components ─────────────────────────────────────────────────────
-function PriorityRow({ task, projects, onToggleDone, isPrimary }) {
+function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, onStartTimer, onStopTimer }) {
   const projColor = projectColor(task.project, projects);
   return (
     <div style={{ ...styles.miniRow, borderLeft: `3px solid ${projColor}` }}>
@@ -415,11 +430,17 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary }) {
           {task.project}
         </span>
       )}
+      <TimerButton
+        task={task}
+        runningTimer={runningTimer}
+        onStartTimer={onStartTimer}
+        onStopTimer={onStopTimer}
+      />
     </div>
   );
 }
 
-function TaskRowMini({ task, projects, onToggleDone, showDate }) {
+function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onStartTimer, onStopTimer }) {
   const projColor = projectColor(task.project, projects);
   return (
     <div style={{ ...styles.miniRow, borderLeft: `3px solid ${projColor}` }}>
@@ -448,9 +469,70 @@ function TaskRowMini({ task, projects, onToggleDone, showDate }) {
           {task.project}
         </span>
       )}
+      <TimerButton
+        task={task}
+        runningTimer={runningTimer}
+        onStartTimer={onStartTimer}
+        onStopTimer={onStopTimer}
+      />
     </div>
   );
 }
+
+// ── TimerButton ─────────────────────────────────────────────────────────────
+// Small Track / Stop button used in the Today rows. Mirrors the behaviour from
+// the Plan list view: only one timer can run; if a different task is running,
+// this button is disabled with a tooltip; if the task is done, no button.
+function TimerButton({ task, runningTimer, onStartTimer, onStopTimer }) {
+  if (task.done || !onStartTimer) return null;
+  const isTracking = runningTimer?.taskId === task.id;
+  if (isTracking) {
+    return (
+      <button onClick={onStopTimer} style={timerStyles.stop}>
+        ■ Stop
+      </button>
+    );
+  }
+  const blocked = !!runningTimer;
+  return (
+    <button
+      onClick={() => onStartTimer(task)}
+      disabled={blocked}
+      style={{
+        ...timerStyles.track,
+        opacity: blocked ? 0.4 : 1,
+        cursor: blocked ? 'not-allowed' : 'pointer',
+      }}
+      title={blocked ? 'Stop the running timer first' : 'Start tracking'}
+    >
+      ▶ Track
+    </button>
+  );
+}
+
+const timerStyles = {
+  track: {
+    padding: '2px 8px',
+    fontSize: 10,
+    background: 'transparent',
+    border: '0.5px solid #534AB7',
+    color: '#534AB7',
+    borderRadius: 4,
+    flexShrink: 0,
+    fontWeight: 500,
+  },
+  stop: {
+    padding: '2px 8px',
+    fontSize: 10,
+    background: '#e24b4a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 4,
+    cursor: 'pointer',
+    flexShrink: 0,
+    fontWeight: 500,
+  },
+};
 
 function CommRow({ item, onJump }) {
   return (

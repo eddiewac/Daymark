@@ -17,8 +17,22 @@ import PendingInvitesBanner from './components/PendingInvitesBanner.jsx';
 import GoalsModal from './components/goals/GoalsModal.jsx';
 import GoalsFloatingButton from './components/goals/GoalsFloatingButton.jsx';
 import AccountDeletionModal from './components/AccountDeletionModal.jsx';
+import PrivacyPage from './components/legal/PrivacyPage.jsx';
+import TermsPage from './components/legal/TermsPage.jsx';
+import SecurityPage from './components/legal/SecurityPage.jsx';
+
+// Public-facing legal pages — rendered before the auth check so anyone can read them.
+const LEGAL_ROUTES = {
+  '/privacy': PrivacyPage,
+  '/terms': TermsPage,
+  '/security': SecurityPage,
+};
 
 export default function App() {
+  // Read pathname once at mount. We don't need reactive routing since the legal
+  // pages link to /, which causes a full reload back to the app.
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+
   const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(true);
   const [workspaces, setWorkspaces] = useState([]);
@@ -76,6 +90,11 @@ export default function App() {
   };
 
   if (checking) return <div style={loadingStyle}>…</div>;
+
+  // Public legal pages — accessible regardless of auth state
+  const LegalComponent = LEGAL_ROUTES[pathname];
+  if (LegalComponent) return <LegalComponent />;
+
   if (!session) return <Auth />;
 
   const indicator = time.runningTimer ? (

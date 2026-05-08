@@ -123,9 +123,31 @@ export default function Auth() {
           </a>
         </div>
       </div>
+      <div style={authFooterStyles.footer}>
+        <a href="/privacy" style={authFooterStyles.link}>Privacy</a>
+        <span style={authFooterStyles.sep}>·</span>
+        <a href="/terms" style={authFooterStyles.link}>Terms</a>
+        <span style={authFooterStyles.sep}>·</span>
+        <a href="/security" style={authFooterStyles.link}>Security</a>
+      </div>
     </div>
   );
 }
+
+const authFooterStyles = {
+  footer: {
+    marginTop: 20,
+    display: 'flex',
+    gap: 8,
+    fontSize: 11,
+    alignItems: 'center',
+  },
+  link: {
+    color: 'var(--text-secondary)',
+    textDecoration: 'none',
+  },
+  sep: { color: 'var(--text-tertiary)' },
+};
 
 // Google brand "G" — official multi-color logo
 function GoogleIcon() {

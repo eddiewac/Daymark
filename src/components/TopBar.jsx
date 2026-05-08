@@ -138,6 +138,25 @@ export default function TopBar({
               Sign out
             </button>
             <div style={styles.menuDivider} />
+            <a
+              href="/privacy"
+              style={{ ...styles.menuItem, textDecoration: 'none', display: 'block' }}
+            >
+              Privacy
+            </a>
+            <a
+              href="/terms"
+              style={{ ...styles.menuItem, textDecoration: 'none', display: 'block' }}
+            >
+              Terms
+            </a>
+            <a
+              href="/security"
+              style={{ ...styles.menuItem, textDecoration: 'none', display: 'block' }}
+            >
+              Security
+            </a>
+            <div style={styles.menuDivider} />
             <button
               onClick={() => {
                 setShowMenu(false);

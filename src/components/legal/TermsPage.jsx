@@ -5,7 +5,7 @@ const CONTENT = `# Terms of Service
 **Last updated:** 8 May 2026
 **Effective date:** 8 May 2026
 
-These Terms of Service ("Terms") govern your use of Daymark, a project management web application available at getdaymark.com ("the Service"), operated by Ed Carter, operating as Daymark, operating as Daymark ("we", "us", "our").
+These Terms of Service ("Terms") govern your use of Daymark, a project management web application available at getdaymark.com ("the Service"), operated by Ed Carter, operating as Daymark ("we", "us", "our").
 
 By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 

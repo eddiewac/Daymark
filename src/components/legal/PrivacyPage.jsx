@@ -5,13 +5,13 @@ const CONTENT = `# Privacy Policy
 **Last updated:** 8 May 2026
 **Effective date:** 8 May 2026
 
-This Privacy Policy describes how [YOUR FULL NAME], operating as Daymark ("we", "us", "our") collects, uses, stores, and shares personal data when you use Daymark, our project management web application, available at getdaymark.com (the "Service").
+This Privacy Policy describes how Ed Carter, operating as Daymark ("we", "us", "our") collects, uses, stores, and shares personal data when you use Daymark, our project management web application, available at getdaymark.com (the "Service").
 
 We take privacy seriously. This policy is written in plain English. If anything is unclear, contact us at privacy@getdaymark.com.
 
 ## 1. Who we are
 
-Daymark is operated by [YOUR FULL NAME], based in Brisbane, Australia.
+Daymark is operated by Ed Carter, based in Brisbane, Australia.
 
 For the purposes of the EU General Data Protection Regulation (GDPR), the UK GDPR, and the Australian Privacy Act 1988:
 

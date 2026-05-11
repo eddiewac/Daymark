@@ -8,6 +8,7 @@ import {
 import { useTime } from './hooks/useTime.js';
 import { useGoals } from './hooks/useGoals.js';
 import Auth from './components/Auth.jsx';
+import MfaChallenge from './components/MfaChallenge.jsx';
 import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
 import RunningTimerIndicator from './components/RunningTimerIndicator.jsx';
@@ -42,6 +43,11 @@ export default function App() {
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
+  // ── MFA gate state ─────────────────────────────────────────────────────
+  // 'unknown' = haven't checked yet (loading); 'needs' = challenge required;
+  // 'ok' = no challenge needed or already passed.
+  const [mfaStatus, setMfaStatus] = useState('unknown');
+
   const time = useTime(activeWorkspace?.id || null);
   const goalsApi = useGoals();
 
@@ -54,6 +60,10 @@ export default function App() {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      // Whenever the session changes (sign-in, sign-out, MFA verify, refresh),
+      // re-check whether MFA is needed. Reset to 'unknown' to trigger the
+      // gate effect below.
+      setMfaStatus('unknown');
     });
     return () => {
       mounted = false;
@@ -61,8 +71,41 @@ export default function App() {
     };
   }, []);
 
+  // Re-check MFA whenever the session changes (and on initial load if signed in).
+  // We do this in its own effect so it can run async without blocking render.
   useEffect(() => {
     if (!session) {
+      setMfaStatus('ok'); // no session = no MFA needed (Auth view handles login)
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: aal, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (cancelled) return;
+        if (error) {
+          // Can't check — fail open. Better UX than locking users out.
+          console.error('Could not check MFA level:', error);
+          setMfaStatus('ok');
+          return;
+        }
+        if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+          setMfaStatus('needs');
+        } else {
+          setMfaStatus('ok');
+        }
+      } catch (err) {
+        console.error('MFA check threw:', err);
+        if (!cancelled) setMfaStatus('ok');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || mfaStatus !== 'ok') {
       setWorkspaces([]);
       setActiveWorkspace(null);
       return;
@@ -73,7 +116,7 @@ export default function App() {
       const matched = savedId ? list.find((w) => w.id === savedId) : null;
       setActiveWorkspace(matched || null);
     });
-  }, [session]);
+  }, [session, mfaStatus]);
 
   const handleSwitch = (ws) => {
     setActiveWorkspace(ws);
@@ -96,6 +139,23 @@ export default function App() {
   if (LegalComponent) return <LegalComponent />;
 
   if (!session) return <Auth />;
+
+  // MFA gate — session exists but second factor needed
+  if (mfaStatus === 'needs') {
+    return (
+      <MfaChallenge
+        onVerified={() => setMfaStatus('ok')}
+        onCancel={async () => {
+          await supabase.auth.signOut();
+          // signOut triggers onAuthStateChange which resets state
+        }}
+      />
+    );
+  }
+
+  // While we're still checking AAL on first load with a session, show a
+  // brief loading indicator. Usually invisible.
+  if (mfaStatus === 'unknown') return <div style={loadingStyle}>…</div>;
 
   const indicator = time.runningTimer ? (
     <RunningTimerIndicator

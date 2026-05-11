@@ -10,6 +10,13 @@ export default function Auth() {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // ── MFA challenge state ──────────────────────────────────────────────────
+  // When the user signs in successfully but has MFA enabled, Supabase returns
+  // a session whose authenticator-assurance level is AAL1 (one factor done).
+  // We need to challenge them for a second factor before granting full access.
+  const [mfaChallenge, setMfaChallenge] = useState(null);
+  // { factorId, challengeId } when active
+
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -18,8 +25,12 @@ export default function Auth() {
 
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+
+        // Check whether MFA is required. If the user has any verified TOTP
+        // factors, Supabase will tell us the next auth assurance level needed.
+        await maybePromptMfa(data);
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
@@ -29,6 +40,38 @@ export default function Auth() {
       setError(err.message || 'Something went wrong.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // After a successful primary sign-in, check whether the user needs to step
+  // up to MFA. If so, create a challenge and switch the UI to MFA mode.
+  const maybePromptMfa = async () => {
+    const { data: aal, error: aalErr } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalErr) {
+      // Not fatal — proceed without MFA. We log but don't block.
+      console.error('Could not check MFA level:', aalErr);
+      return;
+    }
+    // If the user has MFA enrolled and the current level is below required,
+    // we need to challenge them now.
+    if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+      const { data: factors, error: factorsErr } = await supabase.auth.mfa.listFactors();
+      if (factorsErr) {
+        console.error('Could not list MFA factors:', factorsErr);
+        return;
+      }
+      const verifiedTotp = (factors?.totp || []).find((f) => f.status === 'verified');
+      if (!verifiedTotp) return;
+
+      const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({
+        factorId: verifiedTotp.id,
+      });
+      if (chErr) {
+        setError('Could not start two-factor challenge: ' + chErr.message);
+        return;
+      }
+      setMfaChallenge({ factorId: verifiedTotp.id, challengeId: challenge.id });
     }
   };
 
@@ -53,6 +96,22 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
+  // ── MFA challenge view ──────────────────────────────────────────────────
+  if (mfaChallenge) {
+    return (
+      <MfaChallengeView
+        challenge={mfaChallenge}
+        onCancel={async () => {
+          // Bail out of the challenge: sign out so we're not stuck in AAL1
+          await supabase.auth.signOut();
+          setMfaChallenge(null);
+          setError(null);
+        }}
+        onError={(msg) => setError(msg)}
+      />
+    );
+  }
 
   return (
     <div style={styles.wrap}>
@@ -129,6 +188,84 @@ export default function Auth() {
         <a href="/terms" style={authFooterStyles.link}>Terms</a>
         <span style={authFooterStyles.sep}>·</span>
         <a href="/security" style={authFooterStyles.link}>Security</a>
+      </div>
+    </div>
+  );
+}
+
+// ── MfaChallengeView ────────────────────────────────────────────────────────
+// Renders the 6-digit code input. Verifying the code upgrades the session to
+// AAL2 — at which point the auth-state-change listener in App.jsx will fire
+// and the user will see the app.
+function MfaChallengeView({ challenge, onCancel, onError }) {
+  const [code, setCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+
+  const verify = async (e) => {
+    e?.preventDefault();
+    if (verifying || code.length < 6) return;
+    setVerifying(true);
+    try {
+      const { error } = await supabase.auth.mfa.verify({
+        factorId: challenge.factorId,
+        challengeId: challenge.challengeId,
+        code: code.trim(),
+      });
+      if (error) {
+        onError(error.message || 'Code did not verify. Please try again.');
+        setVerifying(false);
+        setCode('');
+        return;
+      }
+      // Success — Supabase fires an auth state change with AAL2 session.
+      // App.jsx picks it up and renders the workspace.
+    } catch (err) {
+      onError(err.message || 'Verification failed.');
+      setVerifying(false);
+    }
+  };
+
+  return (
+    <div style={styles.wrap}>
+      <div style={styles.card}>
+        <div style={styles.logo}>
+          <DaymarkWordmark height={36} />
+        </div>
+        <div style={{ ...styles.sub, marginBottom: 16 }}>
+          Enter the 6-digit code from your authenticator app.
+        </div>
+
+        <form onSubmit={verify}>
+          <input
+            style={{ ...styles.input, textAlign: 'center', letterSpacing: 4, fontSize: 18, fontFamily: 'monospace' }}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+            maxLength={6}
+            placeholder="••••••"
+            required
+            autoFocus
+          />
+
+          <button
+            type="submit"
+            style={styles.btn}
+            disabled={verifying || code.length < 6}
+          >
+            {verifying ? '…' : 'Verify'}
+          </button>
+        </form>
+
+        <div style={styles.switch}>
+          <a
+            onClick={onCancel}
+            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Cancel and sign out
+          </a>
+        </div>
       </div>
     </div>
   );

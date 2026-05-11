@@ -1,3 +1,4 @@
+import SecuritySection from './SecuritySection.jsx';
 import { useState } from 'react';
 import { getStoredThemeMode, setThemeMode } from '../../lib/theme.js';
 
@@ -83,6 +84,7 @@ export default function SettingsPanel({
             {userPrefs && onUpdateUserPrefs && (
               <>
                 <ThemeSection />
+                <SecuritySection />                
                 <section style={styles.section}>
                   <div style={styles.sectionTitle}>Daily triage</div>
                 <div style={styles.sectionHint}>

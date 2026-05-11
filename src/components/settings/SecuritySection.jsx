@@ -37,12 +37,13 @@ export default function SecuritySection() {
       const unverified = (data?.totp || []).filter((f) => f.status !== 'verified');
       // Clean up stranded unverified factors (abandoned enroll flows)
       for (const f of unverified) {
-        try {
-          await supabase.auth.mfa.unenroll({ factorId: f.id });
-        } catch {
-          // Silent
-        }
-      }
+  try {
+    const { error: uErr } = await supabase.auth.mfa.unenroll({ factorId: f.id });
+    if (uErr) console.warn('Could not clean up unverified factor', f.id, uErr);
+  } catch (err) {
+    console.warn('Could not clean up unverified factor', f.id, err);
+  }
+}
       setFactors(verified);
     } catch (err) {
       setError(err.message || 'Could not load security settings.');
@@ -64,7 +65,7 @@ export default function SecuritySection() {
     try {
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: 'totp',
-        friendlyName: `Daymark (${new Date().toLocaleDateString()})`,
+        friendlyName: `Daymark (${new Date().toISOString()})`,
       });
       if (error) throw error;
       setEnrolling({

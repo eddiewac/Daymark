@@ -46,35 +46,35 @@ export default function Auth() {
   // After a successful primary sign-in, check whether the user needs to step
   // up to MFA. If so, create a challenge and switch the UI to MFA mode.
   const maybePromptMfa = async () => {
-    const { data: aal, error: aalErr } =
-      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aalErr) {
-      // Not fatal — proceed without MFA. We log but don't block.
-      console.error('Could not check MFA level:', aalErr);
+  const { data: aal, error: aalErr } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  console.log('[MFA DEBUG] AAL:', aal, 'error:', aalErr);
+  if (aalErr) {
+    console.error('Could not check MFA level:', aalErr);
+    return;
+  }
+  if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+    const { data: factors, error: factorsErr } = await supabase.auth.mfa.listFactors();
+    console.log('[MFA DEBUG] Factors:', factors, 'error:', factorsErr);
+    if (factorsErr) {
+      console.error('Could not list MFA factors:', factorsErr);
       return;
     }
-    // If the user has MFA enrolled and the current level is below required,
-    // we need to challenge them now.
-    if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
-      const { data: factors, error: factorsErr } = await supabase.auth.mfa.listFactors();
-      if (factorsErr) {
-        console.error('Could not list MFA factors:', factorsErr);
-        return;
-      }
-      const verifiedTotp = (factors?.totp || []).find((f) => f.status === 'verified');
-      if (!verifiedTotp) return;
-
-      const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({
-        factorId: verifiedTotp.id,
-      });
-      if (chErr) {
-        setError('Could not start two-factor challenge: ' + chErr.message);
-        return;
-      }
-      setMfaChallenge({ factorId: verifiedTotp.id, challengeId: challenge.id });
+    const verifiedTotp = (factors?.totp || []).find((f) => f.status === 'verified');
+    console.log('[MFA DEBUG] Verified TOTP:', verifiedTotp);
+    if (!verifiedTotp) return;
+    const { data: challenge, error: chErr } = await supabase.auth.mfa.challenge({
+      factorId: verifiedTotp.id,
+    });
+    if (chErr) {
+      setError('Could not start two-factor challenge: ' + chErr.message);
+      return;
     }
-  };
-
+    setMfaChallenge({ factorId: verifiedTotp.id, challengeId: challenge.id });
+  } else {
+    console.log('[MFA DEBUG] No challenge needed. currentLevel:', aal?.currentLevel, 'nextLevel:', aal?.nextLevel);
+  }
+};
   const signInWithGoogle = async () => {
     setError(null);
     setInfo(null);

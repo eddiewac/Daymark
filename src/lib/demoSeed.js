@@ -52,27 +52,17 @@ export async function isDemoWorkspace(workspaceId) {
 
 async function markAsDemo(workspaceId) {
   const userId = await getCurrentUserId();
-  console.log('[markAsDemo] userId:', userId);
-  console.log('[markAsDemo] workspaceId:', workspaceId);
+  if (!userId) return;
 
-  if (!userId) {
-    console.warn('[markAsDemo] no user ID — bailing');
-    return;
-  }
-
-  const key = demoFlagKey(userId, workspaceId);
-  console.log('[markAsDemo] key:', key);
-
-  const { data, error } = await supabase.from('app_storage').upsert(
+  const { error } = await supabase.from('app_storage').upsert(
     {
-      key,
+      key: demoFlagKey(userId, worksspaceId),
       value: 'true',
       updated_at: isoNow(),
     },
     { onConflict: 'key' }
   );
-  console.log('[markAsDemo] upsert data:', data);
-  console.log('[markAsDemo] upsert error:', error);
+  if (error) console.error('markasDemo failed:', error);
 }
 
 // ── The seeder ──────────────────────────────────────────────────────────────

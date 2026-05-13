@@ -1,15 +1,12 @@
-// â”€â”€ Demo workspace seeder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Demo workspace seeder ───────────────────────────────────────────────────
 //
 // Creates a new workspace named "Daymark demo" and seeds it with realistic
-// medcomms project management data â€” three projects at different stages,
-// tasks linked to them, comms logs with various reply states, time entries.
+// medcomms project management data — three projects at different stages,
+// tasks linked to them, comms logs with various reply states.
 //
-// The workspace is marked as a demo via a small flag stored in app_storage
-// (key `ws-meta:{workspaceId}:isDemo`), which the banner reads to decide
-// whether to show.
-//
-// Users can delete the demo workspace at any time via the standard workspace
-// delete flow â€” there's no special handling required.
+// The workspace is marked as a demo via a flag stored in app_storage. The
+// key format MUST start with `<user_id>:` to satisfy the personal_storage
+// RLS policy on the app_storage table.
 
 import { supabase } from './supabase.js';
 import { createWorkspace } from './workspaces.js';
@@ -17,9 +14,7 @@ import { saveTask } from './tasks.js';
 import { saveProject } from './projects.js';
 import { uid } from './utils.js';
 
-// Days from today, helpers for generating realistic relative dates.
 const DAY_MS = 86400000;
-const today = () => new Date();
 const daysFromNow = (n) => {
   const d = new Date(Date.now() + n * DAY_MS);
   return d.toISOString().slice(0, 10);
@@ -27,16 +22,30 @@ const daysFromNow = (n) => {
 const isoNow = () => new Date().toISOString();
 const isoDaysAgo = (n) => new Date(Date.now() - n * DAY_MS).toISOString();
 
-// â”€â”€ Demo metadata helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const demoFlagKey = (workspaceId) => `ws-meta:${workspaceId}:isDemo`;
+// ── Helpers ─────────────────────────────────────────────────────────────────
+// Read user id from cached session (no network call, no auth-lock contention).
+async function getCurrentUserId() {
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.user?.id || null;
+}
 
+// Key format must start with the user UUID to satisfy personal_storage RLS.
+const demoFlagKey = (userId, workspaceId) =>
+  `${userId}:demoWorkspace:${workspaceId}`;
+
+// ── Demo metadata: read / write ────────────────────────────────────────────
 export async function isDemoWorkspace(workspaceId) {
   if (!workspaceId) return false;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+
   const { data, error } = await supabase
     .from('app_storage')
     .select('value')
-    .eq('key', demoFlagKey(workspaceId))
+    .eq('key', demoFlagKey(userId, workspaceId))
     .maybeSingle();
+
   if (error) return false;
   return data?.value === 'true';
 }
@@ -62,29 +71,21 @@ async function markAsDemo(workspaceId) {
     },
     { onConflict: 'key' }
   );
-  console.log('[markAsDemo] upsert result data:', data);
-  console.log('[markAsDemo] upsert result error:', error);
+  console.log('[markAsDemo] upsert data:', data);
+  console.log('[markAsDemo] upsert error:', error);
 }
 
-// â”€â”€ The seeder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── The seeder ──────────────────────────────────────────────────────────────
 export async function seedDemoWorkspace() {
-  // 1. Create the workspace
   const ws = await createWorkspace('Daymark demo');
-
-  // 2. Mark it as a demo
   await markAsDemo(ws.id);
 
-  // 3. Build the projects and their nested deliverables/stations/comms
   const projects = buildDemoProjects();
-
-  // 4. Save projects to the workspace
   for (const p of projects) {
     await saveProject(p, ws.id);
   }
 
-  // 5. Build standalone + project-linked tasks
   const tasks = buildDemoTasks(projects);
-
   for (const t of tasks) {
     await saveTask(t, ws.id);
   }
@@ -92,15 +93,14 @@ export async function seedDemoWorkspace() {
   return ws;
 }
 
-// â”€â”€ Demo projects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Demo projects ──────────────────────────────────────────────────────────
 function buildDemoProjects() {
   return [
-    // Project 1: Active mid-stream Advisory Board
     {
       id: uid(),
-      name: 'Acme Pharma â€” Q4 Advisory Board',
+      name: 'Acme Pharma — Q4 Advisory Board',
       number: 'AP-2026-AB04',
-      status: 'ðŸŸ¡ At risk',
+      status: '🟡 At risk',
       nextSteps:
         'MLR feedback expected this week. Once approved, send pre-read to attendees by Friday.',
       blockers:
@@ -220,7 +220,8 @@ function buildDemoProjects() {
               done: false,
               targetDate: daysFromNow(2),
               updatedAt: isoDaysAgo(3),
-              notes: 'Sent to Anna at Acme. She mentioned she wants to add a chair intro section.',
+              notes:
+                'Sent to Anna at Acme. She mentioned she wants to add a chair intro section.',
               comms: [
                 {
                   id: uid(),
@@ -276,13 +277,11 @@ function buildDemoProjects() {
       ],
       congresses: [],
     },
-
-    // Project 2: Nearly done Manuscript
     {
       id: uid(),
-      name: 'BetaCorp â€” Type 2 Diabetes Manuscript',
+      name: 'BetaCorp — Type 2 Diabetes Manuscript',
       number: 'BC-2026-MS01',
-      status: 'ðŸŸ¢ On track',
+      status: '🟢 On track',
       nextSteps: 'Submitted to NEJM. Awaiting initial editorial decision (~6 weeks).',
       createdAt: Date.now() - 90 * DAY_MS,
       deliverables: [
@@ -290,20 +289,8 @@ function buildDemoProjects() {
           id: uid(),
           name: 'Full manuscript',
           stations: [
-            {
-              id: uid(),
-              name: 'Outline',
-              done: true,
-              completedAt: isoDaysAgo(75),
-              comms: [],
-            },
-            {
-              id: uid(),
-              name: 'Draft 1',
-              done: true,
-              completedAt: isoDaysAgo(55),
-              comms: [],
-            },
+            { id: uid(), name: 'Outline', done: true, completedAt: isoDaysAgo(75), comms: [] },
+            { id: uid(), name: 'Draft 1', done: true, completedAt: isoDaysAgo(55), comms: [] },
             {
               id: uid(),
               name: 'Author review round 1',
@@ -361,7 +348,8 @@ function buildDemoProjects() {
               done: true,
               completedAt: isoDaysAgo(3),
               updatedAt: isoDaysAgo(3),
-              notes: 'Submitted to NEJM. Confirmation email received. Tracking number: NEJM-2026-08214.',
+              notes:
+                'Submitted to NEJM. Confirmation email received. Tracking number: NEJM-2026-08214.',
               comms: [],
             },
           ],
@@ -370,60 +358,29 @@ function buildDemoProjects() {
           id: uid(),
           name: 'Cover letter',
           stations: [
-            {
-              id: uid(),
-              name: 'Draft',
-              done: true,
-              completedAt: isoDaysAgo(8),
-              comms: [],
-            },
-            {
-              id: uid(),
-              name: 'Lead author approval',
-              done: true,
-              completedAt: isoDaysAgo(4),
-              comms: [],
-            },
+            { id: uid(), name: 'Draft', done: true, completedAt: isoDaysAgo(8), comms: [] },
+            { id: uid(), name: 'Lead author approval', done: true, completedAt: isoDaysAgo(4), comms: [] },
           ],
         },
       ],
       congresses: [],
     },
-
-    // Project 3: Fresh, just kicking off
     {
       id: uid(),
-      name: 'GammaCo â€” ASCO 2026 Symposium',
+      name: 'GammaCo — ASCO 2026 Symposium',
       number: 'GC-2026-ASCO',
-      status: 'ðŸŸ¢ On track',
-      nextSteps: 'Kick-off call with GammaCo team scheduled for Thursday. Need to draft initial scope document.',
+      status: '🟢 On track',
+      nextSteps:
+        'Kick-off call with GammaCo team scheduled for Thursday. Need to draft initial scope document.',
       createdAt: Date.now() - 5 * DAY_MS,
       deliverables: [
         {
           id: uid(),
           name: 'Symposium concept',
           stations: [
-            {
-              id: uid(),
-              name: 'Initial brief',
-              done: false,
-              targetDate: daysFromNow(7),
-              comms: [],
-            },
-            {
-              id: uid(),
-              name: 'Concept proposal',
-              done: false,
-              targetDate: daysFromNow(14),
-              comms: [],
-            },
-            {
-              id: uid(),
-              name: 'Client approval',
-              done: false,
-              targetDate: daysFromNow(21),
-              comms: [],
-            },
+            { id: uid(), name: 'Initial brief', done: false, targetDate: daysFromNow(7), comms: [] },
+            { id: uid(), name: 'Concept proposal', done: false, targetDate: daysFromNow(14), comms: [] },
+            { id: uid(), name: 'Client approval', done: false, targetDate: daysFromNow(21), comms: [] },
           ],
         },
       ],
@@ -432,13 +389,12 @@ function buildDemoProjects() {
   ];
 }
 
-// â”€â”€ Demo tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Demo tasks ──────────────────────────────────────────────────────────────
 function buildDemoTasks(projects) {
   const acme = projects[0];
   const beta = projects[1];
   const gamma = projects[2];
 
-  // Find specific stations to link tasks to, for richness
   const acmeMlr = acme.deliverables[0].stations.find((s) => s.name === 'MLR review');
   const acmeClientReview = acme.deliverables[1].stations.find((s) => s.name === 'Client review');
   const gammaBrief = gamma.deliverables[0].stations.find((s) => s.name === 'Initial brief');
@@ -471,7 +427,6 @@ function buildDemoTasks(projects) {
   });
 
   return [
-    // Overdue (deliberately â€” to demonstrate the overdue surfacing)
     baseTask({
       title: 'Chase Acme medical lead on slide 12 sign-off',
       project: acme.name,
@@ -480,17 +435,14 @@ function buildDemoTasks(projects) {
       stationId: acmeMlr?.id || null,
       estimate: 0.5,
     }),
-
-    // Due today â€” important
     baseTask({
-      title: 'Incorporate Anna\'s feedback on discussion guide',
+      title: "Incorporate Anna's feedback on discussion guide",
       project: acme.name,
       priority: 'High',
       dueDate: daysFromNow(0),
       stationId: acmeClientReview?.id || null,
       estimate: 2,
     }),
-
     baseTask({
       title: 'Kick-off call prep for GammaCo',
       project: gamma.name,
@@ -499,8 +451,6 @@ function buildDemoTasks(projects) {
       stationId: gammaBrief?.id || null,
       estimate: 1,
     }),
-
-    // Due this week
     baseTask({
       title: 'Update Acme attendee list with confirmed responses',
       project: acme.name,
@@ -508,7 +458,6 @@ function buildDemoTasks(projects) {
       dueDate: daysFromNow(2),
       estimate: 0.5,
     }),
-
     baseTask({
       title: 'Draft scope document for GammaCo ASCO symposium',
       project: gamma.name,
@@ -517,15 +466,12 @@ function buildDemoTasks(projects) {
       stationId: gammaBrief?.id || null,
       estimate: 4,
     }),
-
     baseTask({
       title: 'Q4 forecast update for finance team',
       priority: 'Medium',
       dueDate: daysFromNow(4),
       estimate: 1,
     }),
-
-    // Recurring weekly task
     baseTask({
       title: 'Weekly status round update',
       priority: 'Medium',
@@ -533,8 +479,6 @@ function buildDemoTasks(projects) {
       recurring: 'weekly',
       estimate: 0.5,
     }),
-
-    // Out of scope flagged item
     baseTask({
       title: 'Add 4 extra slides to Acme deck (MoA deep-dive)',
       project: acme.name,
@@ -545,10 +489,8 @@ function buildDemoTasks(projects) {
       outOfScope: true,
       outOfScopeHours: 3,
       outOfScopeNotes:
-        'Original SoW didn\'t include MoA section. Flagged to account lead for scope discussion.',
+        "Original SoW didn't include MoA section. Flagged to account lead for scope discussion.",
     }),
-
-    // Already done â€” to show what completed tasks look like
     baseTask({
       title: 'Send BetaCorp manuscript to NEJM',
       project: beta.name,
@@ -558,7 +500,6 @@ function buildDemoTasks(projects) {
       doneAt: isoDaysAgo(3),
       estimate: 1,
     }),
-
     baseTask({
       title: 'Confirm BetaCorp authors with final manuscript version',
       project: beta.name,

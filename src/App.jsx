@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from './lib/supabase.js';
 import {
   loadWorkspaces,
@@ -30,8 +30,6 @@ const LEGAL_ROUTES = {
 };
 
 export default function App() {
-  // Read pathname once at mount. We don't need reactive routing since the legal
-  // pages link to /, which causes a full reload back to the app.
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
 
   const [session, setSession] = useState(null);
@@ -44,9 +42,11 @@ export default function App() {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
   // ── MFA gate state ─────────────────────────────────────────────────────
-  // 'unknown' = haven't checked yet (loading); 'needs' = challenge required;
-  // 'ok' = no challenge needed or already passed.
   const [mfaStatus, setMfaStatus] = useState('unknown');
+
+  // Track which session we last MFA-checked, so we don't re-check on every
+  // auth state event (causes lock contention especially on slow networks).
+  const lastCheckedSessionRef = useRef(null);
 
   const time = useTime(activeWorkspace?.id || null);
   const goalsApi = useGoals();
@@ -58,12 +58,14 @@ export default function App() {
       setSession(data.session);
       setChecking(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      // Whenever the session changes (sign-in, sign-out, MFA verify, refresh),
-      // re-check whether MFA is needed. Reset to 'unknown' to trigger the
-      // gate effect below.
-      setMfaStatus('unknown');
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // Only update state if the session actually changed (avoids unnecessary
+      // re-renders and re-checks that cause auth lock contention).
+      setSession((prev) => {
+        if (prev?.access_token === newSession?.access_token) return prev;
+        lastCheckedSessionRef.current = null;
+        return newSession;
+      });
     });
     return () => {
       mounted = false;
@@ -71,22 +73,26 @@ export default function App() {
     };
   }, []);
 
-  // Re-check MFA whenever the session changes (and on initial load if signed in).
-  // We do this in its own effect so it can run async without blocking render.
+  // MFA check — runs once per unique session, with a delay to avoid racing
+  // the initial getSession() call for the auth lock.
   useEffect(() => {
     if (!session) {
-      setMfaStatus('ok'); // no session = no MFA needed (Auth view handles login)
+      setMfaStatus('ok');
+      lastCheckedSessionRef.current = null;
+      return;
+    }
+    if (lastCheckedSessionRef.current === session.access_token) {
       return;
     }
     let cancelled = false;
-    (async () => {
+    const timer = setTimeout(async () => {
       try {
         const { data: aal, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
         if (cancelled) return;
         if (error) {
-          // Can't check — fail open. Better UX than locking users out.
           console.error('Could not check MFA level:', error);
           setMfaStatus('ok');
+          lastCheckedSessionRef.current = session.access_token;
           return;
         }
         if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
@@ -94,13 +100,18 @@ export default function App() {
         } else {
           setMfaStatus('ok');
         }
+        lastCheckedSessionRef.current = session.access_token;
       } catch (err) {
         console.error('MFA check threw:', err);
-        if (!cancelled) setMfaStatus('ok');
+        if (!cancelled) {
+          setMfaStatus('ok');
+          lastCheckedSessionRef.current = session.access_token;
+        }
       }
-    })();
+    }, 500);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [session]);
 
@@ -110,12 +121,19 @@ export default function App() {
       setActiveWorkspace(null);
       return;
     }
+    let cancelled = false;
     loadWorkspaces().then((list) => {
+      if (cancelled) return;
       setWorkspaces(list);
       const savedId = getStoredActiveWorkspaceId();
       const matched = savedId ? list.find((w) => w.id === savedId) : null;
       setActiveWorkspace(matched || null);
+    }).catch((err) => {
+      console.error('Failed to load workspaces:', err);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [session, mfaStatus]);
 
   const handleSwitch = (ws) => {
@@ -134,27 +152,22 @@ export default function App() {
 
   if (checking) return <div style={loadingStyle}>…</div>;
 
-  // Public legal pages — accessible regardless of auth state
   const LegalComponent = LEGAL_ROUTES[pathname];
   if (LegalComponent) return <LegalComponent />;
 
   if (!session) return <Auth />;
 
-  // MFA gate — session exists but second factor needed
   if (mfaStatus === 'needs') {
     return (
       <MfaChallenge
         onVerified={() => setMfaStatus('ok')}
         onCancel={async () => {
           await supabase.auth.signOut();
-          // signOut triggers onAuthStateChange which resets state
         }}
       />
     );
   }
 
-  // While we're still checking AAL on first load with a session, show a
-  // brief loading indicator. Usually invisible.
   if (mfaStatus === 'unknown') return <div style={loadingStyle}>…</div>;
 
   const indicator = time.runningTimer ? (
@@ -175,7 +188,6 @@ export default function App() {
       <PendingInvitesBanner
         session={session}
         onAccepted={async (newWsId) => {
-          // Reload workspaces and switch to the newly-accepted one
           const list = await loadWorkspaces();
           setWorkspaces(list);
           const ws = list.find((w) => w.id === newWsId);
@@ -222,7 +234,6 @@ export default function App() {
           workspace={managingWorkspace}
           onClose={() => setManagingWorkspace(null)}
           onDeleted={async (deletedId) => {
-            // Reload the workspace list and switch to Personal
             const list = await loadWorkspaces();
             setWorkspaces(list);
             if (activeWorkspace?.id === deletedId) {
@@ -234,7 +245,6 @@ export default function App() {
         />
       )}
 
-      {/* Goals: floating quick-evidence button + management modal */}
       <GoalsFloatingButton
         goals={goalsApi.goals}
         onAddEvidence={goalsApi.addEvidence}

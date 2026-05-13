@@ -56,13 +56,13 @@ async function markAsDemo(workspaceId) {
 
   const { error } = await supabase.from('app_storage').upsert(
     {
-      key: demoFlagKey(userId, worksspaceId),
+      key: demoFlagKey(userId, workspaceId),
       value: 'true',
       updated_at: isoNow(),
     },
     { onConflict: 'key' }
   );
-  if (error) console.error('markasDemo failed:', error);
+  if (error) console.error('markAsDemo failed:', error);
 }
 
 // ── The seeder ──────────────────────────────────────────────────────────────

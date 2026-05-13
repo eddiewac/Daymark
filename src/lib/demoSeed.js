@@ -42,14 +42,28 @@ export async function isDemoWorkspace(workspaceId) {
 }
 
 async function markAsDemo(workspaceId) {
-  await supabase.from('app_storage').upsert(
+  const userId = await getCurrentUserId();
+  console.log('[markAsDemo] userId:', userId);
+  console.log('[markAsDemo] workspaceId:', workspaceId);
+
+  if (!userId) {
+    console.warn('[markAsDemo] no user ID — bailing');
+    return;
+  }
+
+  const key = demoFlagKey(userId, workspaceId);
+  console.log('[markAsDemo] key:', key);
+
+  const { data, error } = await supabase.from('app_storage').upsert(
     {
-      key: demoFlagKey(workspaceId),
+      key,
       value: 'true',
       updated_at: isoNow(),
     },
     { onConflict: 'key' }
   );
+  console.log('[markAsDemo] upsert result data:', data);
+  console.log('[markAsDemo] upsert result error:', error);
 }
 
 // â”€â”€ The seeder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

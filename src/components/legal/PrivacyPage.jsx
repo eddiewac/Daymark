@@ -63,13 +63,11 @@ Where GDPR or UK GDPR applies, our lawful bases for processing your personal dat
 
 ## 5. Where your data is stored
 
-Daymark uses Supabase as its database and authentication provider. Customer data is currently stored in Supabase's \`ap-northeast-1\` region (Tokyo, Japan).
+Daymark uses Supabase as its database and authentication provider. Customer data is currently stored in Supabase's \`eu-west-1\` region (Ireland, European Union).
 
-Japan has been recognised by the European Commission as providing an adequate level of data protection (Adequacy Decision of 23 January 2019). Transfers of EU personal data to Japan are therefore permitted under Article 45 of the GDPR. The same recognition applies under UK GDPR.
+Hosting within the EU means your data is subject to EU data protection law, including the GDPR. For UK users, data hosted in Ireland remains under UK-recognised data protection standards.
 
-For Australian users, data storage in Japan complies with Australian Privacy Principle 8 (cross-border disclosure) given Japan's adequate protection regime.
-
-We are working to add additional hosting regions, including an EU region, before any enterprise deployment requires it.
+We may add additional hosting regions in future based on customer requirements.
 
 ## 6. Sub-processors we use
 
@@ -77,7 +75,7 @@ We use the following third-party services to operate Daymark:
 
 | Service | Purpose | Location |
 |---|---|---|
-| Supabase | Database, authentication, file storage | Tokyo, Japan (with EU adequacy) |
+| Supabase | Database, authentication, file storage | Ireland (EU) |
 | Netlify | Web hosting and content delivery | Global CDN |
 | Cloudflare | DNS, email forwarding, security | Global |
 | Google | Optional sign-in (OAuth only — no broader data sharing) | EU/US |

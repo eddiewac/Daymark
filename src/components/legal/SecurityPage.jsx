@@ -14,11 +14,9 @@ We built Daymark for medical communications agencies. That means we know the kin
 
 ## Where your data lives
 
-Daymark uses Supabase as its database and authentication provider. Customer data is currently stored in Supabase's Tokyo (Japan) region.
+Daymark uses Supabase as its database and authentication provider. Customer data is stored in Supabase's eu-west-1 region (Ireland, European Union).
 
-Japan has been recognised by the European Commission as providing an adequate level of data protection, which means transfers of EU personal data to Japan are permitted under GDPR Article 45. The same recognition applies under UK GDPR.
-
-We are working to add an EU hosting region as a customer-selectable option.
+Hosting within the EU means your data is subject to EU data protection law, including the GDPR. For UK users, data hosted in Ireland remains under UK-recognised data protection standards. Australia users benefit from the same GDPR-compliant infrastructure.
 
 ## How we protect your data
 
@@ -66,8 +64,6 @@ Things we don't have yet that some buyers expect:
 
 **ISO 27001 certification.** Same reasoning as SOC 2. Not yet, but the controls described above broadly align with ISO 27001 Annex A requirements.
 
-**EU hosting region.** Currently Tokyo. EU region planned before any enterprise contract requires it.
-
 **Dedicated Data Protection Officer (DPO).** Not yet required given our scale and the nature of data we process. Privacy queries are handled directly by the founder.
 
 If your agency or your agency's clients require any of the above, talk to us. We can usually find a path forward, even if formal certification isn't yet in place.
@@ -76,7 +72,7 @@ If your agency or your agency's clients require any of the above, talk to us. We
 
 | Service | Purpose | Location |
 |---|---|---|
-| Supabase | Database, authentication, file storage | Tokyo, Japan |
+| Supabase | Database, authentication, file storage | Ireland (EU) |
 | Netlify | Web hosting and CDN | Global |
 | Cloudflare | DNS, email forwarding, security | Global |
 | Google | Optional sign-in | EU/US |

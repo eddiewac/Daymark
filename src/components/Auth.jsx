@@ -140,7 +140,6 @@ export default function Auth() {
 
 const authFooterStyles = {
   footer: {
-    marginTop: 20,
     display: 'flex',
     gap: 8,
     fontSize: 11,
@@ -180,10 +179,12 @@ const styles = {
   wrap: {
     minHeight: '100vh',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     background: 'var(--bg-surface-muted)',
     padding: 16,
+    gap: 20,
   },
   card: {
     width: '100%',

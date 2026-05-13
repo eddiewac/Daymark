@@ -1,7 +1,7 @@
-// ── Demo workspace seeder ───────────────────────────────────────────────────
+// â”€â”€ Demo workspace seeder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // Creates a new workspace named "Daymark demo" and seeds it with realistic
-// medcomms project management data — three projects at different stages,
+// medcomms project management data â€” three projects at different stages,
 // tasks linked to them, comms logs with various reply states, time entries.
 //
 // The workspace is marked as a demo via a small flag stored in app_storage
@@ -9,7 +9,7 @@
 // whether to show.
 //
 // Users can delete the demo workspace at any time via the standard workspace
-// delete flow — there's no special handling required.
+// delete flow â€” there's no special handling required.
 
 import { supabase } from './supabase.js';
 import { createWorkspace } from './workspaces.js';
@@ -27,7 +27,7 @@ const daysFromNow = (n) => {
 const isoNow = () => new Date().toISOString();
 const isoDaysAgo = (n) => new Date(Date.now() - n * DAY_MS).toISOString();
 
-// ── Demo metadata helpers ───────────────────────────────────────────────────
+// â”€â”€ Demo metadata helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const demoFlagKey = (workspaceId) => `ws-meta:${workspaceId}:isDemo`;
 
 export async function isDemoWorkspace(workspaceId) {
@@ -52,7 +52,7 @@ async function markAsDemo(workspaceId) {
   );
 }
 
-// ── The seeder ──────────────────────────────────────────────────────────────
+// â”€â”€ The seeder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function seedDemoWorkspace() {
   // 1. Create the workspace
   const ws = await createWorkspace('Daymark demo');
@@ -78,15 +78,15 @@ export async function seedDemoWorkspace() {
   return ws;
 }
 
-// ── Demo projects ───────────────────────────────────────────────────────────
+// â”€â”€ Demo projects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildDemoProjects() {
   return [
     // Project 1: Active mid-stream Advisory Board
     {
       id: uid(),
-      name: 'Acme Pharma — Q4 Advisory Board',
+      name: 'Acme Pharma â€” Q4 Advisory Board',
       number: 'AP-2026-AB04',
-      status: '🟡 At risk',
+      status: 'ðŸŸ¡ At risk',
       nextSteps:
         'MLR feedback expected this week. Once approved, send pre-read to attendees by Friday.',
       blockers:
@@ -266,9 +266,9 @@ function buildDemoProjects() {
     // Project 2: Nearly done Manuscript
     {
       id: uid(),
-      name: 'BetaCorp — Type 2 Diabetes Manuscript',
+      name: 'BetaCorp â€” Type 2 Diabetes Manuscript',
       number: 'BC-2026-MS01',
-      status: '🟢 On track',
+      status: 'ðŸŸ¢ On track',
       nextSteps: 'Submitted to NEJM. Awaiting initial editorial decision (~6 weeks).',
       createdAt: Date.now() - 90 * DAY_MS,
       deliverables: [
@@ -379,9 +379,9 @@ function buildDemoProjects() {
     // Project 3: Fresh, just kicking off
     {
       id: uid(),
-      name: 'GammaCo — ASCO 2026 Symposium',
+      name: 'GammaCo â€” ASCO 2026 Symposium',
       number: 'GC-2026-ASCO',
-      status: '🟢 On track',
+      status: 'ðŸŸ¢ On track',
       nextSteps: 'Kick-off call with GammaCo team scheduled for Thursday. Need to draft initial scope document.',
       createdAt: Date.now() - 5 * DAY_MS,
       deliverables: [
@@ -418,7 +418,7 @@ function buildDemoProjects() {
   ];
 }
 
-// ── Demo tasks ──────────────────────────────────────────────────────────────
+// â”€â”€ Demo tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildDemoTasks(projects) {
   const acme = projects[0];
   const beta = projects[1];
@@ -457,7 +457,7 @@ function buildDemoTasks(projects) {
   });
 
   return [
-    // Overdue (deliberately — to demonstrate the overdue surfacing)
+    // Overdue (deliberately â€” to demonstrate the overdue surfacing)
     baseTask({
       title: 'Chase Acme medical lead on slide 12 sign-off',
       project: acme.name,
@@ -467,7 +467,7 @@ function buildDemoTasks(projects) {
       estimate: 0.5,
     }),
 
-    // Due today — important
+    // Due today â€” important
     baseTask({
       title: 'Incorporate Anna\'s feedback on discussion guide',
       project: acme.name,
@@ -534,7 +534,7 @@ function buildDemoTasks(projects) {
         'Original SoW didn\'t include MoA section. Flagged to account lead for scope discussion.',
     }),
 
-    // Already done — to show what completed tasks look like
+    // Already done â€” to show what completed tasks look like
     baseTask({
       title: 'Send BetaCorp manuscript to NEJM',
       project: beta.name,

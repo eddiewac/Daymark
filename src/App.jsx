@@ -18,11 +18,11 @@ import PendingInvitesBanner from './components/PendingInvitesBanner.jsx';
 import GoalsModal from './components/goals/GoalsModal.jsx';
 import GoalsFloatingButton from './components/goals/GoalsFloatingButton.jsx';
 import AccountDeletionModal from './components/AccountDeletionModal.jsx';
+import LandingPage from './components/LandingPage.jsx';
 import PrivacyPage from './components/legal/PrivacyPage.jsx';
 import TermsPage from './components/legal/TermsPage.jsx';
 import SecurityPage from './components/legal/SecurityPage.jsx';
 
-// Public-facing legal pages — rendered before the auth check so anyone can read them.
 const LEGAL_ROUTES = {
   '/privacy': PrivacyPage,
   '/terms': TermsPage,
@@ -41,11 +41,7 @@ export default function App() {
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
 
-  // ── MFA gate state ─────────────────────────────────────────────────────
   const [mfaStatus, setMfaStatus] = useState('unknown');
-
-  // Track which session we last MFA-checked, so we don't re-check on every
-  // auth state event (causes lock contention especially on slow networks).
   const lastCheckedSessionRef = useRef(null);
 
   const time = useTime(activeWorkspace?.id || null);
@@ -59,8 +55,6 @@ export default function App() {
       setChecking(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      // Only update state if the session actually changed (avoids unnecessary
-      // re-renders and re-checks that cause auth lock contention).
       setSession((prev) => {
         if (prev?.access_token === newSession?.access_token) return prev;
         lastCheckedSessionRef.current = null;
@@ -73,8 +67,6 @@ export default function App() {
     };
   }, []);
 
-  // MFA check — runs once per unique session, with a delay to avoid racing
-  // the initial getSession() call for the auth lock.
   useEffect(() => {
     if (!session) {
       setMfaStatus('ok');
@@ -152,10 +144,21 @@ export default function App() {
 
   if (checking) return <div style={loadingStyle}>…</div>;
 
+  // Legal pages — accessible regardless of auth state
   const LegalComponent = LEGAL_ROUTES[pathname];
   if (LegalComponent) return <LegalComponent />;
 
-  if (!session) return <Auth />;
+  // Routing rules:
+  //   /         → Landing page (signed out) or app (signed in)
+  //   /login    → Auth screen (signed out) or app (signed in)
+  //   /privacy, /terms, /security → handled above
+  //   anything else (signed out) → Landing page
+  //   anything else (signed in) → app
+
+  if (!session) {
+    if (pathname === '/login') return <Auth />;
+    return <LandingPage />;
+  }
 
   if (mfaStatus === 'needs') {
     return (

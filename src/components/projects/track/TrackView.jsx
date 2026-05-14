@@ -29,6 +29,46 @@ function mkStation(name = 'New station') {
   };
 }
 
+// ── Duplicate helpers ───────────────────────────────────────────────────────
+// Build a fresh copy of a station: same name & order, no dates/done/comms/notes.
+function duplicateStation(station) {
+  return {
+    id: uid(),
+    name: station.name,
+    startDate: '',
+    targetDate: '',
+    owner: station.owner || '',
+    estHours: station.estHours || 0,
+    actualHours: null,
+    done: false,
+    completedAt: null,
+    notes: '',
+    comms: [],
+  };
+}
+
+// Build a fresh copy of a task tied to a new station.
+// Keeps: title, priority, category, project, assignees, tags, links.
+// Clears: dueDate, done, doneAt, time entries, out-of-scope flags, recurring.
+function duplicateTask(task, newStationId) {
+  return {
+    ...task,
+    id: uid(),
+    stationId: newStationId,
+    dueDate: '',
+    reminder: '',
+    done: false,
+    doneAt: null,
+    checklistProgress: {},
+    createdAt: Date.now(),
+    outOfScope: false,
+    outOfScopeHours: null,
+    outOfScopeNotes: '',
+    // Keep these from the original:
+    // title, priority, category, project, assignees, tags, links, estimate
+  };
+}
+
 export default function TrackView({
   project,
   allProjects,
@@ -47,12 +87,12 @@ export default function TrackView({
   onAssignTask,
   onClose,
 }) {
-  const [focusKey, setFocusKey] = useState(null); // "delivId:stationId"
-  const [seedingForId, setSeedingForId] = useState(null); // delivId being seeded — shows the template picker
+  const [focusKey, setFocusKey] = useState(null);
+  const [seedingForId, setSeedingForId] = useState(null);
+  const [duplicating, setDuplicating] = useState(null); // null | { delivId, taskCount }
   const color = projectColor(project.name, allProjects);
   const deliverables = project.deliverables || [];
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
   const updateStation = (delivId, stationId, patch) => {
     const newDeliverables = deliverables.map((d) => {
       if (d.id !== delivId) return d;
@@ -80,8 +120,6 @@ export default function TrackView({
   };
 
   const seedStationsFor = (delivId, template) => {
-    // template can be a stationTemplates entry { name, stages } or undefined
-    // Falls back to DEFAULT_STATIONS for the very oldest data path.
     const stageNames = template?.stages?.length
       ? template.stages
       : DEFAULT_STATIONS.map((s) => s.name);
@@ -110,7 +148,58 @@ export default function TrackView({
     onUpdateProject(project.id, { deliverables: newDeliverables });
   };
 
-  // Find currently focused station
+  // ── Duplicate deliverable ────────────────────────────────────────────────
+  // Creates a new deliverable with copied stations (fresh IDs, blank state)
+  // and copies all tasks that were linked to the original's stations,
+  // remapping them to the new station IDs.
+  const duplicateDeliverable = async (originalDeliv) => {
+    // 1. Map old station IDs → new station IDs while creating new stations
+    const stationIdMap = {};
+    const newStations = (originalDeliv.stations || []).map((s) => {
+      const newStation = duplicateStation(s);
+      stationIdMap[s.id] = newStation.id;
+      return newStation;
+    });
+
+    // 2. Build the new deliverable
+    const newDeliv = {
+      id: uid(),
+      name: `Copy of ${originalDeliv.name}`,
+      startDate: '',
+      dueDate: '',
+      done: false,
+      stations: newStations,
+    };
+
+    // 3. Find tasks linked to the original stations
+    const originalStationIds = new Set(Object.keys(stationIdMap));
+    const tasksToCopy = (tasks || []).filter(
+      (t) => t.stationId && originalStationIds.has(t.stationId)
+    );
+
+    // 4. Show "duplicating" feedback if there are tasks to copy
+    if (tasksToCopy.length > 0) {
+      setDuplicating({ delivId: originalDeliv.id, taskCount: tasksToCopy.length });
+    }
+
+    // 5. Append new deliverable to the project
+    const newDeliverables = [...deliverables, newDeliv];
+    onUpdateProject(project.id, { deliverables: newDeliverables });
+
+    // 6. Copy tasks (sequentially, to keep things simple and predictable)
+    for (const t of tasksToCopy) {
+      const copy = duplicateTask(t, stationIdMap[t.stationId]);
+      try {
+        await onAddTask(copy);
+      } catch (err) {
+        console.error('Failed to duplicate task:', err);
+      }
+    }
+
+    // 7. Clear feedback
+    setDuplicating(null);
+  };
+
   let focused = null;
   if (focusKey) {
     const [dId, sId] = focusKey.split(':');
@@ -122,7 +211,6 @@ export default function TrackView({
   const currentTheme = useCurrentTheme();
   const isKaspa = currentTheme === 'kaspa';
 
-  // If focused, show the focus view
   if (focused) {
     return (
       <StationFocus
@@ -149,9 +237,6 @@ export default function TrackView({
     );
   }
 
-  // ── Otherwise: project-level train overview ────────────────────────────────
-
-  // Aggregated stats
   const allStations = deliverables.flatMap((d) => d.stations || []);
   const totalStations = allStations.length;
   const doneStations = allStations.filter((s) => s.done).length;
@@ -164,7 +249,6 @@ export default function TrackView({
 
   return (
     <div style={styles.wrap}>
-      {/* Header */}
       <div style={{ ...styles.header, borderTop: `3px solid ${color}` }}>
         <div style={styles.headTop}>
           <div style={styles.headInfo}>
@@ -186,13 +270,19 @@ export default function TrackView({
           </span>
           {awaitingReply > 0 && (
             <span style={{ ...styles.stat, color: '#ef9f27', fontWeight: 500 }}>
-              ⏳ {awaitingReply} awaiting reply
+              ⟳ {awaitingReply} awaiting reply
             </span>
           )}
         </div>
       </div>
 
-      {/* Body — BlockDag for Kaspa theme, train for everything else */}
+      {/* Duplication toast */}
+      {duplicating && (
+        <div style={styles.toast}>
+          Duplicating deliverable… copying {duplicating.taskCount} task{duplicating.taskCount === 1 ? '' : 's'}
+        </div>
+      )}
+
       {isKaspa && deliverables.length > 0 ? (
         <BlockDagView
           project={project}
@@ -202,220 +292,228 @@ export default function TrackView({
           onOpenStation={(delivId, stationId) => setFocusKey(`${delivId}:${stationId}`)}
         />
       ) : (
-      <div style={styles.trainScroll}>
-        {deliverables.length === 0 ? (
-          <div style={styles.empty}>
-            <div style={styles.emptyTitle}>No deliverables yet</div>
-            <div style={styles.emptySub}>
-              Deliverables hold the work — slide decks, abstracts, manuscripts.
-              Each one gets its own train of stations.
+        <div style={styles.trainScroll}>
+          {deliverables.length === 0 ? (
+            <div style={styles.empty}>
+              <div style={styles.emptyTitle}>No deliverables yet</div>
+              <div style={styles.emptySub}>
+                Deliverables hold the work — slide decks, abstracts, manuscripts.
+                Each one gets its own train of stations.
+              </div>
+              <button
+                onClick={() => addDeliverable()}
+                style={{ ...styles.bigAddBtn, background: color }}
+              >
+                + Add first deliverable
+              </button>
             </div>
-            <button
-              onClick={() => addDeliverable()}
-              style={{ ...styles.bigAddBtn, background: color }}
-            >
-              + Add first deliverable
-            </button>
-          </div>
-        ) : (
-          <div style={styles.deliverables}>
-            {deliverables.map((d) => {
-              const stations = d.stations || [];
-              const dDone = stations.length > 0 && stations.every((s) => s.done);
-              const currentIdx = stations.findIndex((s) => !s.done);
-              return (
-                <div key={d.id} style={styles.deliv}>
-                  <div style={styles.delivHead}>
-                    <div style={styles.delivName}>
-                      {dDone && <span style={{ color: '#1d9e75' }}>✓</span>}
-                      <span
-                        style={{
-                          textDecoration: d.done ? 'line-through' : 'none',
-                          opacity: d.done ? 0.65 : 1,
-                        }}
-                      >
-                        {d.name}
-                      </span>
-                    </div>
-                    {(d.startDate || d.dueDate) && (
-                      <div style={styles.delivDates}>
-                        {d.startDate || '?'} → {d.dueDate || '?'}
+          ) : (
+            <div style={styles.deliverables}>
+              {deliverables.map((d) => {
+                const stations = d.stations || [];
+                const dDone = stations.length > 0 && stations.every((s) => s.done);
+                const currentIdx = stations.findIndex((s) => !s.done);
+                return (
+                  <div key={d.id} style={styles.deliv}>
+                    <div style={styles.delivHead}>
+                      <div style={styles.delivName}>
+                        {dDone && <span style={{ color: '#1d9e75' }}>✓</span>}
+                        <span
+                          style={{
+                            textDecoration: d.done ? 'line-through' : 'none',
+                            opacity: d.done ? 0.65 : 1,
+                          }}
+                        >
+                          {d.name}
+                        </span>
                       </div>
-                    )}
-                  </div>
+                      <div style={styles.delivHeadRight}>
+                        {(d.startDate || d.dueDate) && (
+                          <div style={styles.delivDates}>
+                            {d.startDate || '?'} → {d.dueDate || '?'}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => duplicateDeliverable(d)}
+                          disabled={duplicating !== null}
+                          style={styles.dupBtn}
+                          title="Duplicate this deliverable (copies stations + tasks, fresh state)"
+                        >
+                          ⎘ Duplicate
+                        </button>
+                      </div>
+                    </div>
 
-                  {stations.length === 0 ? (
-                    <div style={styles.noStations}>
-                      <span style={{ flex: 1 }}>No stations yet on this deliverable.</span>
-                      {seedingForId === d.id ? (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                          {(stationTemplates && stationTemplates.length > 0) ? (
-                            stationTemplates.map((tpl) => (
+                    {stations.length === 0 ? (
+                      <div style={styles.noStations}>
+                        <span style={{ flex: 1 }}>No stations yet on this deliverable.</span>
+                        {seedingForId === d.id ? (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {(stationTemplates && stationTemplates.length > 0) ? (
+                              stationTemplates.map((tpl) => (
+                                <button
+                                  key={tpl.id}
+                                  onClick={() => {
+                                    seedStationsFor(d.id, tpl);
+                                    setSeedingForId(null);
+                                  }}
+                                  style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
+                                  title={`Apply: ${tpl.stages.join(' → ')}`}
+                                >
+                                  {tpl.name}
+                                </button>
+                              ))
+                            ) : (
                               <button
-                                key={tpl.id}
                                 onClick={() => {
-                                  seedStationsFor(d.id, tpl);
+                                  seedStationsFor(d.id);
                                   setSeedingForId(null);
                                 }}
                                 style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
-                                title={`Apply: ${tpl.stages.join(' → ')}`}
                               >
-                                {tpl.name}
+                                Standard
                               </button>
-                            ))
-                          ) : (
-                            <button
-                              onClick={() => {
-                                seedStationsFor(d.id);
-                                setSeedingForId(null);
-                              }}
-                              style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
-                            >
-                              Standard
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setSeedingForId(null)}
-                            style={styles.inlineAddBtn}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            // If only one template, apply it directly. Otherwise show the picker.
-                            if (!stationTemplates || stationTemplates.length <= 1) {
-                              seedStationsFor(d.id, stationTemplates?.[0]);
-                            } else {
-                              setSeedingForId(d.id);
-                            }
-                          }}
-                          style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
-                        >
-                          Use template
-                          {stationTemplates && stationTemplates.length > 1 ? ' ▾' : ''}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => addStationTo(d.id)}
-                        style={styles.inlineAddBtn}
-                      >
-                        + Add station
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={styles.train}>
-                      {stations.map((s, i) => {
-                        const isCurrent = i === currentIdx;
-                        const isPast =
-                          i < currentIdx || (currentIdx === -1 && i < stations.length);
-                        const isDone = s.done;
-                        const awaiting = (s.comms || []).filter(
-                          (c) => c.needsReply && !c.replyReceived
-                        ).length;
-                        return (
-                          <div key={s.id} style={styles.trainCol}>
-                            {i > 0 && (
-                              <div
-                                style={{
-                                  ...styles.trainConnector,
-                                  background: isPast ? color : 'var(--color-border-tertiary)',
-                                }}
-                              />
                             )}
                             <button
-                              onClick={() => setFocusKey(`${d.id}:${s.id}`)}
-                              data-kaspa-block
-                              style={{
-                                ...styles.trainNode,
-                                background: isDone
-                                  ? color
-                                  : isCurrent
-                                  ? 'var(--bg-surface)'
-                                  : 'var(--bg-surface)',
-                                borderColor: isDone || isCurrent ? color : 'var(--color-border-primary)',
-                                color: isDone ? '#fff' : isCurrent ? color : 'var(--color-text-secondary)',
-                                fontWeight: isCurrent || isDone ? 600 : 400,
-                              }}
-                              title={`Open ${s.name}`}
+                              onClick={() => setSeedingForId(null)}
+                              style={styles.inlineAddBtn}
                             >
-                              {isDone ? '✓' : i + 1}
+                              Cancel
                             </button>
-                            <div
-                              style={{
-                                ...styles.trainLabel,
-                                color: isCurrent ? color : 'var(--color-text-secondary)',
-                                fontWeight: isCurrent ? 500 : 400,
-                              }}
-                            >
-                              {s.name}
-                            </div>
-                            {s.targetDate && (
-                              <div style={styles.trainDate}>{s.targetDate}</div>
-                            )}
-                            {awaiting > 0 && (
-                              <div style={styles.trainAwaiting}>⏳ {awaiting}</div>
-                            )}
-                            {!s.done && (() => {
-                              const lastAct = stationLastActivityAt(s);
-                              if (!lastAct) return null;
-                              const daysSince = (Date.now() - lastAct) / 86400000;
-                              const rel = relativeTime(lastAct);
-                              if (!rel) return null;
-                              const isStale = daysSince > 7;
-                              return (
-                                <div
-                                  style={{
-                                    fontSize: 9,
-                                    color: isStale ? '#e24b4a' : 'var(--color-text-tertiary)',
-                                    fontWeight: isStale ? 600 : 400,
-                                    marginTop: 2,
-                                  }}
-                                  title={
-                                    isStale
-                                      ? `No activity for ${Math.floor(daysSince)} days`
-                                      : `Last activity ${rel}`
-                                  }
-                                >
-                                  {isStale ? `⚠ ${rel}` : rel}
-                                </div>
-                              );
-                            })()}
                           </div>
-                        );
-                      })}
-                      {/* Trailing add-station tile */}
-                      <div style={styles.trainCol}>
-                        <div
-                          style={{
-                            ...styles.trainConnector,
-                            background: 'var(--color-border-tertiary)',
-                          }}
-                        />
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (!stationTemplates || stationTemplates.length <= 1) {
+                                seedStationsFor(d.id, stationTemplates?.[0]);
+                              } else {
+                                setSeedingForId(d.id);
+                              }
+                            }}
+                            style={{ ...styles.inlineAddBtn, background: color, color: '#fff', border: 'none' }}
+                          >
+                            Use template
+                            {stationTemplates && stationTemplates.length > 1 ? ' ▾' : ''}
+                          </button>
+                        )}
                         <button
                           onClick={() => addStationTo(d.id)}
-                          style={styles.addStationNode}
-                          title="Add a station to this deliverable"
+                          style={styles.inlineAddBtn}
                         >
-                          +
+                          + Add station
                         </button>
-                        <div style={styles.addStationLabel}>Add station</div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <button
-              onClick={() => addDeliverable()}
-              style={styles.addDelivBtn}
-            >
-              + Add deliverable
-            </button>
-          </div>
-        )}
-      </div>
+                    ) : (
+                      <div style={styles.train}>
+                        {stations.map((s, i) => {
+                          const isCurrent = i === currentIdx;
+                          const isPast =
+                            i < currentIdx || (currentIdx === -1 && i < stations.length);
+                          const isDone = s.done;
+                          const awaiting = (s.comms || []).filter(
+                            (c) => c.needsReply && !c.replyReceived
+                          ).length;
+                          return (
+                            <div key={s.id} style={styles.trainCol}>
+                              {i > 0 && (
+                                <div
+                                  style={{
+                                    ...styles.trainConnector,
+                                    background: isPast ? color : 'var(--color-border-tertiary)',
+                                  }}
+                                />
+                              )}
+                              <button
+                                onClick={() => setFocusKey(`${d.id}:${s.id}`)}
+                                data-kaspa-block
+                                style={{
+                                  ...styles.trainNode,
+                                  background: isDone
+                                    ? color
+                                    : isCurrent
+                                    ? 'var(--bg-surface)'
+                                    : 'var(--bg-surface)',
+                                  borderColor: isDone || isCurrent ? color : 'var(--color-border-primary)',
+                                  color: isDone ? '#fff' : isCurrent ? color : 'var(--color-text-secondary)',
+                                  fontWeight: isCurrent || isDone ? 600 : 400,
+                                }}
+                                title={`Open ${s.name}`}
+                              >
+                                {isDone ? '✓' : i + 1}
+                              </button>
+                              <div
+                                style={{
+                                  ...styles.trainLabel,
+                                  color: isCurrent ? color : 'var(--color-text-secondary)',
+                                  fontWeight: isCurrent ? 500 : 400,
+                                }}
+                              >
+                                {s.name}
+                              </div>
+                              {s.targetDate && (
+                                <div style={styles.trainDate}>{s.targetDate}</div>
+                              )}
+                              {awaiting > 0 && (
+                                <div style={styles.trainAwaiting}>⟳ {awaiting}</div>
+                              )}
+                              {!s.done && (() => {
+                                const lastAct = stationLastActivityAt(s);
+                                if (!lastAct) return null;
+                                const daysSince = (Date.now() - lastAct) / 86400000;
+                                const rel = relativeTime(lastAct);
+                                if (!rel) return null;
+                                const isStale = daysSince > 7;
+                                return (
+                                  <div
+                                    style={{
+                                      fontSize: 9,
+                                      color: isStale ? '#e24b4a' : 'var(--color-text-tertiary)',
+                                      fontWeight: isStale ? 600 : 400,
+                                      marginTop: 2,
+                                    }}
+                                    title={
+                                      isStale
+                                        ? `No activity for ${Math.floor(daysSince)} days`
+                                        : `Last activity ${rel}`
+                                    }
+                                  >
+                                    {isStale ? `⚠ ${rel}` : rel}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          );
+                        })}
+                        <div style={styles.trainCol}>
+                          <div
+                            style={{
+                              ...styles.trainConnector,
+                              background: 'var(--color-border-tertiary)',
+                            }}
+                          />
+                          <button
+                            onClick={() => addStationTo(d.id)}
+                            style={styles.addStationNode}
+                            title="Add a station to this deliverable"
+                          >
+                            +
+                          </button>
+                          <div style={styles.addStationLabel}>Add station</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => addDeliverable()}
+                style={styles.addDelivBtn}
+              >
+                + Add deliverable
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -454,6 +552,18 @@ const styles = {
   },
   headStats: { display: 'flex', gap: 16, fontSize: 12, color: 'var(--color-text-secondary)' },
   stat: { display: 'flex', alignItems: 'center', gap: 4 },
+
+  // Duplication toast
+  toast: {
+    padding: '8px 16px',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    fontSize: 12,
+    fontWeight: 500,
+    textAlign: 'center',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+  },
+
   trainScroll: { flex: 1, overflowY: 'auto', padding: 20 },
   deliverables: { display: 'flex', flexDirection: 'column', gap: 24 },
   deliv: {
@@ -467,6 +577,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14,
+    gap: 8,
   },
   delivName: {
     fontSize: 14,
@@ -475,12 +586,33 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  delivHeadRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    flexShrink: 0,
   },
   delivDates: {
     fontSize: 11,
     color: 'var(--color-text-secondary)',
     fontFamily: 'monospace',
   },
+
+  // Duplicate button
+  dupBtn: {
+    padding: '4px 10px',
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 6,
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+
   noStations: {
     padding: '10px 12px',
     fontSize: 11,
@@ -541,6 +673,23 @@ const styles = {
     fontWeight: 500,
     cursor: 'pointer',
   },
+  empty: {
+    padding: 40,
+    textAlign: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+    marginBottom: 8,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: 'var(--color-text-secondary)',
+    maxWidth: 400,
+    margin: '0 auto',
+    lineHeight: 1.5,
+  },
   train: {
     display: 'flex',
     alignItems: 'flex-start',
@@ -568,47 +717,29 @@ const styles = {
     height: 36,
     borderRadius: '50%',
     border: '2.5px solid',
-    fontSize: 13,
     cursor: 'pointer',
+    fontSize: 13,
     zIndex: 1,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'transform 0.15s',
   },
   trainLabel: {
     fontSize: 11,
     marginTop: 8,
     textAlign: 'center',
-    maxWidth: 88,
-    lineHeight: 1.25,
+    maxWidth: 100,
   },
   trainDate: {
-    fontSize: 10,
+    fontSize: 9,
     color: 'var(--color-text-tertiary)',
-    marginTop: 3,
+    marginTop: 4,
     fontFamily: 'monospace',
   },
   trainAwaiting: {
-    marginTop: 4,
     fontSize: 9,
-    padding: '1px 6px',
-    borderRadius: 8,
-    background: '#ef9f2722',
     color: '#ef9f27',
-    fontWeight: 500,
-  },
-  empty: {
-    padding: 40,
-    textAlign: 'center',
-    background: 'var(--color-background-secondary)',
-    borderRadius: 10,
-  },
-  emptyTitle: { fontSize: 14, fontWeight: 600, marginBottom: 4 },
-  emptySub: {
-    fontSize: 12,
-    color: 'var(--color-text-secondary)',
-    maxWidth: 380,
-    margin: '0 auto',
+    fontWeight: 600,
+    marginTop: 4,
   },
 };

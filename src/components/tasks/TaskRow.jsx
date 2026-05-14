@@ -19,6 +19,8 @@ export default function TaskRow({
   onStopTimer,
 }) {
   const [showAssign, setShowAssign] = useState(false);
+  const [confirmDone, setConfirmDone] = useState(null); // null | { assigneeLabel }
+
   const priColor = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.Medium;
   const projColor = projectColor(task.project, projects);
   const due = formatDue(task.dueDate);
@@ -37,6 +39,77 @@ export default function TaskRow({
   const isAssigned = !!task.isAssigned;
   const assignedMember = members?.find((m) => m.id === task.assignedToId);
 
+  // ── Confirmation logic for ticking off someone else's task ──────────────
+  // Rules:
+  //   - Personal workspace (no workspaceId) → no confirmation needed
+  //   - Task has no assignees → no confirmation needed
+  //   - Current user is one of the assignees → no confirmation needed
+  //   - Already done (unticking) → no confirmation needed
+  //   - Otherwise → show confirmation
+  //
+  // Supports both the new array model (task.assignees: [uid, ...]) and the
+  // older singular model (task.assignedToId: uid), so legacy tasks aren't
+  // broken by this change.
+  function handleToggleClick() {
+    // Unticking a done task is always allowed — less risky than ticking
+    if (task.done) {
+      onToggleDone(task.id);
+      return;
+    }
+
+    // Personal workspace? Just toggle.
+    if (!workspaceId) {
+      onToggleDone(task.id);
+      return;
+    }
+
+    // Build the list of assignee IDs, handling both data models.
+    const assigneeIds = [];
+    if (Array.isArray(task.assignees)) {
+      assigneeIds.push(...task.assignees);
+    }
+    if (task.assignedToId && !assigneeIds.includes(task.assignedToId)) {
+      assigneeIds.push(task.assignedToId);
+    }
+
+    // No assignees → no one to step on → toggle directly
+    if (assigneeIds.length === 0) {
+      onToggleDone(task.id);
+      return;
+    }
+
+    // You're one of the assignees → it's your task → toggle directly
+    if (currentUserId && assigneeIds.includes(currentUserId)) {
+      onToggleDone(task.id);
+      return;
+    }
+
+    // You're not an assignee, but someone else is. Confirm.
+    const assigneeLabels = assigneeIds
+      .map((uid) => {
+        const m = members?.find((mm) => mm.id === uid);
+        if (!m?.email) return null;
+        return m.email.split('@')[0]; // local part of email, e.g. "eddiewac"
+      })
+      .filter(Boolean);
+
+    const label =
+      assigneeLabels.length === 0
+        ? 'someone else'
+        : assigneeLabels.length === 1
+        ? assigneeLabels[0]
+        : assigneeLabels.length === 2
+        ? `${assigneeLabels[0]} and ${assigneeLabels[1]}`
+        : `${assigneeLabels[0]} and ${assigneeLabels.length - 1} others`;
+
+    setConfirmDone({ assigneeLabel: label });
+  }
+
+  function confirmAndToggle() {
+    setConfirmDone(null);
+    onToggleDone(task.id);
+  }
+
   return (
     <div
       style={{
@@ -46,7 +119,7 @@ export default function TaskRow({
       }}
     >
       <button
-        onClick={() => onToggleDone(task.id)}
+        onClick={handleToggleClick}
         style={{
           ...styles.check,
           border: `1.5px solid ${task.done ? 'var(--accent)' : priColor}`,
@@ -195,6 +268,27 @@ export default function TaskRow({
           {isAssigned ? '✕' : '🗑'}
         </button>
       </div>
+
+      {/* Confirmation modal */}
+      {confirmDone && (
+        <div style={styles.modalBackdrop} onClick={() => setConfirmDone(null)}>
+          <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalTitle}>Mark this task done?</div>
+            <div style={styles.modalBody}>
+              This task is assigned to <strong>{confirmDone.assigneeLabel}</strong>, not you.
+              Mark it done anyway?
+            </div>
+            <div style={styles.modalActions}>
+              <button style={styles.modalCancel} onClick={() => setConfirmDone(null)}>
+                Cancel
+              </button>
+              <button style={styles.modalConfirm} onClick={confirmAndToggle}>
+                Yes, mark done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -312,5 +406,61 @@ const styles = {
     borderRadius: 6,
     textAlign: 'left',
     fontSize: 12,
+  },
+
+  // Confirmation modal
+  modalBackdrop: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.4)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  modalCard: {
+    background: 'var(--bg-surface)',
+    borderRadius: 12,
+    padding: 24,
+    maxWidth: 380,
+    width: 'calc(100% - 32px)',
+    boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
+    border: '0.5px solid var(--color-border-primary)',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+    marginBottom: 8,
+  },
+  modalBody: {
+    fontSize: 13,
+    color: 'var(--color-text-secondary)',
+    lineHeight: 1.5,
+    marginBottom: 20,
+  },
+  modalActions: {
+    display: 'flex',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  modalCancel: {
+    padding: '8px 16px',
+    border: '0.5px solid var(--color-border-primary)',
+    background: 'transparent',
+    color: 'var(--color-text-primary)',
+    borderRadius: 8,
+    fontSize: 13,
+    cursor: 'pointer',
+  },
+  modalConfirm: {
+    padding: '8px 16px',
+    border: 'none',
+    background: 'var(--accent)',
+    color: '#fff',
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
   },
 };

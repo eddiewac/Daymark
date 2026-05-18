@@ -55,20 +55,23 @@ export default function TodayView({
   );
 
   // Walk all projects' deliverables → stations to find overdue comms + stale stations
-  const { overdueCommsList, staleStationsList } = useMemo(() => {
+const { overdueCommsList, dueTodayCommsList, staleStationsList } = useMemo(() => {
     const overdue = [];
+    const dueToday = [];
     const stale = [];
     for (const p of projects || []) {
       for (const d of p.deliverables || []) {
         for (const s of d.stations || []) {
-          // Overdue comms
-          for (const c of overdueComms(s)) {
-            overdue.push({
-              project: p,
-              deliverable: d,
-              station: s,
-              comm: c,
-            });
+          // Walk comms once to bucket them
+          for (const c of s.comms || []) {
+            if (c.replyReceived || !c.needsReply) continue;
+            if (!c.expectReplyBy) continue;
+            const entry = { project: p, deliverable: d, station: s, comm: c };
+            if (c.expectReplyBy < today) {
+              overdue.push(entry);
+            } else if (c.expectReplyBy === today) {
+              dueToday.push(entry);
+            }
           }
           // Stale stations (incomplete + last activity > 7 days)
           if (!s.done) {
@@ -89,8 +92,8 @@ export default function TodayView({
         }
       }
     }
-    return { overdueCommsList: overdue, staleStationsList: stale };
-  }, [projects]);
+    return { overdueCommsList: overdue, dueTodayCommsList: dueToday, staleStationsList: stale };
+  }, [projects, today]);
 
   const upcomingCongresses = useMemo(() => {
     const now = new Date();
@@ -105,10 +108,11 @@ export default function TodayView({
   }, [congresses]);
 
   // Total count for the "all clear" check
-  const totalItems =
+const totalItems =
     overdueTasks.length +
     dueTodayTasks.length +
     overdueCommsList.length +
+    dueTodayCommsList.length +
     staleStationsList.length +
     upcomingCongresses.length;
 
@@ -246,7 +250,27 @@ export default function TodayView({
             )}
           </Section>
         )}
-
+        
+{/* Replies expected today */}
+{dueTodayCommsList.length > 0 && (
+  <Section
+    title={`✉ ${dueTodayCommsList.length} repl${dueTodayCommsList.length === 1 ? 'y' : 'ies'} expected today`}
+    tone="purple"
+  >
+    {dueTodayCommsList.slice(0, 8).map((item, i) => (
+      <CommRow
+        key={`${item.station.id}-${item.comm.id}-${i}`}
+        item={item}
+        onJump={() => onJumpToProject(item.project.id)}
+      />
+    ))}
+    {dueTodayCommsList.length > 8 && (
+      <div style={styles.moreLine}>
+        + {dueTodayCommsList.length - 8} more
+      </div>
+    )}
+  </Section>
+)}
         {/* Stale stations */}
         {staleStationsList.length > 0 && (
           <Section

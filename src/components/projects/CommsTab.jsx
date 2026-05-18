@@ -33,25 +33,45 @@ export default function CommsTab({ station, onUpdateStation }) {
     onUpdateStation({ ...station, commPills: newPills });
 
   const logComm = (label, needsReply) => {
-    const pill = pills.find((p) => p.label === label);
-    const col =
-      pill?.color || PILL_COLOR_CYCLE[pills.length % PILL_COLOR_CYCLE.length];
-    onUpdateStation({
-      ...station,
-      comms: [
-        ...comms,
-        {
-          id: uid(),
-          type: label,
-          color: col,
-          needsReply: needsReply ?? pill?.needsReply ?? true,
-          sentAt: Date.now(),
-          replyReceived: false,
-          replyAt: null,
-        },
-      ],
-    });
-  };
+  const pill = pills.find((p) => p.label === label);
+  const col =
+    pill?.color || PILL_COLOR_CYCLE[pills.length % PILL_COLOR_CYCLE.length];
+  const needs = needsReply ?? pill?.needsReply ?? true;
+
+  // For comms that need a reply, default expectReplyBy to 3 business days
+  // from today. User can clear or change it via the date input on the comm.
+  // This makes new comms surface in Today / Plan views without requiring
+  // the user to remember to set the date.
+  let defaultExpectReplyBy = null;
+  if (needs) {
+    const d = new Date();
+    let added = 0;
+    while (added < 3) {
+      d.setDate(d.getDate() + 1);
+      const day = d.getDay();
+      // Skip Saturday (6) and Sunday (0)
+      if (day !== 0 && day !== 6) added++;
+    }
+    defaultExpectReplyBy = d.toISOString().slice(0, 10);
+  }
+
+  onUpdateStation({
+    ...station,
+    comms: [
+      ...comms,
+      {
+        id: uid(),
+        type: label,
+        color: col,
+        needsReply: needs,
+        sentAt: Date.now(),
+        replyReceived: false,
+        replyAt: null,
+        expectReplyBy: defaultExpectReplyBy,
+      },
+    ],
+  });
+};
 
   const addPill = () => {
     if (!newLabel.trim()) return;

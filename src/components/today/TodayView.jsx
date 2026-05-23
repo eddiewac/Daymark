@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
 import {
   stationLastActivityAt,
   relativeTime,
   overdueComms,
+  projectHealth,
 } from '../../lib/stations.js';
 
 // ── TodayView ───────────────────────────────────────────────────────────────
@@ -39,6 +40,10 @@ export default function TodayView({
   seedingDemo,
 }) {
   const today = todayStr();
+
+  // Project status digest is collapsed by default so it never dominates the
+  // Today tab — the header still shows the count, one click expands the list.
+  const [projectStatusOpen, setProjectStatusOpen] = useState(false);
 
   // ── Compute the data ────────────────────────────────────────────────────
   const overdueTasks = useMemo(
@@ -106,6 +111,30 @@ const { overdueCommsList, dueTodayCommsList, staleStationsList } = useMemo(() =>
       })
       .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
   }, [congresses]);
+
+  // Project status digest — runs projectHealth() on every active project and
+  // keeps only those needing attention (amber/red). Green/on-track projects
+  // are deliberately omitted: like every other Today section, this only
+  // surfaces what needs the user. Sorted red first, then amber.
+  const attentionProjects = useMemo(() => {
+    const out = [];
+    for (const p of projects || []) {
+      if (p.archived) continue;
+      const tasksForProject = (tasks || []).filter(
+        (t) => t.project === p.name
+      );
+      const { status, reasons } = projectHealth(p, tasksForProject);
+      if (status === 'red' || status === 'amber') {
+        out.push({ project: p, status, reasons });
+      }
+    }
+    // Red before amber
+    out.sort((a, b) => {
+      if (a.status === b.status) return 0;
+      return a.status === 'red' ? -1 : 1;
+    });
+    return out;
+  }, [projects, tasks]);
 
   // Total count for the "all clear" check
 const totalItems =
@@ -319,6 +348,18 @@ const totalItems =
           </Section>
         )}
 
+        {/* Project status — collapsed digest of projects needing attention.
+            Only amber/red projects appear; if everything is on track the
+            whole section is omitted, consistent with the other sections. */}
+        {attentionProjects.length > 0 && (
+          <ProjectStatusSection
+            items={attentionProjects}
+            open={projectStatusOpen}
+            onToggle={() => setProjectStatusOpen((v) => !v)}
+            onJumpToProject={onJumpToProject}
+          />
+        )}
+
         {/* First-time welcome — appears when the user hasn't created any
             projects yet. We deliberately don't check tasks because, for the
             personal workspace, allTasks includes tasks assigned to the user
@@ -451,6 +492,73 @@ function Section({ title, children, empty, tone, hint, jumpLabel, onJump }) {
         )}
       </div>
       {hasContent ? children : empty}
+    </div>
+  );
+}
+
+// ── ProjectStatusSection ────────────────────────────────────────────────────
+// Collapsible digest of projects that need attention. Collapsed by default:
+// the header carries the summary (how many red / amber) so the signal is
+// visible without expanding. Click the header to reveal the per-project list.
+function ProjectStatusSection({ items, open, onToggle, onJumpToProject }) {
+  const redCount = items.filter((it) => it.status === 'red').length;
+  const amberCount = items.length - redCount;
+
+  // Header summary: lead with the more urgent count.
+  const parts = [];
+  if (redCount > 0) parts.push(`${redCount} at risk`);
+  if (amberCount > 0) parts.push(`${amberCount} need${amberCount === 1 ? 's' : ''} a look`);
+  const summary = parts.join(' · ');
+
+  return (
+    <div style={sectionStyles.wrap}>
+      <button
+        onClick={onToggle}
+        style={projectStatusStyles.headerBtn}
+        title={open ? 'Collapse' : 'Expand'}
+      >
+        <span style={projectStatusStyles.caret}>{open ? '▾' : '▸'}</span>
+        <span style={{ ...sectionStyles.title, color: redCount > 0 ? '#e24b4a' : '#ef9f27' }}>
+          Project status
+        </span>
+        <span style={projectStatusStyles.summary}>{summary}</span>
+      </button>
+
+      {open && (
+        <div style={projectStatusStyles.list}>
+          {items.map(({ project, status, reasons }) => (
+            <div key={project.id} style={styles.miniRow}>
+              <span
+                style={{
+                  ...projectStatusStyles.dot,
+                  background: status === 'red' ? '#e24b4a' : '#ef9f27',
+                }}
+              />
+              <span style={styles.miniTitle}>
+                <strong>{project.name}</strong>
+              </span>
+              <span
+                style={{
+                  ...styles.miniMeta,
+                  color: status === 'red' ? '#e24b4a' : '#ef9f27',
+                }}
+              >
+                {reasons && reasons.length > 0
+                  ? reasons.join(' · ')
+                  : status === 'red'
+                  ? 'Needs attention'
+                  : 'Worth a look'}
+              </span>
+              <button
+                onClick={() => onJumpToProject(project.id)}
+                style={styles.jumpInline}
+              >
+                Open →
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -874,5 +982,42 @@ const sectionStyles = {
     color: 'var(--color-text-secondary)',
     borderRadius: 6,
     cursor: 'pointer',
+  },
+};
+
+const projectStatusStyles = {
+  headerBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  caret: {
+    fontSize: 10,
+    color: 'var(--color-text-tertiary)',
+    width: 12,
+    flexShrink: 0,
+  },
+  summary: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    marginLeft: 'auto',
+  },
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    marginTop: 6,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
   },
 };

@@ -43,7 +43,6 @@ export default function TimesheetPanel({
   onRequestStop,
 }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
-  const [showDone, setShowDone] = useState(false);
   const [editingCell, setEditingCell] = useState(null); // { taskId, date }
 
   const days = useMemo(
@@ -62,19 +61,17 @@ export default function TimesheetPanel({
     return m;
   }, [blocks]);
 
-  // Visible tasks: ones with blocks this week, plus trackable tasks
+  // Visible tasks: only tasks with time logged this week.
+  // The timesheet is a record of logged time — to track a new task, start
+  // its timer from the Tasks or Projects view; once it has time, it appears
+  // here automatically.
   const visibleTasks = useMemo(() => {
     const dayKeySet = new Set(dayKeys);
     const taskHasHoursThisWeek = (taskId) =>
       blocks.some((b) => b.taskId === taskId && dayKeySet.has(b.date));
 
     return (tasks || [])
-      .filter((t) => {
-        if (taskHasHoursThisWeek(t.id)) return true;
-        if (!canTrackTime(t, currentUserId, workspaceId)) return false;
-        if (t.done && !showDone) return false;
-        return true;
-      })
+      .filter((t) => taskHasHoursThisWeek(t.id))
       .sort((a, b) => {
         if (!!a.done !== !!b.done) return a.done ? 1 : -1;
         if (a.project && !b.project) return -1;
@@ -82,7 +79,7 @@ export default function TimesheetPanel({
         if (a.project !== b.project) return (a.project || '').localeCompare(b.project || '');
         return (a.title || '').localeCompare(b.title || '');
       });
-  }, [tasks, blocks, dayKeys, currentUserId, workspaceId, showDone]);
+  }, [tasks, blocks, dayKeys]);
 
   const dayTotals = useMemo(() => {
     return dayKeys.map((dk) =>
@@ -123,14 +120,6 @@ export default function TimesheetPanel({
           })}
         </div>
         <div style={styles.spacer} />
-        <label style={styles.toggleLabel}>
-          <input
-            type="checkbox"
-            checked={showDone}
-            onChange={(e) => setShowDone(e.target.checked)}
-          />
-          Show completed
-        </label>
         <div style={styles.weekTotal}>
           Total: <strong>{weekTotal.toFixed(2)}h</strong>
         </div>
@@ -141,7 +130,7 @@ export default function TimesheetPanel({
           <div style={styles.empty}>Loading…</div>
         ) : visibleTasks.length === 0 ? (
           <div style={styles.empty}>
-            No tasks to track this week. Add or assign yourself tasks first.
+            No time logged this week. Start a timer from the Tasks or Projects view, and tracked tasks will appear here.
           </div>
         ) : (
           <table style={styles.table}>
@@ -368,14 +357,6 @@ const styles = {
   },
   weekLabel: { fontSize: 13, fontWeight: 500, marginLeft: 6 },
   spacer: { flex: 1 },
-  toggleLabel: {
-    fontSize: 11,
-    color: 'var(--color-text-secondary)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    cursor: 'pointer',
-  },
   weekTotal: { fontSize: 12, color: 'var(--color-text-secondary)' },
   scroll: { flex: 1, overflow: 'auto' },
   empty: {

@@ -184,19 +184,21 @@ export default function TaskList({
         </div>
       </div>
 
-      {showForm && (
-        <TaskForm
-          initialTask={editing}
-          projects={projects}
-          categories={categories}
-          priorities={priorities}
-          statuses={statuses}
-          members={members}
-          workspaceId={workspaceId}
-          onSave={handleSave}
-          onCancel={cancelForm}
-        />
-      )}
+{showForm && (
+  <div style={styles.formScrollWrap}>
+    <TaskForm
+      initialTask={editing}
+      projects={projects}
+      categories={categories}
+      priorities={priorities}
+      statuses={statuses}
+      members={members}
+      workspaceId={workspaceId}
+      onSave={handleSave}
+      onCancel={cancelForm}
+    />
+  </div>
+)}
 
       <div style={{
         ...styles.listScroll,
@@ -884,6 +886,12 @@ function TableView({ tasks, projects, members, onToggleDone, onEdit, onDelete })
 }
 
 const styles = {
+  formScrollWrap: {
+    maxHeight: '55vh',
+    overflowY: 'auto',
+    flexShrink: 0,
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+  },
   wrap: {
     flex: 1,
     display: 'flex',

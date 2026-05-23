@@ -281,8 +281,17 @@ const styles = {
     color: 'var(--color-text-secondary)',
     marginBottom: 4,
   },
-  btnRow: { display: 'flex', gap: 6, marginTop: 4 },
-  primary: {
+btnRow: {
+    display: 'flex',
+    gap: 6,
+    marginTop: 4,
+    position: 'sticky',
+    bottom: 0,
+    background: 'var(--color-background-secondary)',
+    paddingTop: 8,
+    paddingBottom: 2,
+  },
+    primary: {
     flex: 1,
     padding: '7px 0',
     background: 'var(--accent)',

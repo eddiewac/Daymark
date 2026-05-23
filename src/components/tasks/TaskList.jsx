@@ -184,27 +184,31 @@ export default function TaskList({
         </div>
       </div>
 
-{showForm && (
-  <div style={styles.formScrollWrap}>
-    <TaskForm
-      initialTask={editing}
-      projects={projects}
-      categories={categories}
-      priorities={priorities}
-      statuses={statuses}
-      members={members}
-      workspaceId={workspaceId}
-      onSave={handleSave}
-      onCancel={cancelForm}
-    />
-  </div>
-)}
-
       <div style={{
         ...styles.listScroll,
         overflowX: viewMode === 'kanban' ? 'auto' : 'hidden',
         padding: viewMode === 'table' ? 0 : viewMode === 'kanban' ? '12px' : '8px 14px',
       }}>
+        {/* Task form lives inside the scroll area so it shares the main
+            scrollbar with the task list. When the form expands (e.g.
+            out-of-scope section), the whole area scrolls as one — no nested
+            scroll region, no hidden sub-scrollbar. */}
+        {showForm && (
+          <div style={styles.formInline}>
+            <TaskForm
+              initialTask={editing}
+              projects={projects}
+              categories={categories}
+              priorities={priorities}
+              statuses={statuses}
+              members={members}
+              workspaceId={workspaceId}
+              onSave={handleSave}
+              onCancel={cancelForm}
+            />
+          </div>
+        )}
+
         {loading ? (
           <div style={styles.empty}>Loading…</div>
         ) : visible.length === 0 ? (
@@ -886,12 +890,6 @@ function TableView({ tasks, projects, members, onToggleDone, onEdit, onDelete })
 }
 
 const styles = {
-  formScrollWrap: {
-    maxHeight: '55vh',
-    overflowY: 'auto',
-    flexShrink: 0,
-    borderBottom: '0.5px solid var(--color-border-tertiary)',
-  },
   wrap: {
     flex: 1,
     display: 'flex',
@@ -987,6 +985,12 @@ const styles = {
     outline: 'none',
   },
   listScroll: { flex: 1, overflowY: 'auto' },
+  formInline: {
+    marginBottom: 10,
+    borderRadius: 8,
+    border: '0.5px solid var(--color-border-tertiary)',
+    overflow: 'hidden',
+  },
   empty: {
     padding: 32,
     textAlign: 'center',

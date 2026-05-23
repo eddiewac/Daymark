@@ -3,7 +3,7 @@ import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
 
 const DAY_PX = 18;
-const ROW_H = 36; 
+const ROW_H = 36;
 const HEADER_H = 44;
 const LABEL_W = 180;
 
@@ -36,7 +36,9 @@ export default function GanttView({ projects, congresses }) {
   const labelColRef = useRef(null);
 
   // Keep the label column's vertical scroll in sync with the timeline.
-  // The timeline is the source of truth; the labels follow it.
+  // The timeline is the single source of truth; the label column has its
+  // own scrollbar hidden (overflowY: 'hidden') but is still scrolled
+  // programmatically here so project names stay aligned with their bars.
   const handleTimelineScroll = () => {
     if (labelColRef.current && scrollRef.current) {
       labelColRef.current.scrollTop = scrollRef.current.scrollTop;
@@ -168,8 +170,10 @@ export default function GanttView({ projects, congresses }) {
       </div>
 
       <div style={styles.layout}>
-        {{/* Left label column */}
-<div ref={labelColRef} style={styles.labelCol}>
+        {/* Left label column. overflowY is 'hidden' — it has no scrollbar of
+            its own; it is scrolled programmatically by handleTimelineScroll
+            so the names stay aligned with the timeline bars. */}
+        <div ref={labelColRef} style={styles.labelCol}>
           <div style={{ ...styles.labelHeader, height: HEADER_H }}>Project / Deliverable</div>
           {rows.map((r, i) => (
             <div
@@ -205,8 +209,9 @@ export default function GanttView({ projects, congresses }) {
           ))}
         </div>
 
-        {/* Scrollable timeline */}
-<div ref={scrollRef} style={styles.scrollArea} onScroll={handleTimelineScroll}>
+        {/* Scrollable timeline — the single scroll surface. Its onScroll
+            handler keeps the label column in vertical sync. */}
+        <div ref={scrollRef} style={styles.scrollArea} onScroll={handleTimelineScroll}>
           <div style={{ width: totalW, position: 'relative' }}>
             {/* Header */}
             <div style={{ ...styles.header, height: HEADER_H, width: totalW }}>

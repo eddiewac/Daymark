@@ -3,7 +3,7 @@ import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
 
 const DAY_PX = 18;
-const ROW_H = 36;
+const ROW_H = 36; 
 const HEADER_H = 44;
 const LABEL_W = 180;
 
@@ -33,6 +33,15 @@ function fmtMonth(d) {
 export default function GanttView({ projects, congresses }) {
   const [today] = useState(() => toDate(todayStr()));
   const scrollRef = useRef(null);
+  const labelColRef = useRef(null);
+
+  // Keep the label column's vertical scroll in sync with the timeline.
+  // The timeline is the source of truth; the labels follow it.
+  const handleTimelineScroll = () => {
+    if (labelColRef.current && scrollRef.current) {
+      labelColRef.current.scrollTop = scrollRef.current.scrollTop;
+    }
+  };
 
   // Build the rows: project header, then deliverables, then stations under each deliverable
   const rows = useMemo(() => {
@@ -159,8 +168,8 @@ export default function GanttView({ projects, congresses }) {
       </div>
 
       <div style={styles.layout}>
-        {/* Left label column */}
-        <div style={styles.labelCol}>
+        {{/* Left label column */}
+<div ref={labelColRef} style={styles.labelCol}>
           <div style={{ ...styles.labelHeader, height: HEADER_H }}>Project / Deliverable</div>
           {rows.map((r, i) => (
             <div
@@ -197,7 +206,7 @@ export default function GanttView({ projects, congresses }) {
         </div>
 
         {/* Scrollable timeline */}
-        <div ref={scrollRef} style={styles.scrollArea}>
+<div ref={scrollRef} style={styles.scrollArea} onScroll={handleTimelineScroll}>
           <div style={{ width: totalW, position: 'relative' }}>
             {/* Header */}
             <div style={{ ...styles.header, height: HEADER_H, width: totalW }}>
@@ -398,7 +407,7 @@ const styles = {
     width: LABEL_W,
     flexShrink: 0,
     borderRight: '0.5px solid var(--color-border-tertiary)',
-    overflowY: 'auto',
+    overflowY: 'hidden',
   },
   labelHeader: {
     padding: '8px 10px',

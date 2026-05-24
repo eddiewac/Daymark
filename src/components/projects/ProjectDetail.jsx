@@ -155,8 +155,9 @@ export default function ProjectDetail({
           <select
             value={draft.group || ''}
             onChange={(e) => {
-              set({ group: e.target.value || null });
-              setTimeout(flush, 0);
+              const newDraft = { ...draft, group: e.target.value || null };
+              setDraft(newDraft);
+              onUpdate(project.id, newDraft);
             }}
             style={styles.input}
           >

@@ -30,7 +30,17 @@ export default function ProjectsPanel({
   const [trackingId, setTrackingId] = useState(null); // when set, full-screen track mode
   const [view, setView] = useState('grid'); // grid | gantt | track
   const [search, setSearch] = useState('');
-  const [groupBy, setGroupBy] = useState('none'); // none | group
+const [groupBy, setGroupByState] = useState(() => {
+    try {
+      return localStorage.getItem('daymark-projects-groupby') || 'none';
+    } catch {
+      return 'none';
+    }
+  }); // none | group
+  const setGroupBy = (v) => {
+    setGroupByState(v);
+    try { localStorage.setItem('daymark-projects-groupby', v); } catch {}
+  };
   const [collapsedGroups, setCollapsedGroups] = useState({});
 
   const hasGroups = (projectGroups || []).length > 0;

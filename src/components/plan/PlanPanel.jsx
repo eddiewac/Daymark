@@ -225,19 +225,14 @@ export default function PlanPanel({
 
           {/* Main board: backlog + 5 days */}
           <div style={styles.board}>
-            <DayColumn
-              title="Backlog"
-              subtitle="No due date"
-              count={backlog.length}
+            <BacklogColumn
               tasks={backlog}
               projects={projects}
-              isToday={false}
               isDropTarget={dragOverDay === 'backlog'}
               onDragOver={() => setDragOverDay('backlog')}
               onDragLeave={() => setDragOverDay(null)}
               onDrop={(taskId) => handleDrop(taskId, '')}
               onToggleDone={onToggleDone}
-              backlog
             />
 
             {days.map((d, i) => {
@@ -845,6 +840,115 @@ const listStyles = {
   },
 };
 
+// ── BacklogColumn ────────────────────────────────────────────────────────────
+// The backlog (open tasks with no due date) grouped by project, each group
+// collapsible and collapsed by default. This stops the backlog becoming an
+// endless wall when a whole project's tasks are entered at once — you see a
+// short list of project names with counts, and expand only what you need.
+function BacklogColumn({
+  tasks,
+  projects,
+  isDropTarget,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onToggleDone,
+}) {
+  // Which project groups are expanded. Default: all collapsed.
+  const [openGroups, setOpenGroups] = useState({});
+  const toggleGroup = (key) =>
+    setOpenGroups((g) => ({ ...g, [key]: !g[key] }));
+
+  // Group tasks by project name. Tasks with no project fall under a
+  // "No project" group. Groups are sorted by name, "No project" last.
+  const groups = useMemo(() => {
+    const map = {};
+    for (const t of tasks) {
+      const key = t.project || '';
+      (map[key] = map[key] || []).push(t);
+    }
+    const keys = Object.keys(map).sort((a, b) => {
+      if (a === '') return 1;
+      if (b === '') return -1;
+      return a.localeCompare(b);
+    });
+    return keys.map((k) => ({ key: k, tasks: map[k] }));
+  }, [tasks]);
+
+  return (
+    <div
+      style={{
+        ...colStyles.col,
+        ...(isDropTarget ? colStyles.colDropping : {}),
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onDragOver();
+      }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => {
+        e.preventDefault();
+        const taskId = e.dataTransfer.getData('text/plain');
+        if (taskId) onDrop(taskId);
+      }}
+    >
+      <div style={colStyles.header}>
+        <div style={{ ...colStyles.title, color: 'var(--color-text-primary)' }}>
+          Backlog
+        </div>
+        <div style={colStyles.subtitle}>No due date</div>
+        {tasks.length > 0 && (
+          <div style={colStyles.count}>{tasks.length}</div>
+        )}
+      </div>
+
+      <div style={colStyles.list}>
+        {tasks.length === 0 ? (
+          <div style={colStyles.emptyDrop}>Drop here to clear due date</div>
+        ) : (
+          groups.map(({ key, tasks: groupTasks }) => {
+            const isOpen = !!openGroups[key];
+            const label = key || 'No project';
+            const projColor = key
+              ? projectColor(key, projects)
+              : 'var(--color-text-tertiary)';
+            return (
+              <div key={key || '__none__'} style={backlogStyles.group}>
+                <button
+                  onClick={() => toggleGroup(key)}
+                  style={backlogStyles.groupHeader}
+                  title={isOpen ? 'Collapse' : 'Expand'}
+                >
+                  <span style={backlogStyles.caret}>{isOpen ? '▾' : '▸'}</span>
+                  <span
+                    style={{ ...backlogStyles.groupDot, background: projColor }}
+                  />
+                  <span style={backlogStyles.groupName}>{label}</span>
+                  <span style={backlogStyles.groupCount}>
+                    {groupTasks.length}
+                  </span>
+                </button>
+                {isOpen && (
+                  <div style={backlogStyles.groupTasks}>
+                    {groupTasks.map((t) => (
+                      <TaskCard
+                        key={t.id}
+                        task={t}
+                        projects={projects}
+                        onToggleDone={onToggleDone}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── DayColumn ────────────────────────────────────────────────────────────────
 function DayColumn({
   title,
@@ -1160,5 +1264,63 @@ const cardStyles = {
     fontSize: 9,
     fontWeight: 500,
     marginTop: 2,
+  },
+};
+
+const backlogStyles = {
+  group: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  groupHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
+    padding: '4px 6px',
+    background: 'var(--bg-surface)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 6,
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  caret: {
+    fontSize: 9,
+    color: 'var(--color-text-tertiary)',
+    width: 10,
+    flexShrink: 0,
+  },
+  groupDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  groupName: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  groupCount: {
+    fontSize: 10,
+    fontWeight: 600,
+    padding: '0 6px',
+    background: 'var(--color-background-tertiary)',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 8,
+    minWidth: 16,
+    textAlign: 'center',
+    flexShrink: 0,
+  },
+  groupTasks: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    paddingLeft: 6,
   },
 };

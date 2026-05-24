@@ -163,6 +163,9 @@ const totalItems =
         {/* Priority */}
         <Section
           title="🎯 Today's priority"
+          jumpLabel={todayPriority?.primary ? 'Edit' : undefined}
+          onJump={todayPriority?.primary ? onOpenPriorityModal : undefined}
+          jumpArrow=""
           empty={
             !todayPriority?.primary && (
               <div style={styles.emptyRow}>
@@ -465,7 +468,7 @@ const totalItems =
 }
 
 // ── Section wrapper ────────────────────────────────────────────────────────
-function Section({ title, children, empty, tone, hint, jumpLabel, onJump }) {
+function Section({ title, children, empty, tone, hint, jumpLabel, onJump, jumpArrow = ' →' }) {
   // Hide the section if empty content provided AND children is null/empty
   const hasContent = Array.isArray(children) ? children.length > 0 : !!children;
   if (!hasContent && !empty) return null;
@@ -487,7 +490,7 @@ function Section({ title, children, empty, tone, hint, jumpLabel, onJump }) {
         <div style={{ flex: 1 }} />
         {jumpLabel && onJump && (
           <button onClick={onJump} style={sectionStyles.jumpBtn}>
-            {jumpLabel} →
+            {jumpLabel}{jumpArrow}
           </button>
         )}
       </div>

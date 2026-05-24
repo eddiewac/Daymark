@@ -3,6 +3,7 @@ import ProjectCard from './ProjectCard.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import GanttView from './GanttView.jsx';
 import TrackView from './track/TrackView.jsx';
+import { groupProjects } from '../../lib/projectGroups.js';
 
 export default function ProjectsPanel({
   projects,
@@ -15,6 +16,7 @@ export default function ProjectsPanel({
   categories,
   priorities,
   statuses,
+  projectGroups,
   onAdd,
   onUpdate,
   onDelete,
@@ -28,6 +30,10 @@ export default function ProjectsPanel({
   const [trackingId, setTrackingId] = useState(null); // when set, full-screen track mode
   const [view, setView] = useState('grid'); // grid | gantt | track
   const [search, setSearch] = useState('');
+  const [groupBy, setGroupBy] = useState('none'); // none | group
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+
+  const hasGroups = (projectGroups || []).length > 0;
 
   const visible = useMemo(() => {
     if (!search.trim()) return projects;
@@ -40,6 +46,12 @@ export default function ProjectsPanel({
     );
   }, [projects, search]);
 
+  // Grouped buckets — only computed/used when grouping is on.
+  const grouped = useMemo(
+    () => groupProjects(visible, projectGroups),
+    [visible, projectGroups]
+  );
+
   const taskCountFor = (projectName) =>
     tasks.filter((t) => t.project === projectName && !t.done).length;
 
@@ -50,6 +62,9 @@ export default function ProjectsPanel({
     const proj = await onAdd();
     setActiveId(proj.id);
   };
+
+  const toggleGroupCollapsed = (id) =>
+    setCollapsedGroups((c) => ({ ...c, [id]: !c[id] }));
 
   // When a project is being tracked, show the full-screen TrackView
   if (tracking) {
@@ -74,6 +89,49 @@ export default function ProjectsPanel({
       />
     );
   }
+
+  // Renders a flat grid of project cards.
+  const renderGrid = (list, onCardClick) => (
+    <div style={styles.grid}>
+      {list.map((p) => (
+        <ProjectCard
+          key={p.id}
+          project={p}
+          allProjects={projects}
+          projectGroups={projectGroups}
+          taskCount={taskCountFor(p.name)}
+          projectTasks={(tasks || []).filter((t) => t.project === p.name)}
+          onClick={() => onCardClick(p)}
+        />
+      ))}
+    </div>
+  );
+
+  // Renders project cards bucketed under collapsible group headers.
+  const renderGrouped = (onCardClick) => (
+    <div style={styles.groupsWrap}>
+      {grouped.map(({ group, projects: groupProjectsList }) => {
+        const isCollapsed = !!collapsedGroups[group.id];
+        return (
+          <div key={group.id} style={styles.groupBlock}>
+            <button
+              onClick={() => toggleGroupCollapsed(group.id)}
+              style={styles.groupHeader}
+              title={isCollapsed ? 'Expand' : 'Collapse'}
+            >
+              <span style={styles.groupCaret}>{isCollapsed ? '▸' : '▾'}</span>
+              <span style={{ ...styles.groupHeaderDot, background: group.color }} />
+              <span style={styles.groupHeaderName}>{group.name}</span>
+              <span style={styles.groupHeaderCount}>
+                {groupProjectsList.length}
+              </span>
+            </button>
+            {!isCollapsed && renderGrid(groupProjectsList, onCardClick)}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div style={styles.wrap}>
@@ -102,6 +160,21 @@ export default function ProjectsPanel({
           placeholder="Search projects…"
           style={styles.search}
         />
+        {/* Group-by control — only meaningful for the grid view, and only
+            shown when at least one project group has been defined. */}
+        {view === 'grid' && hasGroups && (
+          <label style={styles.groupByLabel}>
+            Group by
+            <select
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value)}
+              style={styles.groupBySelect}
+            >
+              <option value="none">None</option>
+              <option value="group">Group</option>
+            </select>
+          </label>
+        )}
         <button onClick={handleAdd} style={styles.addBtn}>
           + New project
         </button>
@@ -120,19 +193,10 @@ export default function ProjectsPanel({
                     ? 'No projects yet. Click + New project to create one.'
                     : 'No projects match the search.'}
                 </div>
+              ) : groupBy === 'group' && hasGroups ? (
+                renderGrouped((p) => setActiveId(p.id))
               ) : (
-                <div style={styles.grid}>
-                  {visible.map((p) => (
-                    <ProjectCard
-                      key={p.id}
-                      project={p}
-                      allProjects={projects}
-                      taskCount={taskCountFor(p.name)}
-                      projectTasks={(tasks || []).filter((t) => t.project === p.name)}
-                      onClick={() => setActiveId(p.id)}
-                    />
-                  ))}
-                </div>
+                renderGrid(visible, (p) => setActiveId(p.id))
               )}
             </div>
           ) : view === 'gantt' ? (
@@ -151,18 +215,7 @@ export default function ProjectsPanel({
                     : 'No projects match the search.'}
                 </div>
               ) : (
-                <div style={styles.grid}>
-                  {visible.map((p) => (
-                    <ProjectCard
-                      key={p.id}
-                      project={p}
-                      allProjects={projects}
-                      taskCount={taskCountFor(p.name)}
-                      projectTasks={(tasks || []).filter((t) => t.project === p.name)}
-                      onClick={() => setTrackingId(p.id)}
-                    />
-                  ))}
-                </div>
+                renderGrid(visible, (p) => setTrackingId(p.id))
               )}
             </div>
           )}
@@ -174,6 +227,7 @@ export default function ProjectsPanel({
             <ProjectDetail
               project={active}
               allProjects={projects}
+              projectGroups={projectGroups}
               tasks={tasks}
               congresses={congresses}
               stationTemplates={stationTemplates}
@@ -226,6 +280,22 @@ const styles = {
     fontSize: 12,
     outline: 'none',
   },
+  groupByLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    flexShrink: 0,
+  },
+  groupBySelect: {
+    padding: '4px 6px',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    fontSize: 11,
+    background: 'var(--bg-surface)',
+    outline: 'none',
+  },
   addBtn: {
     padding: '5px 14px',
     background: 'var(--accent)',
@@ -251,6 +321,56 @@ const styles = {
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
     gap: 10,
   },
+  groupsWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+  },
+  groupBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  groupHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '6px 4px',
+    background: 'transparent',
+    border: 'none',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  groupCaret: {
+    fontSize: 10,
+    color: 'var(--color-text-tertiary)',
+    width: 12,
+    flexShrink: 0,
+  },
+  groupHeaderDot: {
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  groupHeaderName: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+    flex: 1,
+  },
+  groupHeaderCount: {
+    fontSize: 11,
+    fontWeight: 600,
+    padding: '0 7px',
+    background: 'var(--color-background-tertiary)',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 8,
+    minWidth: 18,
+    textAlign: 'center',
+  },
   empty: {
     padding: 32,
     textAlign: 'center',
@@ -265,3 +385,4 @@ const styles = {
     flexDirection: 'column',
   },
 };
+

@@ -16,6 +16,12 @@ const DEFAULT_STATION_TEMPLATES = [
 // Tag → checklist of items. Tags are case-insensitive on lookup.
 const DEFAULT_TAG_CHECKLISTS = {};
 
+// Project groups: user-defined, named, coloured buckets for organising
+// projects (e.g. all the work for one client) without the label having to
+// reveal anything confidential. Each is { id, name, color }. Empty by
+// default — the user creates their own in Settings.
+const DEFAULT_PROJECT_GROUPS = [];
+
 export const DEFAULT_SETTINGS = {
   categories: DEFAULT_CATEGORIES,
   priorities: DEFAULT_PRIORITIES,
@@ -23,6 +29,7 @@ export const DEFAULT_SETTINGS = {
   reviewStages: DEFAULT_REVIEW_STAGES, // legacy field, kept for backward compat
   stationTemplates: DEFAULT_STATION_TEMPLATES,
   tagChecklists: DEFAULT_TAG_CHECKLISTS,
+  projectGroups: DEFAULT_PROJECT_GROUPS,
 };
 
 // Build the storage key. Personal workspace gets one key per user; team

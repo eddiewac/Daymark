@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { projectColor } from '../../lib/constants.js';
+import { projectColorWithGroups } from '../../lib/projectGroups.js';
 import { generateProjectHandoff } from '../../lib/handoff.js';
 import DeliverableEditor from './DeliverableEditor.jsx';
 
@@ -8,6 +8,7 @@ const STATUS_OPTIONS = ['', '🟢 On track', '🟡 At risk', '🔴 Off track'];
 export default function ProjectDetail({
   project,
   allProjects,
+  projectGroups,
   tasks,
   congresses,
   stationTemplates,
@@ -68,7 +69,7 @@ export default function ProjectDetail({
     }
   };
 
-  const color = projectColor(project.name, allProjects);
+  const color = projectColorWithGroups(project, allProjects, projectGroups);
   const projectTasks = (tasks || []).filter((t) => t.project === project.name);
   const doneCount = projectTasks.filter((t) => t.done).length;
   const totalCount = projectTasks.length;
@@ -144,6 +145,33 @@ export default function ProjectDetail({
               style={styles.input}
             />
           </div>
+        </div>
+
+        {/* Project group — assign this project to a colour-coded group.
+            Groups are defined in Settings. Assigning a group also drives the
+            project's accent colour across the app. */}
+        <div style={styles.field}>
+          <label style={styles.label}>Group</label>
+          <select
+            value={draft.group || ''}
+            onChange={(e) => {
+              set({ group: e.target.value || null });
+              setTimeout(flush, 0);
+            }}
+            style={styles.input}
+          >
+            <option value="">— No group —</option>
+            {(projectGroups || []).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          {(!projectGroups || projectGroups.length === 0) && (
+            <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+              Define project groups in Settings to use this.
+            </span>
+          )}
         </div>
 
         {/* Task summary */}

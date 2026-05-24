@@ -1,7 +1,5 @@
-import { projectColor } from '../../lib/constants.js';
+import { projectColorWithGroups, findGroup } from '../../lib/projectGroups.js';
 import { projectHealth } from '../../lib/stations.js';
-
-const STATUS_OPTIONS = ['', '🟢 On track', '🟡 At risk', '🔴 Off track'];
 
 const HEALTH_COLOR = {
   green: '#1d9e75',
@@ -9,8 +7,16 @@ const HEALTH_COLOR = {
   red: '#e24b4a',
 };
 
-export default function ProjectCard({ project, allProjects, taskCount, projectTasks, onClick }) {
-  const color = projectColor(project.name, allProjects);
+export default function ProjectCard({
+  project,
+  allProjects,
+  projectGroups,
+  taskCount,
+  projectTasks,
+  onClick,
+}) {
+  const color = projectColorWithGroups(project, allProjects, projectGroups);
+  const group = findGroup(projectGroups, project.group);
   const delivCount = (project.deliverables || []).length;
   const congressCount = (project.congresses || []).length;
   const health = projectHealth(project, projectTasks || []);
@@ -32,6 +38,12 @@ export default function ProjectCard({ project, allProjects, taskCount, projectTa
         />
       </div>
       {project.number && <div style={styles.number}>#{project.number}</div>}
+      {group && (
+        <div style={styles.groupRow}>
+          <span style={{ ...styles.groupDot, background: group.color }} />
+          <span style={styles.groupName}>{group.name}</span>
+        </div>
+      )}
       {project.status && (
         <div style={{ ...styles.status, color }}>{project.status}</div>
       )}
@@ -73,6 +85,23 @@ const styles = {
     flexShrink: 0,
   },
   number: { fontSize: 11, color: 'var(--color-text-tertiary)' },
+  groupRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  groupDot: {
+    width: 7,
+    height: 7,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  groupName: {
+    fontSize: 10,
+    fontWeight: 500,
+    color: 'var(--color-text-secondary)',
+  },
   status: { fontSize: 11, fontWeight: 500 },
   meta: {
     fontSize: 10,
@@ -92,3 +121,4 @@ const styles = {
     overflow: 'hidden',
   },
 };
+

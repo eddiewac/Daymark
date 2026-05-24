@@ -1,6 +1,7 @@
 import SecuritySection from './SecuritySection.jsx';
 import { useState } from 'react';
 import { getStoredThemeMode, setThemeMode } from '../../lib/theme.js';
+import { GROUP_COLOR_CHOICES, newGroupId } from '../../lib/projectGroups.js';
 
 function fmtRel(ts) {
   if (!ts) return '';
@@ -68,6 +69,11 @@ export default function SettingsPanel({
               items={settings.statuses}
               onChange={(items) => onUpdate({ statuses: items })}
               placeholder="Add a status…"
+            />
+
+            <ProjectGroupsEditor
+              groups={settings.projectGroups || []}
+              onChange={(projectGroups) => onUpdate({ projectGroups })}
             />
 
             <StationTemplatesEditor
@@ -241,6 +247,117 @@ function ListEditor({ title, hint, items, onChange, placeholder }) {
     </section>
   );
 }
+
+// ── ProjectGroupsEditor: named, coloured project groups ───────────────────
+function ProjectGroupsEditor({ groups, onChange }) {
+  const [draftName, setDraftName] = useState('');
+
+  const add = () => {
+    const name = draftName.trim();
+    if (!name) return;
+    // Pick the next colour in the palette by current group count.
+    const color = GROUP_COLOR_CHOICES[groups.length % GROUP_COLOR_CHOICES.length];
+    onChange([...groups, { id: newGroupId(), name, color }]);
+    setDraftName('');
+  };
+
+  const remove = (id) => onChange(groups.filter((g) => g.id !== id));
+
+  const rename = (id, name) =>
+    onChange(groups.map((g) => (g.id === id ? { ...g, name } : g)));
+
+  const recolour = (id, color) =>
+    onChange(groups.map((g) => (g.id === id ? { ...g, color } : g)));
+
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionTitle}>Project groups</div>
+      <div style={styles.sectionHint}>
+        Group related projects together with a colour and a label of your
+        choosing. Use neutral names — groups appear on project cards, so avoid
+        anything confidential. Assign a project to a group in its detail panel.
+      </div>
+      <div style={styles.list}>
+        {groups.length === 0 && (
+          <div style={styles.empty}>
+            No groups yet. Add one below to start grouping projects.
+          </div>
+        )}
+        {groups.map((g) => (
+          <div key={g.id} style={styles.row}>
+            {/* Colour picker — swatches */}
+            <div style={groupEditorStyles.swatchRow}>
+              {GROUP_COLOR_CHOICES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => recolour(g.id, c)}
+                  title={c}
+                  style={{
+                    ...groupEditorStyles.swatch,
+                    background: c,
+                    outline: g.color === c ? '2px solid var(--color-text-primary)' : 'none',
+                    outlineOffset: 1,
+                  }}
+                />
+              ))}
+            </div>
+            <input
+              value={g.name}
+              onChange={(e) => rename(g.id, e.target.value)}
+              style={styles.itemInput}
+              placeholder="Group name"
+            />
+            <button
+              onClick={() => remove(g.id)}
+              style={styles.removeBtn}
+              title="Remove group"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <div style={styles.addRow}>
+        <input
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="Add a group…"
+          style={styles.addInput}
+        />
+        <button
+          onClick={add}
+          disabled={!draftName.trim()}
+          style={{
+            ...styles.addBtn,
+            opacity: draftName.trim() ? 1 : 0.4,
+            cursor: draftName.trim() ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Add
+        </button>
+      </div>
+    </section>
+  );
+}
+
+const groupEditorStyles = {
+  swatchRow: {
+    display: 'flex',
+    gap: 3,
+    flexWrap: 'wrap',
+    maxWidth: 130,
+    flexShrink: 0,
+  },
+  swatch: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+  },
+};
 
 // ── StationTemplatesEditor: named templates of stages ─────────────────────
 function StationTemplatesEditor({ templates, onChange }) {

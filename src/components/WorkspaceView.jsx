@@ -363,6 +363,7 @@ export default function WorkspaceView({
             categories={settings.categories}
             priorities={settings.priorities}
             statuses={settings.statuses}
+            projectGroups={settings.projectGroups || []}
             onAdd={addProject}
             onUpdate={updateProject}
             onDelete={deleteProject}

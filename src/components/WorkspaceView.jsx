@@ -14,6 +14,7 @@ import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
 import Notepad from './notes/Notepad.jsx';
+import FloatingNotepad from './notes/FloatingNotepad.jsx';
 import TimesheetPanel from './time/TimesheetPanel.jsx';
 import PlanPanel from './plan/PlanPanel.jsx';
 import ExportPanel from './export/ExportPanel.jsx';
@@ -138,6 +139,22 @@ export default function WorkspaceView({
   const [helpOpen, setHelpOpen] = useState(false);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
+
+  // Floating notepad: a docked panel that stays open while navigating other
+  // tabs. Its open-state is persisted so it survives reloads and tab changes.
+  const [notepadOpen, setNotepadOpenState] = useState(() => {
+    try {
+      return localStorage.getItem('daymark-notepad-floating') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setNotepadOpen = (v) => {
+    setNotepadOpenState(v);
+    try {
+      localStorage.setItem('daymark-notepad-floating', v ? '1' : '0');
+    } catch {}
+  };
 
   // ── Quick comm prompt ─────────────────────────────────────────────────────
   // When a station-linked task is completed, we offer to log a comm against
@@ -371,7 +388,20 @@ export default function WorkspaceView({
             🎯 Focus
           </button>
         )}
+        {/* Floating notepad toggle — keeps the notepad available on any tab */}
+        <button
+          onClick={() => setNotepadOpen(!notepadOpen)}
+          style={{
+            ...styles.notepadToggle,
+            ...(notepadOpen ? styles.notepadToggleActive : {}),
+          }}
+          title={notepadOpen ? 'Close floating notepad' : 'Open floating notepad'}
+        >
+          📝 Notepad
+        </button>
       </div>
+
+      <div style={styles.bodyRow}>
 
       <div style={styles.body}>
         {tab === 'today' && (
@@ -551,6 +581,22 @@ export default function WorkspaceView({
         )}
       </div>
 
+      {/* Floating notepad — docked beside the main content, stays open
+          across tab changes. Hidden on the Notepad tab itself, where the
+          full-screen notepad is already shown. */}
+      {notepadOpen && tab !== 'notepad' && (
+        <FloatingNotepad
+          projects={projects}
+          tasks={allTasks}
+          workspaceId={workspaceId}
+          onAddTask={addTask}
+          onAddProject={addProject}
+          onAddNote={addNote}
+          onClose={() => setNotepadOpen(false)}
+        />
+      )}
+      </div>
+
       {/* Focus mode dialog */}
       {focusOpen && time.runningTimer && (
         <FocusBox
@@ -658,5 +704,23 @@ const styles = {
     fontWeight: 500,
     cursor: 'pointer',
   },
+  notepadToggle: {
+    marginLeft: 'auto',
+    padding: '5px 12px',
+    background: 'transparent',
+    color: 'var(--color-text-secondary)',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  notepadToggleActive: {
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    border: '0.5px solid var(--accent)',
+  },
+  bodyRow: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
   body: { flex: 1, display: 'flex', minHeight: 0 },
 };

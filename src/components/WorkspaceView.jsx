@@ -26,6 +26,8 @@ import QuickCapture from './QuickCapture.jsx';
 import HelpPanel from './HelpPanel.jsx';
 import TodayView from './today/TodayView.jsx';
 import FocusBox from './FocusBox.jsx';
+import QuickCommPrompt from './QuickCommPrompt.jsx';
+import { DEFAULT_COMM_PILLS } from './projects/CommsTab.jsx';
 
 const TABS = [
   { key: 'today', label: 'Today' },
@@ -136,6 +138,92 @@ export default function WorkspaceView({
   const [helpOpen, setHelpOpen] = useState(false);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
+
+  // ── Quick comm prompt ─────────────────────────────────────────────────────
+  // When a station-linked task is completed, we offer to log a comm against
+  // that station without the user navigating to the Comms tab. `commPrompt`
+  // holds the resolved context for the transient prompt, or null when hidden.
+  const [commPrompt, setCommPrompt] = useState(null);
+
+  // Resolve which project / deliverable / station a task belongs to, by its
+  // stationId. Returns null if the task has no station or it can't be found.
+  const resolveStationForTask = (task) => {
+    if (!task?.stationId) return null;
+    for (const p of projects || []) {
+      for (const d of p.deliverables || []) {
+        const s = (d.stations || []).find((x) => x.id === task.stationId);
+        if (s) return { project: p, deliverable: d, station: s };
+      }
+    }
+    return null;
+  };
+
+  // Wrapped toggle: runs the real toggleDone, then — if the task was just
+  // COMPLETED (not un-completed) and is linked to a resolvable station —
+  // surfaces the quick comm prompt. Every panel already calls onToggleDone,
+  // so intercepting here covers Tasks, Today, Plan and the priority banner
+  // without touching any of them.
+  const handleToggleDone = (taskId) => {
+    const task = (allTasks || []).find((t) => t.id === taskId);
+    const wasDone = !!task?.done;
+    toggleDone(taskId);
+    // Only prompt on completion, and only for station-linked tasks.
+    if (task && !wasDone) {
+      const ctx = resolveStationForTask(task);
+      if (ctx) {
+        setCommPrompt({
+          taskId,
+          taskTitle: task.title || '(untitled)',
+          projectId: ctx.project.id,
+          stationId: ctx.station.id,
+          pills: ctx.station.commPills || DEFAULT_COMM_PILLS,
+        });
+      }
+    }
+  };
+
+  // Append a comm to the prompt's station, then dismiss the prompt.
+  const logCommFromPrompt = (pill) => {
+    if (!commPrompt) return;
+    const project = (projects || []).find((p) => p.id === commPrompt.projectId);
+    if (!project) {
+      setCommPrompt(null);
+      return;
+    }
+    const newComm = {
+      id: 'comm_' + Math.random().toString(36).slice(2, 9),
+      type: pill.label,
+      color: pill.color,
+      needsReply: pill.needsReply ?? true,
+      sentAt: Date.now(),
+      replyReceived: false,
+      replyAt: null,
+      // Match CommsTab: a needs-reply comm defaults to a reply due in 3
+      // business days so it surfaces in Today / Plan.
+      expectReplyBy: (pill.needsReply ?? true)
+        ? (() => {
+            const d = new Date();
+            let added = 0;
+            while (added < 3) {
+              d.setDate(d.getDate() + 1);
+              const day = d.getDay();
+              if (day !== 0 && day !== 6) added++;
+            }
+            return d.toISOString().slice(0, 10);
+          })()
+        : null,
+    };
+    const deliverables = (project.deliverables || []).map((d) => ({
+      ...d,
+      stations: (d.stations || []).map((s) =>
+        s.id === commPrompt.stationId
+          ? { ...s, comms: [...(s.comms || []), newComm] }
+          : s
+      ),
+    }));
+    updateProject(project.id, { deliverables });
+    setCommPrompt(null);
+  };
 
   // Check whether the current workspace is the demo
   useEffect(() => {
@@ -295,7 +383,7 @@ export default function WorkspaceView({
             onOpenPriorityModal={() => setPriorityModalOpen(true)}
             onJumpToTab={(t) => setTab(t)}
             onJumpToProject={() => setTab('projects')}
-            onToggleDone={toggleDone}
+            onToggleDone={handleToggleDone}
             runningTimer={time.runningTimer}
             onStartTimer={startTimer}
             onStopTimer={time.requestStop}
@@ -313,7 +401,7 @@ export default function WorkspaceView({
               onOpenModal={() => setPriorityModalOpen(true)}
               onDismiss={priorityApi.dismissToday}
               onClear={priorityApi.clearToday}
-              onToggleDone={toggleDone}
+              onToggleDone={handleToggleDone}
             />
             <TaskList
               tasks={allTasks}
@@ -329,7 +417,7 @@ export default function WorkspaceView({
               onAdd={addTask}
               onUpdate={updateTask}
               onDelete={deleteTask}
-              onToggleDone={toggleDone}
+              onToggleDone={handleToggleDone}
               onAssign={assignToMember}
               onUnassign={unassignFromMember}
               onStartTimer={startTimer}
@@ -343,7 +431,7 @@ export default function WorkspaceView({
             projects={projects}
             loading={tasksLoading}
             onUpdateTask={updateTask}
-            onToggleDone={toggleDone}
+            onToggleDone={handleToggleDone}
             blocks={time.blocks}
             currentUserId={time.currentUserId}
             runningTimer={time.runningTimer}
@@ -504,6 +592,16 @@ export default function WorkspaceView({
 
       {/* Help panel (? in top bar) */}
       <HelpPanel open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* Quick comm prompt — appears after completing a station-linked task */}
+      {commPrompt && (
+        <QuickCommPrompt
+          taskTitle={commPrompt.taskTitle}
+          pills={commPrompt.pills}
+          onPick={logCommFromPrompt}
+          onDismiss={() => setCommPrompt(null)}
+        />
+      )}
     </div>
   );
 }

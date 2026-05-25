@@ -12,6 +12,7 @@ import { seedDemoWorkspace, isDemoWorkspace } from '../lib/demoSeed.js';
 import DemoWorkspaceBanner from './DemoWorkspaceBanner.jsx';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
+import TrackTab from './projects/track/TrackTab.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
 import Notepad from './notes/Notepad.jsx';
 import FloatingNotepad from './notes/FloatingNotepad.jsx';
@@ -35,6 +36,7 @@ const TABS = [
   { key: 'tasks', label: 'Tasks' },
   { key: 'plan', label: 'Plan' },
   { key: 'projects', label: 'Projects' },
+  { key: 'track', label: '🚂 Track' },
   { key: 'status', label: 'Status' },
   { key: 'notes', label: 'Notes' },
   { key: 'notepad', label: 'Notepad' },
@@ -492,6 +494,25 @@ export default function WorkspaceView({
             onAssignTask={assignToMember}
           />
         )}
+        {tab === 'track' && (
+          <TrackTab
+            projects={projects}
+            allProjects={projects}
+            tasks={allTasks}
+            members={members}
+            workspaceId={workspaceId}
+            stationTemplates={settings.stationTemplates || []}
+            categories={settings.categories}
+            priorities={settings.priorities}
+            statuses={settings.statuses}
+            onUpdateProject={updateProject}
+            onAddTask={addTask}
+            onUpdateTask={updateTask}
+            onToggleTask={handleToggleDone}
+            onDeleteTask={deleteTask}
+            onAssignTask={assignToMember}
+          />
+        )}
         {tab === 'status' && (
           <StatusRoundsPanel
             rounds={statusRounds}
@@ -724,3 +745,4 @@ const styles = {
   bodyRow: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
   body: { flex: 1, display: 'flex', minHeight: 0 },
 };
+

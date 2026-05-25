@@ -257,9 +257,11 @@ export default function TrackView({
               <div style={styles.headNumber}>#{project.number}</div>
             )}
           </div>
-          <button onClick={onClose} style={styles.closeBtn} title="Close Track">
-            ×
-          </button>
+          {onClose && (
+            <button onClick={onClose} style={styles.closeBtn} title="Close Track">
+              ×
+            </button>
+          )}
         </div>
         <div style={styles.headStats}>
           <span style={styles.stat}>
@@ -743,3 +745,4 @@ const styles = {
     marginTop: 4,
   },
 };
+

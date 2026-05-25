@@ -32,6 +32,7 @@ export default function TodayView({
   onOpenPriorityModal,
   onJumpToTab,
   onJumpToProject,
+  onJumpToTrack,
   onToggleDone,
   runningTimer,
   onStartTimer,
@@ -194,6 +195,7 @@ const totalItems =
                   runningTimer={runningTimer}
                   onStartTimer={onStartTimer}
                   onStopTimer={onStopTimer}
+                  onJumpToTrack={onJumpToTrack}
                   isPrimary
                 />
                 {stretchTasks.map((t) => (
@@ -205,6 +207,7 @@ const totalItems =
                     runningTimer={runningTimer}
                     onStartTimer={onStartTimer}
                     onStopTimer={onStopTimer}
+                    onJumpToTrack={onJumpToTrack}
                   />
                 ))}
               </div>
@@ -229,6 +232,7 @@ const totalItems =
                 runningTimer={runningTimer}
                 onStartTimer={onStartTimer}
                 onStopTimer={onStopTimer}
+                onJumpToTrack={onJumpToTrack}
                 showDate
               />
             ))}
@@ -257,6 +261,7 @@ const totalItems =
                 runningTimer={runningTimer}
                 onStartTimer={onStartTimer}
                 onStopTimer={onStopTimer}
+                onJumpToTrack={onJumpToTrack}
               />
             ))}
           </Section>
@@ -567,7 +572,7 @@ function ProjectStatusSection({ items, open, onToggle, onJumpToProject }) {
 }
 
 // ── Mini row components ─────────────────────────────────────────────────────
-function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, onStartTimer, onStopTimer }) {
+function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, onStartTimer, onStopTimer, onJumpToTrack }) {
   const projColor = projectColor(task.project, projects);
   return (
     <div style={{ ...styles.miniRow, borderLeft: `3px solid ${projColor}` }}>
@@ -592,6 +597,15 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
           {task.project}
         </span>
       )}
+      {task.stationId && onJumpToTrack && (
+        <button
+          onClick={() => onJumpToTrack(task)}
+          style={styles.trackJumpBtn}
+          title="Open in Track"
+        >
+          🚂
+        </button>
+      )}
       <TimerButton
         task={task}
         runningTimer={runningTimer}
@@ -602,7 +616,7 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
   );
 }
 
-function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onStartTimer, onStopTimer }) {
+function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onStartTimer, onStopTimer, onJumpToTrack }) {
   const projColor = projectColor(task.project, projects);
   return (
     <div style={{ ...styles.miniRow, borderLeft: `3px solid ${projColor}` }}>
@@ -630,6 +644,15 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
         <span style={{ ...styles.miniChip, color: projColor }}>
           {task.project}
         </span>
+      )}
+      {task.stationId && onJumpToTrack && (
+        <button
+          onClick={() => onJumpToTrack(task)}
+          style={styles.trackJumpBtn}
+          title="Open in Track"
+        >
+          🚂
+        </button>
       )}
       <TimerButton
         task={task}
@@ -785,6 +808,17 @@ const styles = {
     fontSize: 10,
     fontWeight: 500,
     flexShrink: 0,
+  },
+  trackJumpBtn: {
+    flexShrink: 0,
+    width: 22,
+    height: 22,
+    padding: 0,
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 6,
+    fontSize: 12,
+    cursor: 'pointer',
   },
   jumpInline: {
     padding: '2px 8px',
@@ -1024,3 +1058,4 @@ const projectStatusStyles = {
     flexShrink: 0,
   },
 };
+

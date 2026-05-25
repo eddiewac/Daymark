@@ -17,6 +17,7 @@ export default function TaskRow({
   onUnassign,
   onStartTimer,
   onStopTimer,
+  onJumpToTrack,
 }) {
   const [showAssign, setShowAssign] = useState(false);
   const [confirmDone, setConfirmDone] = useState(null); // null | { assigneeLabel }
@@ -261,6 +262,17 @@ export default function TaskRow({
             )}
           </div>
         )}
+        {/* Jump to this task's station in Track — only for station-linked
+            tasks, since a standalone task has nowhere to jump to. */}
+        {task.stationId && onJumpToTrack && (
+          <button
+            onClick={() => onJumpToTrack(task)}
+            style={styles.actionBtn}
+            title="Open in Track"
+          >
+            🚂
+          </button>
+        )}
         <button onClick={() => onEdit?.(task)} style={styles.actionBtn} title="Edit">
           ✎
         </button>
@@ -464,3 +476,4 @@ const styles = {
     cursor: 'pointer',
   },
 };
+

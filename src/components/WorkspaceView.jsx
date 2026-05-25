@@ -158,6 +158,22 @@ export default function WorkspaceView({
     } catch {}
   };
 
+  // ── Jump to Track ─────────────────────────────────────────────────────────
+  // A task can link directly through to its project's Track view. When a task
+  // row triggers this, we record the target project id and switch to the
+  // Track tab; TrackTab picks the project up via its initialProjectId prop.
+  const [trackTargetProjectId, setTrackTargetProjectId] = useState(null);
+
+  const jumpToTrack = (task) => {
+    if (!task) return;
+    // Resolve the task's project by name (tasks store project as a name).
+    const proj = (projects || []).find((p) => p.name === task.project);
+    if (proj) {
+      setTrackTargetProjectId(proj.id);
+      setTab('track');
+    }
+  };
+
   // ── Quick comm prompt ─────────────────────────────────────────────────────
   // When a station-linked task is completed, we offer to log a comm against
   // that station without the user navigating to the Comms tab. `commPrompt`
@@ -415,6 +431,7 @@ export default function WorkspaceView({
             onOpenPriorityModal={() => setPriorityModalOpen(true)}
             onJumpToTab={(t) => setTab(t)}
             onJumpToProject={() => setTab('projects')}
+            onJumpToTrack={jumpToTrack}
             onToggleDone={handleToggleDone}
             runningTimer={time.runningTimer}
             onStartTimer={startTimer}
@@ -450,6 +467,7 @@ export default function WorkspaceView({
               onUpdate={updateTask}
               onDelete={deleteTask}
               onToggleDone={handleToggleDone}
+              onJumpToTrack={jumpToTrack}
               onAssign={assignToMember}
               onUnassign={unassignFromMember}
               onStartTimer={startTimer}
@@ -464,6 +482,7 @@ export default function WorkspaceView({
             loading={tasksLoading}
             onUpdateTask={updateTask}
             onToggleDone={handleToggleDone}
+            onJumpToTrack={jumpToTrack}
             blocks={time.blocks}
             currentUserId={time.currentUserId}
             runningTimer={time.runningTimer}
@@ -501,6 +520,7 @@ export default function WorkspaceView({
             tasks={allTasks}
             members={members}
             workspaceId={workspaceId}
+            initialProjectId={trackTargetProjectId}
             stationTemplates={settings.stationTemplates || []}
             categories={settings.categories}
             priorities={settings.priorities}

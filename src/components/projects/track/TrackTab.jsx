@@ -16,6 +16,7 @@ export default function TrackTab({
   tasks,
   members,
   workspaceId,
+  initialProjectId,
   stationTemplates,
   categories,
   priorities,
@@ -30,13 +31,28 @@ export default function TrackTab({
   const activeProjects = (projects || []).filter((p) => !p.archived);
 
   // Restore last-picked project if it still exists, else first project.
+  // An incoming initialProjectId (a "jump to Track" from a task) takes
+  // precedence — see the effect below.
   const [selectedId, setSelectedId] = useState(() => {
+    if (initialProjectId && activeProjects.some((p) => p.id === initialProjectId)) {
+      return initialProjectId;
+    }
     try {
       const stored = localStorage.getItem(LAST_PROJECT_KEY);
       if (stored && activeProjects.some((p) => p.id === stored)) return stored;
     } catch {}
     return activeProjects[0]?.id || null;
   });
+
+  // When a task elsewhere jumps to Track, initialProjectId changes — honour it.
+  useEffect(() => {
+    if (initialProjectId && activeProjects.some((p) => p.id === initialProjectId)) {
+      setSelectedId(initialProjectId);
+      try {
+        localStorage.setItem(LAST_PROJECT_KEY, initialProjectId);
+      } catch {}
+    }
+  }, [initialProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // If the selected project disappears (deleted / switched workspace),
   // fall back to the first available one.

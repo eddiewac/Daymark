@@ -39,6 +39,7 @@ export default function TaskList({
   onUnassign,
   onStartTimer,
   onStopTimer,
+  onJumpToTrack,
 }) {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -233,6 +234,7 @@ export default function TaskList({
             onUnassign={onUnassign}
             onStartTimer={onStartTimer}
             onStopTimer={onStopTimer}
+            onJumpToTrack={onJumpToTrack}
           />
         ) : viewMode === 'kanban' ? (
           <KanbanView
@@ -267,7 +269,7 @@ export default function TaskList({
 function ListView({
   tasks, compact, projects, members, workspaceId, currentUserId,
   runningTimer, onToggleDone, onEdit, onDelete, onAssign, onUnassign,
-  onStartTimer, onStopTimer,
+  onStartTimer, onStopTimer, onJumpToTrack,
 }) {
   if (compact) {
     return (
@@ -307,6 +309,7 @@ function ListView({
           onUnassign={onUnassign}
           onStartTimer={onStartTimer}
           onStopTimer={onStopTimer}
+          onJumpToTrack={onJumpToTrack}
         />
       ))}
     </>

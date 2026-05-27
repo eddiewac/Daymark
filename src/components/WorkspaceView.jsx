@@ -495,6 +495,7 @@ export default function WorkspaceView({
             projects={projects}
             loading={projectsLoading}
             tasks={allTasks}
+            blocks={time.blocks}
             congresses={congresses}
             members={members}
             workspaceId={workspaceId}
@@ -765,4 +766,3 @@ const styles = {
   bodyRow: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
   body: { flex: 1, display: 'flex', minHeight: 0 },
 };
-

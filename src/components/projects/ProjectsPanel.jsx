@@ -9,6 +9,7 @@ export default function ProjectsPanel({
   projects,
   loading,
   tasks,
+  blocks,
   congresses,
   members,
   workspaceId,
@@ -30,17 +31,7 @@ export default function ProjectsPanel({
   const [trackingId, setTrackingId] = useState(null); // when set, full-screen track mode
   const [view, setView] = useState('grid'); // grid | gantt | track
   const [search, setSearch] = useState('');
-const [groupBy, setGroupByState] = useState(() => {
-    try {
-      return localStorage.getItem('daymark-projects-groupby') || 'none';
-    } catch {
-      return 'none';
-    }
-  }); // none | group
-  const setGroupBy = (v) => {
-    setGroupByState(v);
-    try { localStorage.setItem('daymark-projects-groupby', v); } catch {}
-  };
+  const [groupBy, setGroupBy] = useState('none'); // none | group
   const [collapsedGroups, setCollapsedGroups] = useState({});
 
   const hasGroups = (projectGroups || []).length > 0;
@@ -239,6 +230,7 @@ const [groupBy, setGroupByState] = useState(() => {
               allProjects={projects}
               projectGroups={projectGroups}
               tasks={tasks}
+              blocks={blocks}
               congresses={congresses}
               stationTemplates={stationTemplates}
               onUpdate={onUpdate}
@@ -395,4 +387,3 @@ const styles = {
     flexDirection: 'column',
   },
 };
-

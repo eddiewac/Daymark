@@ -76,6 +76,27 @@ export default function SettingsPanel({
               onChange={(projectGroups) => onUpdate({ projectGroups })}
             />
 
+            <section style={styles.section}>
+              <div style={styles.sectionTitle}>Daily capacity hours</div>
+              <div style={styles.sectionHint}>
+                A typical working day's hours. Used by the capacity email and
+                the Resource view's over-capacity flag. 7.5 is a good default;
+                set lower for part-time, higher for longer days.
+              </div>
+              <input
+                type="number"
+                min="0.5"
+                max="24"
+                step="0.5"
+                value={settings.dailyHours ?? 7.5}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v) && v > 0) onUpdate({ dailyHours: v });
+                }}
+                style={{ ...styles.itemInput, maxWidth: 120 }}
+              />
+            </section>
+
             <StationTemplatesEditor
               templates={settings.stationTemplates || []}
               onChange={(stationTemplates) => onUpdate({ stationTemplates })}

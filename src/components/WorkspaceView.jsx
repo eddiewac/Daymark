@@ -13,6 +13,7 @@ import DemoWorkspaceBanner from './DemoWorkspaceBanner.jsx';
 import TaskList from './tasks/TaskList.jsx';
 import ProjectsPanel from './projects/ProjectsPanel.jsx';
 import TrackTab from './projects/track/TrackTab.jsx';
+import ResourceView from './resource/ResourceView.jsx';
 import NotesPanel from './notes/NotesPanel.jsx';
 import Notepad from './notes/Notepad.jsx';
 import FloatingNotepad from './notes/FloatingNotepad.jsx';
@@ -37,6 +38,7 @@ const TABS = [
   { key: 'plan', label: 'Plan' },
   { key: 'projects', label: 'Projects' },
   { key: 'track', label: '🚂 Track' },
+  { key: 'resource', label: '👥 Resource' },
   { key: 'status', label: 'Status' },
   { key: 'notes', label: 'Notes' },
   { key: 'notepad', label: 'Notepad' },
@@ -533,6 +535,9 @@ export default function WorkspaceView({
             onDeleteTask={deleteTask}
             onAssignTask={assignToMember}
           />
+        )}
+        {tab === 'resource' && (
+          <ResourceView dailyHours={settings.dailyHours ?? 7.5} />
         )}
         {tab === 'status' && (
           <StatusRoundsPanel

@@ -30,6 +30,9 @@ export const DEFAULT_SETTINGS = {
   stationTemplates: DEFAULT_STATION_TEMPLATES,
   tagChecklists: DEFAULT_TAG_CHECKLISTS,
   projectGroups: DEFAULT_PROJECT_GROUPS,
+  // Default working hours per day, used by the capacity email and the
+  // Resource view's over-capacity flag. Each user/workspace can change it.
+  dailyHours: 7.5,
 };
 
 // Build the storage key. Personal workspace gets one key per user; team

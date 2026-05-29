@@ -229,6 +229,7 @@ export default function TaskList({
             runningTimer={runningTimer}
             onToggleDone={onToggleDone}
             onEdit={startEdit}
+            onUpdate={onUpdate}
             onDelete={onDelete}
             onAssign={onAssign}
             onUnassign={onUnassign}
@@ -268,7 +269,7 @@ export default function TaskList({
 // ── ListView ─────────────────────────────────────────────────────────────────
 function ListView({
   tasks, compact, projects, members, workspaceId, currentUserId,
-  runningTimer, onToggleDone, onEdit, onDelete, onAssign, onUnassign,
+  runningTimer, onToggleDone, onEdit, onUpdate, onDelete, onAssign, onUnassign,
   onStartTimer, onStopTimer, onJumpToTrack,
 }) {
   if (compact) {
@@ -304,6 +305,7 @@ function ListView({
           runningTimer={runningTimer}
           onToggleDone={onToggleDone}
           onEdit={onEdit}
+          onUpdate={onUpdate}
           onDelete={onDelete}
           onAssign={onAssign}
           onUnassign={onUnassign}
@@ -1001,3 +1003,4 @@ const styles = {
     color: 'var(--color-text-secondary)',
   },
 };
+

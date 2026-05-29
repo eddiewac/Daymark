@@ -12,6 +12,7 @@ export default function TaskRow({
   runningTimer,
   onToggleDone,
   onEdit,
+  onUpdate,
   onDelete,
   onAssign,
   onUnassign,
@@ -21,6 +22,20 @@ export default function TaskRow({
 }) {
   const [showAssign, setShowAssign] = useState(false);
   const [confirmDone, setConfirmDone] = useState(null); // null | { assigneeLabel }
+  // Local draft of the inline estimate input — saved on blur via onUpdate.
+  const [estDraft, setEstDraft] = useState(
+    task.estimate != null ? String(task.estimate) : ''
+  );
+  const commitEstimate = () => {
+    if (!onUpdate) return;
+    const raw = estDraft;
+    const next =
+      raw === '' || raw == null ? null : Number(raw);
+    const cleaned = Number.isFinite(next) && next >= 0 ? next : null;
+    const current = task.estimate ?? null;
+    if (cleaned === current) return; // nothing changed
+    onUpdate(task.id, { estimate: cleaned });
+  };
 
   const priColor = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.Medium;
   const projColor = projectColor(task.project, projects);
@@ -262,6 +277,29 @@ export default function TaskRow({
             )}
           </div>
         )}
+        {/* Inline estimate input — quick hours entry without opening the
+            full task form. Saves on blur. Hidden if there's no onUpdate
+            (e.g. an assigned task in a workspace we can't write to). */}
+        {onUpdate && !isAssigned && (
+          <input
+            type="number"
+            step="0.25"
+            min="0"
+            value={estDraft}
+            onChange={(e) => setEstDraft(e.target.value)}
+            onBlur={commitEstimate}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') {
+                setEstDraft(task.estimate != null ? String(task.estimate) : '');
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="h"
+            title="Estimated hours"
+            style={styles.estInput}
+          />
+        )}
         {/* Jump to this task's station in Track — only for station-linked
             tasks, since a standalone task has nowhere to jump to. */}
         {task.stationId && onJumpToTrack && (
@@ -381,6 +419,18 @@ const styles = {
     fontSize: 12,
     color: 'var(--color-text-secondary)',
   },
+  estInput: {
+    width: 44,
+    height: 22,
+    padding: '0 6px',
+    fontSize: 11,
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 6,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+    textAlign: 'right',
+    outline: 'none',
+  },
   actionBtnDanger: {
     width: 24,
     height: 24,
@@ -476,4 +526,3 @@ const styles = {
     cursor: 'pointer',
   },
 };
-

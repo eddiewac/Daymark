@@ -12,6 +12,7 @@ const blankForm = {
   project: '',
   status: 'To do',
   dueDate: '',
+  estimate: '',
   tags: [],
   recurring: 'none',
   taskNumber: '',
@@ -51,9 +52,16 @@ export default function TaskForm({
       hoursRaw === '' || hoursRaw == null
         ? null
         : Number(hoursRaw);
+    // Same coercion for estimate
+    const estRaw = form.estimate;
+    const estNum =
+      estRaw === '' || estRaw == null
+        ? null
+        : Number(estRaw);
     onSave({
       ...form,
       title: form.title.trim(),
+      estimate: Number.isFinite(estNum) ? estNum : null,
       outOfScopeHours: Number.isFinite(hoursNum) ? hoursNum : null,
       outOfScopeNotes: (form.outOfScopeNotes || '').trim(),
     });
@@ -127,6 +135,17 @@ export default function TaskForm({
           onChange={(e) => set({ dueDate: e.target.value })}
           style={styles.select}
           title="Due date"
+        />
+
+        <input
+          type="number"
+          step="0.25"
+          min="0"
+          value={form.estimate ?? ''}
+          onChange={(e) => set({ estimate: e.target.value })}
+          placeholder="Estimate (h)"
+          style={styles.select}
+          title="Estimated hours for this task"
         />
 
         <select
@@ -370,3 +389,4 @@ const oosStyles = {
     outline: 'none',
   },
 };
+

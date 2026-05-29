@@ -76,8 +76,11 @@ export async function loadMyShares() {
   return { sharingWithMe, pendingSent, pendingReceived };
 }
 
-// Accept an invite addressed to me: stamp my id + name, flip to accepted.
-export async function acceptShare(shareId, myDisplayName) {
+// Accept an invite addressed to me: stamp my id + name, flip to accepted,
+// and record what I chose to share.
+//   shareAll = true  → all my workspaces (now and future)
+//   shareAll = false → only workspaces marked true in `visibility`
+export async function acceptShare(shareId, { myDisplayName, shareAll, visibility } = {}) {
   const user = await getCurrentUser();
   if (!user) return { error: 'not signed in' };
 
@@ -88,6 +91,8 @@ export async function acceptShare(shareId, myDisplayName) {
       sharer_name: (myDisplayName || '').trim() || null,
       sharer_email: user.email,
       status: 'accepted',
+      share_all: !!shareAll,
+      visibility: shareAll ? {} : (visibility || {}),
       accepted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -95,6 +100,24 @@ export async function acceptShare(shareId, myDisplayName) {
 
   if (error) {
     console.error('acceptShare:', error);
+    return { error: error.message };
+  }
+  return { ok: true };
+}
+
+// Update what an already-accepted share exposes (sharer changes their mind).
+export async function updateShareVisibility(shareId, { shareAll, visibility } = {}) {
+  const { error } = await supabase
+    .from('load_shares')
+    .update({
+      share_all: !!shareAll,
+      visibility: shareAll ? {} : (visibility || {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', shareId);
+
+  if (error) {
+    console.error('updateShareVisibility:', error);
     return { error: error.message };
   }
   return { ok: true };

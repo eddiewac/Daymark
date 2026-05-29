@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useResourceData } from '../../hooks/useResourceData.js';
 import { localDateStr } from '../../lib/utils.js';
+import SharingPanel from './SharingPanel.jsx';
 
 // ── ResourceView ────────────────────────────────────────────────────────────
 //
@@ -41,6 +42,7 @@ export default function ResourceView({ dailyHours = 7.5, myName }) {
   const { entries, loading, error, refresh } = useResourceData();
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [openDayKey, setOpenDayKey] = useState(null);
+  const [showSharing, setShowSharing] = useState(false);
 
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const dayKeys = useMemo(() => days.map((d) => localDateStr(d)), [days]);
@@ -125,8 +127,23 @@ export default function ResourceView({ dailyHours = 7.5, myName }) {
           <button onClick={goThis} style={styles.navBtn}>This week</button>
           <button onClick={goNext} style={styles.navBtn}>›</button>
           <button onClick={refresh} style={styles.navBtn} title="Refresh">↻</button>
+          <button
+            onClick={() => setShowSharing((v) => !v)}
+            style={{
+              ...styles.navBtn,
+              ...(showSharing
+                ? { background: 'var(--accent-soft)', color: 'var(--accent)', borderColor: 'var(--accent)' }
+                : {}),
+            }}
+          >
+            Sharing
+          </button>
         </div>
       </div>
+
+      {showSharing && (
+        <SharingPanel myName={myName} onChanged={refresh} />
+      )}
 
       <div style={styles.weekLabel}>{fmtRange(weekStart)}</div>
 

@@ -39,10 +39,12 @@ function fmtRange(monday) {
 }
 
 export default function ResourceView({ dailyHours = 7.5, myName }) {
-  const { entries, loading, error, refresh } = useResourceData();
+  const { entries, sharedTasks, sharers, loading, error, refresh } = useResourceData();
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [openDayKey, setOpenDayKey] = useState(null);
   const [showSharing, setShowSharing] = useState(false);
+  // Which shared person's day is expanded: "sharerId|dayKey" or null
+  const [openSharedCell, setOpenSharedCell] = useState(null);
 
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const dayKeys = useMemo(() => days.map((d) => localDateStr(d)), [days]);
@@ -68,6 +70,33 @@ export default function ResourceView({ dailyHours = 7.5, myName }) {
     () => dayData.reduce((sum, d) => sum + d.totalHours, 0),
     [dayData]
   );
+
+  // One row per person sharing with me. Each row computes the same per-day
+  // shape as my own row, but from that sharer's shared tasks.
+  const sharedRows = useMemo(() => {
+    return (sharers || []).map((share) => {
+      const mine = (sharedTasks || []).filter(
+        (t) => t.sharerId === share.sharer_id && !t.done
+      );
+      const perDay = dayKeys.map((key) => {
+        const dayTasks = mine.filter((t) => t.dueDate === key);
+        const totalHours = dayTasks.reduce((sum, t) => {
+          const h = Number(t.estimate);
+          return sum + (Number.isFinite(h) ? h : 0);
+        }, 0);
+        return { key, tasks: dayTasks, totalHours };
+      });
+      const weekTotal = perDay.reduce((s, d) => s + d.totalHours, 0);
+      return {
+        sharerId: share.sharer_id,
+        name:
+          (share.sharer_name && share.sharer_name.trim()) ||
+          (share.sharer_email ? share.sharer_email.split('@')[0] : 'Shared'),
+        perDay,
+        weekTotal,
+      };
+    });
+  }, [sharers, sharedTasks, dayKeys]);
 
   const goPrev = () => {
     const m = new Date(weekStart);
@@ -195,7 +224,86 @@ export default function ResourceView({ dailyHours = 7.5, myName }) {
           })}
           <div style={styles.totalCell}>{round1(weekTotal)}h</div>
         </div>
+
+        {/* One row per person sharing with me */}
+        {sharedRows.map((row) => (
+          <div key={row.sharerId} style={styles.bodyRow}>
+            <div style={styles.rowLabelCell}>
+              <span style={styles.rowName}>{row.name}</span>
+              <span style={styles.rowMeta}>{round1(row.weekTotal)}h this week</span>
+            </div>
+            {row.perDay.map((d) => {
+              const over = d.totalHours > dailyHours;
+              const cellKey = `${row.sharerId}|${d.key}`;
+              const isOpen = openSharedCell === cellKey;
+              const hasContent = d.tasks.length > 0;
+              return (
+                <button
+                  key={d.key}
+                  onClick={() => setOpenSharedCell(isOpen ? null : cellKey)}
+                  style={{
+                    ...styles.cell,
+                    ...(over ? styles.cellOver : {}),
+                    ...(isOpen ? styles.cellOpen : {}),
+                    ...(hasContent ? {} : styles.cellEmpty),
+                  }}
+                  title={hasContent ? 'Click to see tasks' : 'No assigned tasks'}
+                >
+                  <div style={styles.cellHours}>
+                    {hasContent ? `${round1(d.totalHours)}h` : '—'}
+                  </div>
+                  {over && <div style={styles.cellFlag}>⚠ over</div>}
+                </button>
+              );
+            })}
+            <div style={styles.totalCell}>{round1(row.weekTotal)}h</div>
+          </div>
+        ))}
       </div>
+
+      {/* Detail drawer for a shared person's clicked day */}
+      {openSharedCell && (() => {
+        const [sid, dkey] = openSharedCell.split('|');
+        const row = sharedRows.find((r) => r.sharerId === sid);
+        const day = row?.perDay.find((d) => d.key === dkey);
+        if (!row || !day) return null;
+        return (
+          <div style={styles.detail}>
+            <div style={styles.detailHead}>
+              <span style={styles.detailTitle}>
+                {row.name} —{' '}
+                {(() => {
+                  const d = new Date(dkey + 'T12:00:00');
+                  return d.toLocaleDateString(undefined, {
+                    weekday: 'long', day: 'numeric', month: 'long',
+                  });
+                })()}
+                {' — '}{round1(day.totalHours)}h
+              </span>
+              <button onClick={() => setOpenSharedCell(null)} style={styles.detailClose}>×</button>
+            </div>
+            {day.tasks.length === 0 ? (
+              <div style={styles.detailEmpty}>No assigned tasks on this day.</div>
+            ) : (
+              <div style={styles.taskList}>
+                {day.tasks.map((t) => (
+                  <div key={t.taskId} style={styles.taskRow}>
+                    <div style={styles.taskMain}>
+                      <div style={styles.taskTitle}>{t.title || '(untitled)'}</div>
+                      <div style={styles.taskMeta}>
+                        {t.project && <span style={styles.taskProject}>{t.project}</span>}
+                      </div>
+                    </div>
+                    <div style={styles.taskHours}>
+                      {Number.isFinite(Number(t.estimate)) ? `${round1(Number(t.estimate))}h` : 'TBC'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Detail drawer for the clicked day */}
       {openDay && (

@@ -1,15 +1,22 @@
 import { useEffect, useState, useCallback } from 'react';
-import { loadMyResourceData } from '../lib/resource.js';
+import { loadMyResourceData, loadSharedResourceData } from '../lib/resource.js';
+import { loadMyShares } from '../lib/loadShares.js';
 
 // ── useResourceData ─────────────────────────────────────────────────────────
 //
-// Loads cross-workspace task data for the Resource view. No realtime
-// subscription in Stage 1 — opening the tab fetches fresh; a refresh action
-// re-pulls on demand. We can add realtime later if it's worth it.
+// Loads cross-workspace task data for the Resource view:
+//   • entries      — my own assigned work across my workspaces
+//   • sharedTasks  — work belonging to people who've shared with me (via the
+//                    get_shared_load() security-definer function)
+//   • sharers      — the accepted shares (for display names / row labels)
+//
+// No realtime subscription yet — opening the tab fetches fresh; refresh re-pulls.
 
 export function useResourceData() {
   const [entries, setEntries] = useState([]);
   const [workspaces, setWorkspaces] = useState([]);
+  const [sharedTasks, setSharedTasks] = useState([]);
+  const [sharers, setSharers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -17,9 +24,15 @@ export function useResourceData() {
     setLoading(true);
     setError(null);
     try {
-      const result = await loadMyResourceData();
-      setEntries(result.entries);
-      setWorkspaces(result.workspaces);
+      const [mine, shared, shares] = await Promise.all([
+        loadMyResourceData(),
+        loadSharedResourceData(),
+        loadMyShares(),
+      ]);
+      setEntries(mine.entries);
+      setWorkspaces(mine.workspaces);
+      setSharedTasks(shared);
+      setSharers(shares.sharingWithMe || []);
     } catch (e) {
       console.error('useResourceData:', e);
       setError(e);
@@ -32,10 +45,16 @@ export function useResourceData() {
     let cancelled = false;
     (async () => {
       try {
-        const result = await loadMyResourceData();
+        const [mine, shared, shares] = await Promise.all([
+          loadMyResourceData(),
+          loadSharedResourceData(),
+          loadMyShares(),
+        ]);
         if (cancelled) return;
-        setEntries(result.entries);
-        setWorkspaces(result.workspaces);
+        setEntries(mine.entries);
+        setWorkspaces(mine.workspaces);
+        setSharedTasks(shared);
+        setSharers(shares.sharingWithMe || []);
       } catch (e) {
         if (!cancelled) setError(e);
       } finally {
@@ -47,5 +66,13 @@ export function useResourceData() {
     };
   }, []);
 
-  return { entries, workspaces, loading, error, refresh: fetchAll };
+  return {
+    entries,
+    workspaces,
+    sharedTasks,
+    sharers,
+    loading,
+    error,
+    refresh: fetchAll,
+  };
 }

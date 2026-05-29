@@ -1,6 +1,6 @@
 import { loadWorkspaces } from './workspaces.js';
 import { loadTasks, loadAssignedTasks } from './tasks.js';
-import { getCurrentUser } from './supabase.js';
+import { getCurrentUser, supabase } from './supabase.js';
 
 // ── Cross-workspace resource data ───────────────────────────────────────────
 //
@@ -74,4 +74,35 @@ export async function loadMyResourceData() {
     entries: [...memberEntries, ...assignedEntries, ...personalEntries],
     workspaces,
   };
+}
+
+// ── Shared load (other people who've shared their workload with me) ──────────
+//
+// Calls the security-definer function get_shared_load(), which returns tasks
+// assigned to people who've accepted a share with the current user, scoped to
+// the workspaces they chose to share. The function enforces all the gating;
+// here we just shape the rows for the grid.
+//
+// Returns an array of:
+//   { sharerId, taskId, workspaceId, title, project, dueDate, estimate, done }
+export async function loadSharedResourceData() {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase.rpc('get_shared_load');
+  if (error) {
+    console.error('loadSharedResourceData:', error);
+    return [];
+  }
+
+  return (data || []).map((r) => ({
+    sharerId: r.sharer_id,
+    taskId: r.task_id,
+    workspaceId: r.workspace_id,
+    title: r.title,
+    project: r.project,
+    dueDate: r.due_date,
+    estimate: r.estimate == null ? null : Number(r.estimate),
+    done: r.done,
+  }));
 }

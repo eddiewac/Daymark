@@ -5,6 +5,7 @@ import {
   acceptShare,
   declineShare,
   revokeShare,
+  updateShareVisibility,
 } from '../../lib/loadShares.js';
 import { loadWorkspaces } from '../../lib/workspaces.js';
 import { displayName } from '../../lib/userPrefs.js';
@@ -24,6 +25,7 @@ export default function SharingPanel({ myName, onChanged }) {
     sharingWithMe: [],
     pendingSent: [],
     pendingReceived: [],
+    myActiveShares: [],
   });
   const [workspaces, setWorkspaces] = useState([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -31,6 +33,8 @@ export default function SharingPanel({ myName, onChanged }) {
   const [msg, setMsg] = useState(null);
   // Which received-invite is mid-accept (showing the workspace choice), if any
   const [acceptingId, setAcceptingId] = useState(null);
+  // Which of my active shares is being edited (showing the workspace choice)
+  const [editingShareId, setEditingShareId] = useState(null);
 
   const refresh = useCallback(async () => {
     const [s, ws] = await Promise.all([loadMyShares(), loadWorkspaces()]);
@@ -162,6 +166,56 @@ export default function SharingPanel({ myName, onChanged }) {
         </section>
       )}
 
+      {/* ── People I'm sharing my load with (I control these) ── */}
+      {shares.myActiveShares.length > 0 && (
+        <section style={styles.section}>
+          <div style={styles.sectionTitle}>You're sharing with</div>
+          {shares.myActiveShares.map((s) => (
+            <div key={s.id} style={styles.shareItem}>
+              <div style={styles.row}>
+                <span style={styles.rowName}>
+                  {displayName({ email: s.viewer_email })}
+                  <span style={styles.scopeTag}>
+                    {s.share_all
+                      ? 'all workspaces'
+                      : `${Object.values(s.visibility || {}).filter(Boolean).length} workspace(s)`}
+                  </span>
+                </span>
+                <div style={styles.btnRow}>
+                  <button
+                    style={styles.ghostBtn}
+                    onClick={() =>
+                      setEditingShareId(editingShareId === s.id ? null : s.id)
+                    }
+                  >
+                    {editingShareId === s.id ? 'Close' : 'Edit'}
+                  </button>
+                  <button style={styles.ghostBtn} onClick={() => handleRevoke(s.id)}>
+                    Stop
+                  </button>
+                </div>
+              </div>
+              {editingShareId === s.id && (
+                <AcceptChoice
+                  workspaces={workspaces}
+                  initialShareAll={s.share_all}
+                  initialVisibility={s.visibility || {}}
+                  confirmLabel="Save"
+                  onCancel={() => setEditingShareId(null)}
+                  onConfirm={async ({ shareAll, visibility }) => {
+                    await updateShareVisibility(s.id, { shareAll, visibility });
+                    setEditingShareId(null);
+                    notify('Updated what you share.');
+                    refresh();
+                    onChanged && onChanged();
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </section>
+      )}
+
       {/* ── Invites I've sent, not yet accepted ── */}
       {shares.pendingSent.length > 0 && (
         <section style={styles.section}>
@@ -183,10 +237,17 @@ export default function SharingPanel({ myName, onChanged }) {
   );
 }
 
-// The per-workspace choice shown when accepting an invite.
-function AcceptChoice({ workspaces, onConfirm, onCancel }) {
-  const [mode, setMode] = useState('all'); // 'all' | 'choose'
-  const [selected, setSelected] = useState({}); // { wsId: true }
+// The per-workspace choice shown when accepting an invite or editing a share.
+function AcceptChoice({
+  workspaces,
+  onConfirm,
+  onCancel,
+  initialShareAll = true,
+  initialVisibility = {},
+  confirmLabel = 'Confirm',
+}) {
+  const [mode, setMode] = useState(initialShareAll ? 'all' : 'choose'); // 'all' | 'choose'
+  const [selected, setSelected] = useState(initialVisibility); // { wsId: true }
 
   const toggle = (id) =>
     setSelected((s) => ({ ...s, [id]: !s[id] }));
@@ -252,7 +313,7 @@ function AcceptChoice({ workspaces, onConfirm, onCancel }) {
           onClick={confirm}
           disabled={!anyChosen}
         >
-          Confirm
+          {confirmLabel}
         </button>
         <button style={styles.ghostBtn} onClick={onCancel}>
           Cancel
@@ -335,6 +396,15 @@ const styles = {
     padding: '6px 0',
   },
   rowName: { fontSize: 13, color: 'var(--color-text-primary)' },
+  shareItem: { display: 'flex', flexDirection: 'column', gap: 8 },
+  scopeTag: {
+    fontSize: 10,
+    color: 'var(--color-text-tertiary)',
+    marginLeft: 8,
+    padding: '1px 6px',
+    background: 'var(--color-background-secondary)',
+    borderRadius: 4,
+  },
   pendingTag: {
     fontSize: 10,
     color: 'var(--color-text-tertiary)',
@@ -376,3 +446,4 @@ const styles = {
     cursor: 'pointer',
   },
 };
+

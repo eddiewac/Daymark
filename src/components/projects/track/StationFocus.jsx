@@ -365,6 +365,32 @@ export default function StationFocus({
                         </span>
                       )}
 
+                      {/* Inline estimate (hours) — saves on blur. Uncontrolled
+                          so typing doesn't fight live updates; keyed by task id
+                          + current estimate so external changes reset it. */}
+                      <input
+                        key={`est-${t.id}-${t.estimate ?? ''}`}
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        defaultValue={t.estimate ?? ''}
+                        onBlur={(e) => {
+                          const raw = e.target.value;
+                          const num = raw === '' ? null : Number(raw);
+                          const cleaned =
+                            Number.isFinite(num) && num >= 0 ? num : null;
+                          if (cleaned !== (t.estimate ?? null)) {
+                            onUpdateTask(t.id, { estimate: cleaned });
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        placeholder="h"
+                        title="Estimated hours"
+                        style={enrichedStyles.estInput}
+                      />
+
                       {/* Inline date picker (popover) */}
                       <div style={{ position: 'relative' }}>
                         <button
@@ -762,6 +788,19 @@ const enrichedStyles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  estInput: {
+    width: 44,
+    height: 22,
+    padding: '0 6px',
+    fontSize: 11,
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 6,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+    textAlign: 'right',
+    outline: 'none',
+    flexShrink: 0,
   },
   datePopover: {
     position: 'absolute',

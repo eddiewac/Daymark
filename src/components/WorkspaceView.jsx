@@ -537,7 +537,10 @@ export default function WorkspaceView({
           />
         )}
         {tab === 'resource' && (
-          <ResourceView dailyHours={settings.dailyHours ?? 7.5} />
+          <ResourceView
+            dailyHours={settings.dailyHours ?? 7.5}
+            myName={userPrefs.displayName || ''}
+          />
         )}
         {tab === 'status' && (
           <StatusRoundsPanel
@@ -771,3 +774,4 @@ const styles = {
   bodyRow: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
   body: { flex: 1, display: 'flex', minHeight: 0 },
 };
+

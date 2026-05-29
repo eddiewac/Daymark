@@ -12,6 +12,7 @@ const KEY_SUFFIX = 'user-prefs-v1';
 
 export const DEFAULT_USER_PREFS = {
   showPriorityBanner: true, // show "What's today's priority?" banner each morning
+  displayName: '', // how you appear to others (e.g. in the Resource view)
 };
 
 function prefsKey(user) {
@@ -50,4 +51,15 @@ export async function saveUserPrefs(prefs) {
     },
     { onConflict: 'key' }
   );
+}
+
+// Resolve a display label for a person. Prefers an explicit display name,
+// then the local-part of an email, then a short id, then a generic fallback.
+// Used wherever a person is shown (Resource view, etc.).
+export function displayName({ name, email, id } = {}) {
+  if (name && name.trim()) return name.trim();
+  if (email && email.includes('@')) return email.split('@')[0];
+  if (email) return email;
+  if (id) return id.slice(0, 8);
+  return 'Unknown';
 }

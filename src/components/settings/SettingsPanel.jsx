@@ -111,7 +111,23 @@ export default function SettingsPanel({
             {userPrefs && onUpdateUserPrefs && (
               <>
                 <ThemeSection />
-                <SecuritySection />                
+                <SecuritySection />
+                <section style={styles.section}>
+                  <div style={styles.sectionTitle}>Your name</div>
+                  <div style={styles.sectionHint}>
+                    How you appear to others — for example in the Resource view
+                    when you share your workload. Leave blank to show your email.
+                  </div>
+                  <input
+                    type="text"
+                    value={userPrefs.displayName || ''}
+                    onChange={(e) =>
+                      onUpdateUserPrefs({ displayName: e.target.value })
+                    }
+                    placeholder="e.g. Sarah Thompson"
+                    style={{ ...styles.itemInput, maxWidth: 280 }}
+                  />
+                </section>
                 <section style={styles.section}>
                   <div style={styles.sectionTitle}>Daily triage</div>
                 <div style={styles.sectionHint}>
@@ -1126,3 +1142,4 @@ const themeStyles = {
     background: 'var(--accent)',
   },
 };
+

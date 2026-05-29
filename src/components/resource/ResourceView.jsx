@@ -37,7 +37,7 @@ function fmtRange(monday) {
   return `${monday.toLocaleDateString(undefined, opts)} – ${sunday.toLocaleDateString(undefined, opts)}`;
 }
 
-export default function ResourceView({ dailyHours = 7.5 }) {
+export default function ResourceView({ dailyHours = 7.5, myName }) {
   const { entries, loading, error, refresh } = useResourceData();
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [openDayKey, setOpenDayKey] = useState(null);
@@ -145,7 +145,7 @@ export default function ResourceView({ dailyHours = 7.5 }) {
 
         <div style={styles.bodyRow}>
           <div style={styles.rowLabelCell}>
-            <span style={styles.rowName}>You</span>
+            <span style={styles.rowName}>{myName || 'You'}</span>
             <span style={styles.rowMeta}>{round1(weekTotal)}h this week</span>
           </div>
           {dayData.map((d) => {
@@ -428,3 +428,4 @@ const styles = {
     border: '0.5px dashed var(--color-border-tertiary)',
   },
 };
+

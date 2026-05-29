@@ -72,8 +72,13 @@ export async function loadMyShares() {
       r.viewer_id !== user.id &&
       (r.sharer_email || '').toLowerCase() === myEmail
   );
+  // Accepted shares where I'm the sharer — I control these, so I can edit
+  // what they expose or stop sharing.
+  const myActiveShares = rows.filter(
+    (r) => r.sharer_id === user.id && r.status === 'accepted'
+  );
 
-  return { sharingWithMe, pendingSent, pendingReceived };
+  return { sharingWithMe, pendingSent, pendingReceived, myActiveShares };
 }
 
 // Accept an invite addressed to me: stamp my id + name, flip to accepted,

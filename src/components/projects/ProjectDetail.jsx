@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import { projectColorWithGroups } from '../../lib/projectGroups.js';
+import { projectColor } from '../../lib/constants.js';
 import { generateProjectHandoff } from '../../lib/handoff.js';
 import DeliverableEditor from './DeliverableEditor.jsx';
 
-const STATUS_OPTIONS = ['', '🟢 On track', '🟡 At risk', '🔴 Off track'];
+const STATUS_OPTIONS = ['', '🟢 On track', '🟡 At risk', '🔴 Off track', '✅ Complete'];
+const COMPLETE_STATUS = '✅ Complete';
 
 export default function ProjectDetail({
   project,
   allProjects,
-  projectGroups,
   tasks,
-  blocks,
   congresses,
   stationTemplates,
   onUpdate,
   onDelete,
+  onDeleteTask,
   onTrack,
   onClose,
 }) {
@@ -70,7 +70,7 @@ export default function ProjectDetail({
     }
   };
 
-  const color = projectColorWithGroups(project, allProjects, projectGroups);
+  const color = projectColor(project.name, allProjects);
   const projectTasks = (tasks || []).filter((t) => t.project === project.name);
   const doneCount = projectTasks.filter((t) => t.done).length;
   const totalCount = projectTasks.length;
@@ -79,34 +79,6 @@ export default function ProjectDetail({
     const h = Number(t.outOfScopeHours);
     return sum + (Number.isFinite(h) ? h : 0);
   }, 0);
-
-  // ── Project capacity ──────────────────────────────────────────────────────
-  // Budget   = the SOW hours entered on the project.
-  // Allocated = sum of estimates on this project's open (not done) tasks —
-  //             work that's planned but not yet completed.
-  // Tracked  = sum of all time tracked against this project's tasks.
-  // This gives the PM an at-a-glance "are we within the SOW" read.
-  const hoursBudget =
-    Number.isFinite(Number(project.hoursBudget)) && project.hoursBudget !== null
-      ? Number(project.hoursBudget)
-      : null;
-  const projectTaskIds = new Set(projectTasks.map((t) => t.id));
-  const allocatedHours = projectTasks
-    .filter((t) => !t.done)
-    .reduce((sum, t) => {
-      const h = Number(t.estimate);
-      return sum + (Number.isFinite(h) ? h : 0);
-    }, 0);
-  const trackedHours = (blocks || [])
-    .filter((b) => projectTaskIds.has(b.taskId))
-    .reduce((sum, b) => {
-      if (!b.start || !b.end) return sum;
-      const s = new Date(b.start).getTime();
-      const e = new Date(b.end).getTime();
-      if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) return sum;
-      return sum + (e - s) / 3600000;
-    }, 0);
-  const round1 = (n) => Math.round(n * 10) / 10;
 
   return (
     <div style={styles.wrap}>
@@ -152,7 +124,19 @@ export default function ProjectDetail({
             <select
               value={draft.status || ''}
               onChange={(e) => {
-                set({ status: e.target.value });
+                const next = e.target.value;
+                if (next === COMPLETE_STATUS) {
+                  const openCount = projectTasks.filter((t) => !t.done).length;
+                  if (openCount > 0) {
+                    const ok = window.confirm(
+                      `This project has ${openCount} open task${openCount === 1 ? '' : 's'}. ` +
+                        `Mark it complete and archive it anyway? ` +
+                        `(The tasks stay as they are; you can still find them.)`
+                    );
+                    if (!ok) return;
+                  }
+                }
+                set({ status: next });
                 setTimeout(flush, 0);
               }}
               style={styles.input}
@@ -175,106 +159,6 @@ export default function ProjectDetail({
             />
           </div>
         </div>
-
-        {/* Project group — assign this project to a colour-coded group.
-            Groups are defined in Settings. Assigning a group also drives the
-            project's accent colour across the app. */}
-        <div style={styles.field}>
-          <label style={styles.label}>Group</label>
-          <select
-            value={draft.group || ''}
-            onChange={(e) => {
-              const newDraft = { ...draft, group: e.target.value || null };
-              setDraft(newDraft);
-              onUpdate(project.id, newDraft);
-            }}
-            style={styles.input}
-          >
-            <option value="">— No group —</option>
-            {(projectGroups || []).map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-          {(!projectGroups || projectGroups.length === 0) && (
-            <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
-              Define project groups in Settings to use this.
-            </span>
-          )}
-        </div>
-
-        {/* SOW hours budget — the contracted hours this project is sold for.
-            Used by the capacity view to compare budget vs allocated vs
-            tracked time. Leave blank if the project isn't hours-budgeted. */}
-        <div style={styles.field}>
-          <label style={styles.label}>Budgeted hours (SOW)</label>
-          <input
-            type="number"
-            min="0"
-            step="0.5"
-            value={draft.hoursBudget ?? ''}
-            onChange={(e) =>
-              set({
-                hoursBudget:
-                  e.target.value === '' ? null : Number(e.target.value),
-              })
-            }
-            onBlur={flush}
-            placeholder="e.g. 120"
-            style={styles.input}
-          />
-        </div>
-
-        {/* Project capacity — budget vs allocated vs tracked. Only shown
-            once a budget is set, since without it there's nothing to
-            compare against. */}
-        {hoursBudget !== null && (
-          <div style={styles.capacityCard}>
-            <div style={styles.capacityHead}>
-              <span style={styles.capacityTitle}>Capacity</span>
-              {(() => {
-                const over = allocatedHours > hoursBudget;
-                const remaining = round1(hoursBudget - allocatedHours);
-                return (
-                  <span
-                    style={{
-                      ...styles.capacityBadge,
-                      color: over ? '#e24b4a' : '#1d9e75',
-                      background: (over ? '#e24b4a' : '#1d9e75') + '18',
-                    }}
-                  >
-                    {over
-                      ? `${round1(allocatedHours - hoursBudget)}h over budget`
-                      : `${remaining}h of budget left`}
-                  </span>
-                );
-              })()}
-            </div>
-            {/* Allocation bar — allocated estimates against the SOW budget */}
-            <div style={styles.capacityBar}>
-              <div
-                style={{
-                  ...styles.capacityBarFill,
-                  width: `${Math.min(100, hoursBudget > 0 ? (allocatedHours / hoursBudget) * 100 : 0)}%`,
-                  background:
-                    allocatedHours > hoursBudget ? '#e24b4a' : color,
-                }}
-              />
-            </div>
-            <div style={styles.capacityNums}>
-              <span>
-                <strong>{round1(hoursBudget)}h</strong> budgeted
-              </span>
-              <span>
-                <strong>{round1(allocatedHours)}h</strong> allocated
-              </span>
-              <span>
-                <strong>{round1(trackedHours)}h</strong> tracked
-              </span>
-            </div>
-          </div>
-        )}
 
         {/* Task summary */}
         {totalCount > 0 && (
@@ -409,10 +293,14 @@ export default function ProjectDetail({
           ) : (
             <div style={styles.confirmRow}>
               <span style={{ fontSize: 12, color: '#e24b4a' }}>
-                Delete this project? Tasks will not be deleted but will lose their project link.
+                Delete this project and its {projectTasks.length} task{projectTasks.length === 1 ? '' : 's'}? This can't be undone.
               </span>
               <button
                 onClick={() => {
+                  // Delete the project's tasks first, then the project.
+                  if (onDeleteTask) {
+                    projectTasks.forEach((t) => onDeleteTask(t.id));
+                  }
                   onDelete(project.id);
                   onClose?.();
                 }}
@@ -584,45 +472,6 @@ const styles = {
   },
   taskBarFill: { height: '100%', transition: 'width 0.2s' },
   taskMeta: { fontSize: 11, color: 'var(--color-text-secondary)' },
-  capacityCard: {
-    background: 'var(--color-background-secondary)',
-    borderRadius: 8,
-    padding: 12,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  capacityHead: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  capacityTitle: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: 'var(--color-text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  capacityBadge: {
-    fontSize: 10,
-    fontWeight: 600,
-    padding: '2px 8px',
-    borderRadius: 10,
-  },
-  capacityBar: {
-    height: 6,
-    background: 'var(--color-border-tertiary)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  capacityBarFill: { height: '100%', transition: 'width 0.2s' },
-  capacityNums: {
-    display: 'flex',
-    gap: 14,
-    fontSize: 11,
-    color: 'var(--color-text-secondary)',
-  },
   section: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 },
   sectionTitle: {
     fontSize: 12,
@@ -774,3 +623,4 @@ const handoffStyles = {
   },
   msg: { fontSize: 11, color: '#1d9e75', fontWeight: 500 },
 };
+

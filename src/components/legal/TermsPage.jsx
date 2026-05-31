@@ -2,10 +2,10 @@ import LegalPage from './LegalPage.jsx';
 
 const CONTENT = `# Terms of Service
 
-**Last updated:** 8 May 2026
+**Last updated:** 30 May 2026
 **Effective date:** 8 May 2026
 
-These Terms of Service ("Terms") govern your use of Daymark, a project management web application available at getdaymark.com ("the Service"), operated by Ed Carter, operating as Daymark ("we", "us", "our").
+These Terms of Service ("Terms") govern your use of Daymark, a project management web application available at getdaymark.com ("the Service"), operated by Edward Carter, trading as Kenilworth & Co (ABN 76 959 252 036) ("we", "us", "our").
 
 By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 
@@ -93,9 +93,9 @@ When paid plans are introduced:
 
 ## 8. Intellectual property
 
-The Service, including its software, design, branding, and documentation, is owned by Ed Carter, operating as Daymark and is protected by intellectual property laws. You may not copy, modify, distribute, or create derivative works without our written permission.
+The Service, including its software, design, branding, and documentation, is owned by Edward Carter, trading as Kenilworth & Co and is protected by intellectual property laws. You may not copy, modify, distribute, or create derivative works without our written permission.
 
-The "Daymark" name and logo are trademarks of Ed Carter, operating as Daymark.
+The "Daymark" name and logo are trademarks of Edward Carter, trading as Kenilworth & Co.
 
 ## 9. Privacy
 

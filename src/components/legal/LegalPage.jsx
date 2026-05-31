@@ -68,7 +68,7 @@ export default function LegalPage({ title, content }) {
           <a href="/security" style={styles.footerLink}>Security</a>
         </div>
         <div style={styles.footerMeta}>
-          © {new Date().getFullYear()} Daymark. Brisbane, Australia.
+          © {new Date().getFullYear()} Kenilworth & Co. Brisbane, Australia.
         </div>
       </footer>
     </div>

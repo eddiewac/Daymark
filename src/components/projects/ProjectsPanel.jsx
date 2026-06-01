@@ -3,6 +3,7 @@ import ProjectCard from './ProjectCard.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import GanttView from './GanttView.jsx';
 import TrackView from './track/TrackView.jsx';
+import { groupProjects } from '../../lib/projectGroups.js';
 
 export default function ProjectsPanel({
   projects,
@@ -15,6 +16,7 @@ export default function ProjectsPanel({
   categories,
   priorities,
   statuses,
+  projectGroups,
   onAdd,
   onUpdate,
   onDelete,
@@ -54,6 +56,14 @@ export default function ProjectsPanel({
         p.nextSteps?.toLowerCase().includes(q)
     );
   }, [projects, search, showArchived]);
+
+  // Bucket the visible projects by their group, for the grouped grid display.
+  // Ungrouped projects fall into a trailing "Ungrouped" bucket. When no groups
+  // are defined, this yields a single bucket and the grid looks as before.
+  const grouped = useMemo(
+    () => groupProjects(visible, projectGroups || []),
+    [visible, projectGroups]
+  );
 
   const taskCountFor = (projectName) =>
     tasks.filter((t) => t.project === projectName && !t.done).length;
@@ -148,16 +158,41 @@ export default function ProjectsPanel({
                     : 'No projects match the search.'}
                 </div>
               ) : (
-                <div style={styles.grid}>
-                  {visible.map((p) => (
-                    <ProjectCard
-                      key={p.id}
-                      project={p}
-                      allProjects={projects}
-                      taskCount={taskCountFor(p.name)}
-                      projectTasks={(tasks || []).filter((t) => t.project === p.name)}
-                      onClick={() => setActiveId(p.id)}
-                    />
+                <div style={styles.groupedWrap}>
+                  {grouped.map((bucket) => (
+                    <div key={bucket.group.id} style={styles.groupBlock}>
+                      {/* Only show a group header when there's more than one
+                          bucket (i.e. groups are actually in use). With no
+                          groups defined, this renders a single unlabelled grid
+                          exactly as before. */}
+                      {grouped.length > 1 && (
+                        <div style={styles.groupHeader}>
+                          <span
+                            style={{
+                              ...styles.groupDot,
+                              background: bucket.group.color || '#888780',
+                            }}
+                          />
+                          <span style={styles.groupName}>{bucket.group.name}</span>
+                          <span style={styles.groupCount}>
+                            {bucket.projects.length}
+                          </span>
+                        </div>
+                      )}
+                      <div style={styles.grid}>
+                        {bucket.projects.map((p) => (
+                          <ProjectCard
+                            key={p.id}
+                            project={p}
+                            allProjects={projects}
+                            projectGroups={projectGroups || []}
+                            taskCount={taskCountFor(p.name)}
+                            projectTasks={(tasks || []).filter((t) => t.project === p.name)}
+                            onClick={() => setActiveId(p.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -184,6 +219,7 @@ export default function ProjectsPanel({
                       key={p.id}
                       project={p}
                       allProjects={projects}
+                      projectGroups={projectGroups || []}
                       taskCount={taskCountFor(p.name)}
                       projectTasks={(tasks || []).filter((t) => t.project === p.name)}
                       onClick={() => setTrackingId(p.id)}
@@ -204,6 +240,7 @@ export default function ProjectsPanel({
               tasks={tasks}
               congresses={congresses}
               stationTemplates={stationTemplates}
+              projectGroups={projectGroups || []}
               onUpdate={onUpdate}
               onDelete={onDelete}
               onDeleteTask={onDeleteTask}
@@ -278,6 +315,41 @@ const styles = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
     gap: 10,
+  },
+  groupedWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 20,
+  },
+  groupBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  groupHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  groupDot: {
+    width: 10,
+    height: 10,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  groupName: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  groupCount: {
+    fontSize: 11,
+    color: 'var(--color-text-tertiary)',
+    background: 'var(--color-background-secondary)',
+    borderRadius: 10,
+    padding: '1px 8px',
   },
   empty: {
     padding: 32,

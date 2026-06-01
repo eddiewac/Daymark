@@ -12,6 +12,7 @@ export default function ProjectDetail({
   tasks,
   congresses,
   stationTemplates,
+  projectGroups,
   onUpdate,
   onDelete,
   onDeleteTask,
@@ -147,6 +148,32 @@ export default function ProjectDetail({
                 </option>
               ))}
             </select>
+          </div>
+          {/* Project group — assign this project to a colour-coded group.
+              Groups are defined in Settings and drive the project's accent
+              colour and grouping in the Projects list. */}
+          <div style={styles.field}>
+            <label style={styles.label}>Group</label>
+            <select
+              value={draft.group || ''}
+              onChange={(e) => {
+                set({ group: e.target.value || null });
+                setTimeout(flush, 0);
+              }}
+              style={styles.input}
+            >
+              <option value="">— No group —</option>
+              {(projectGroups || []).map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            {(!projectGroups || projectGroups.length === 0) && (
+              <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', fontStyle: 'italic' }}>
+                Define project groups in Settings to use this.
+              </span>
+            )}
           </div>
           <div style={styles.field}>
             <label style={styles.label}>Start date</label>
@@ -623,4 +650,3 @@ const handoffStyles = {
   },
   msg: { fontSize: 11, color: '#1d9e75', fontWeight: 500 },
 };
-

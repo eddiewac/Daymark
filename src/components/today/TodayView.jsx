@@ -101,23 +101,6 @@ const { overdueCommsList, dueTodayCommsList, staleStationsList } = useMemo(() =>
     return { overdueCommsList: overdue, dueTodayCommsList: dueToday, staleStationsList: stale };
   }, [projects, today]);
 
-  // Tasks the user is waiting on someone for. Same proactive surfacing as
-  // station comms, but for ad-hoc task-level "waiting on [name] by [date]".
-  const { overdueWaitingList, dueTodayWaitingList } = useMemo(() => {
-    const overdue = [];
-    const dueToday = [];
-    for (const t of tasks || []) {
-      if (t.done) continue;
-      if (!t.waitingOnDate || !t.waitingOnName) continue;
-      if (t.waitingOnDate < today) {
-        overdue.push(t);
-      } else if (t.waitingOnDate === today) {
-        dueToday.push(t);
-      }
-    }
-    return { overdueWaitingList: overdue, dueTodayWaitingList: dueToday };
-  }, [tasks, today]);
-
   const upcomingCongresses = useMemo(() => {
     const now = new Date();
     const cutoff = new Date(now.getTime() + 14 * DAY_MS);
@@ -326,54 +309,7 @@ const totalItems =
   </Section>
 )}
 
-        {/* Overdue: waiting on someone, expected back before today */}
-        {overdueWaitingList.length > 0 && (
-          <Section
-            title={`⏳ ${overdueWaitingList.length} overdue from people`}
-            tone="red"
-          >
-            {overdueWaitingList.slice(0, 8).map((t) => (
-              <button
-                key={t.id}
-                style={styles.waitingRow}
-                onClick={() => onJumpToTab && onJumpToTab('tasks')}
-                title="Go to Tasks"
-              >
-                <span style={styles.waitingTitle}>{t.title || '(untitled)'}</span>
-                <span style={styles.waitingMeta}>
-                  from {t.waitingOnName} · due {t.waitingOnDate}
-                </span>
-              </button>
-            ))}
-            {overdueWaitingList.length > 8 && (
-              <div style={styles.moreLine}>+ {overdueWaitingList.length - 8} more</div>
-            )}
-          </Section>
-        )}
-
-        {/* Expected back from someone today */}
-        {dueTodayWaitingList.length > 0 && (
-          <Section
-            title={`⏳ ${dueTodayWaitingList.length} expected back today`}
-            tone="purple"
-          >
-            {dueTodayWaitingList.slice(0, 8).map((t) => (
-              <button
-                key={t.id}
-                style={styles.waitingRow}
-                onClick={() => onJumpToTab && onJumpToTab('tasks')}
-                title="Go to Tasks"
-              >
-                <span style={styles.waitingTitle}>{t.title || '(untitled)'}</span>
-                <span style={styles.waitingMeta}>from {t.waitingOnName}</span>
-              </button>
-            ))}
-            {dueTodayWaitingList.length > 8 && (
-              <div style={styles.moreLine}>+ {dueTodayWaitingList.length - 8} more</div>
-            )}
-          </Section>
-        )}
-        {/* Stale stations */}
+{/* Stale stations */}
         {staleStationsList.length > 0 && (
           <Section
             title={`🕸 ${staleStationsList.length} stale station${staleStationsList.length === 1 ? '' : 's'}`}
@@ -918,28 +854,6 @@ const styles = {
     color: 'var(--color-text-tertiary)',
     paddingLeft: 10,
     paddingTop: 3,
-  },
-  waitingRow: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 2,
-    width: '100%',
-    textAlign: 'left',
-    background: 'transparent',
-    border: 'none',
-    padding: '6px 10px',
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  waitingTitle: {
-    fontSize: 12,
-    fontWeight: 500,
-    color: 'var(--color-text-primary)',
-  },
-  waitingMeta: {
-    fontSize: 10,
-    color: 'var(--color-text-secondary)',
   },
   allClear: {
     background: '#1d9e7511',

@@ -220,35 +220,27 @@ export default function WorkspaceView({
   };
 
   // Append a comm to the prompt's station, then dismiss the prompt.
-  const logCommFromPrompt = (pill) => {
+  // `expectBy` is the chosen expected-reply date (from QuickCommPrompt). If not
+  // provided, falls back to null for non-reply comms.
+  const logCommFromPrompt = (pill, expectBy) => {
     if (!commPrompt) return;
     const project = (projects || []).find((p) => p.id === commPrompt.projectId);
     if (!project) {
       setCommPrompt(null);
       return;
     }
+    const needsReply = pill.needsReply ?? true;
     const newComm = {
       id: 'comm_' + Math.random().toString(36).slice(2, 9),
       type: pill.label,
       color: pill.color,
-      needsReply: pill.needsReply ?? true,
+      needsReply,
       sentAt: Date.now(),
       replyReceived: false,
       replyAt: null,
-      // Match CommsTab: a needs-reply comm defaults to a reply due in 3
-      // business days so it surfaces in Today / Plan.
-      expectReplyBy: (pill.needsReply ?? true)
-        ? (() => {
-            const d = new Date();
-            let added = 0;
-            while (added < 3) {
-              d.setDate(d.getDate() + 1);
-              const day = d.getDay();
-              if (day !== 0 && day !== 6) added++;
-            }
-            return d.toISOString().slice(0, 10);
-          })()
-        : null,
+      // Use the date chosen in the prompt (defaults to +3 business days there).
+      // Only reply-needing comms carry an expected-back date.
+      expectReplyBy: needsReply ? (expectBy || null) : null,
     };
     const deliverables = (project.deliverables || []).map((d) => ({
       ...d,

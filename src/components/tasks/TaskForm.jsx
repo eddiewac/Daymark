@@ -21,8 +21,6 @@ const blankForm = {
   outOfScope: false,
   outOfScopeHours: '',
   outOfScopeNotes: '',
-  waitingOnName: '',
-  waitingOnDate: '',
 };
 
 export default function TaskForm({
@@ -60,18 +58,12 @@ export default function TaskForm({
       estRaw === '' || estRaw == null
         ? null
         : Number(estRaw);
-    // Waiting-on: only keep if a name is given. A bare date with no name is
-    // meaningless, so clear both in that case.
-    const woName = (form.waitingOnName || '').trim();
-    const woDate = woName ? form.waitingOnDate || '' : '';
     onSave({
       ...form,
       title: form.title.trim(),
       estimate: Number.isFinite(estNum) ? estNum : null,
       outOfScopeHours: Number.isFinite(hoursNum) ? hoursNum : null,
       outOfScopeNotes: (form.outOfScopeNotes || '').trim(),
-      waitingOnName: woName,
-      waitingOnDate: woDate,
     });
   };
 
@@ -167,29 +159,6 @@ export default function TaskForm({
             </option>
           ))}
         </select>
-      </div>
-
-      {/* Waiting on — track that this task is with someone (a colleague, client,
-          reviewer) and when it's expected back. Surfaces on the Today view on
-          the expected-back date. The name is free text — they don't need to be
-          a Daymark user. */}
-      <div style={styles.fieldRow}>
-        <input
-          type="text"
-          value={form.waitingOnName || ''}
-          onChange={(e) => set({ waitingOnName: e.target.value })}
-          placeholder="Waiting on (e.g. client, reviewer)"
-          style={styles.select}
-          title="Who is this with? They don't need a Daymark account."
-        />
-        <input
-          type="date"
-          value={form.waitingOnDate || ''}
-          onChange={(e) => set({ waitingOnDate: e.target.value })}
-          style={styles.select}
-          title="Expected back date — surfaces on Today that day"
-          disabled={!form.waitingOnName.trim()}
-        />
       </div>
 
       {workspaceId && members && members.length > 0 && (

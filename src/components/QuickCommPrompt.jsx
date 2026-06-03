@@ -14,17 +14,35 @@ import { useEffect, useState } from 'react';
 
 const AUTO_DISMISS_MS = 9000;
 
+// Default expected-reply date: +3 business days from today (matches the
+// previous hardcoded behaviour, so the fast path is unchanged).
+function defaultExpectBy() {
+  const d = new Date();
+  let added = 0;
+  while (added < 3) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 export default function QuickCommPrompt({ taskTitle, pills, onPick, onDismiss }) {
   const [leaving, setLeaving] = useState(false);
+  const [expectBy, setExpectBy] = useState(defaultExpectBy);
+  // Once the user touches the date, stop the auto-dismiss so the prompt doesn't
+  // vanish mid-edit.
+  const [touched, setTouched] = useState(false);
 
   // Auto-dismiss after a few seconds if the user does nothing.
   useEffect(() => {
+    if (touched) return;
     const t = setTimeout(() => {
       setLeaving(true);
       setTimeout(onDismiss, 180);
     }, AUTO_DISMISS_MS);
     return () => clearTimeout(t);
-  }, [onDismiss]);
+  }, [onDismiss, touched]);
 
   const dismiss = () => {
     setLeaving(true);
@@ -49,7 +67,7 @@ export default function QuickCommPrompt({ taskTitle, pills, onPick, onDismiss })
         {(pills || []).map((pill) => (
           <button
             key={pill.label}
-            onClick={() => onPick(pill)}
+            onClick={() => onPick(pill, pill.needsReply ?? true ? expectBy : null)}
             style={{
               ...styles.pill,
               border: `0.5px solid ${pill.color}`,
@@ -62,6 +80,23 @@ export default function QuickCommPrompt({ taskTitle, pills, onPick, onDismiss })
             {pill.needsReply ? ' ↩' : ''}
           </button>
         ))}
+      </div>
+      {/* Expected-back date — applies to comms that need a reply. Defaults to
+          +3 business days; edit before tapping a pill to set a different day.
+          Whatever's here is when the comm surfaces on Today. */}
+      <div style={styles.dateCol}>
+        <label style={styles.dateLabel}>back by</label>
+        <input
+          type="date"
+          value={expectBy}
+          onChange={(e) => {
+            setExpectBy(e.target.value);
+            setTouched(true);
+          }}
+          onFocus={() => setTouched(true)}
+          style={styles.dateInput}
+          title="Expected back date — when this surfaces on Today"
+        />
       </div>
       <button onClick={dismiss} style={styles.close} title="Dismiss">
         ×
@@ -116,6 +151,27 @@ const styles = {
     fontWeight: 500,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
+  },
+  dateCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    gap: 1,
+  },
+  dateLabel: {
+    fontSize: 9,
+    color: 'var(--color-text-tertiary)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  dateInput: {
+    fontSize: 11,
+    padding: '2px 4px',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+    outline: 'none',
   },
   close: {
     width: 24,

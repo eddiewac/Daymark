@@ -133,6 +133,29 @@ export default function DeliverableEditor({ deliverables, onChange, stationTempl
               </button>
             </div>
 
+            {/* Waiting on — who this deliverable is currently with, and when
+                it's expected back. Surfaces on Today on that date. Free text;
+                they don't need a Daymark account. Shows as the deliverable's
+                status on the project card. */}
+            <div style={styles.waitingRow}>
+              <span style={styles.waitingLabel}>⏳ with</span>
+              <input
+                type="text"
+                value={d.waitingOnName || ''}
+                onChange={(e) => update(d.id, { waitingOnName: e.target.value })}
+                placeholder="(e.g. Jess, client) — optional"
+                style={styles.waitingNameInput}
+              />
+              <input
+                type="date"
+                value={d.waitingOnDate || ''}
+                onChange={(e) => update(d.id, { waitingOnDate: e.target.value })}
+                style={styles.dateInput}
+                title="Expected back date"
+                disabled={!(d.waitingOnName || '').trim()}
+              />
+            </div>
+
             {isExpanded && (
               <div style={styles.delivBody}>
                 <StationsEditor deliverable={d} onChange={updateDeliverable} stationTemplates={stationTemplates} />
@@ -209,6 +232,27 @@ const styles = {
     background: 'var(--bg-surface)',
   },
   dash: { fontSize: 11, color: 'var(--color-text-tertiary)' },
+  waitingRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '4px 0 4px 34px',
+  },
+  waitingLabel: {
+    fontSize: 10,
+    color: 'var(--color-text-tertiary)',
+    flexShrink: 0,
+  },
+  waitingNameInput: {
+    flex: '0 1 200px',
+    fontSize: 11,
+    padding: '2px 6px',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 4,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+    outline: 'none',
+  },
   expandBtn: {
     width: 22,
     height: 22,

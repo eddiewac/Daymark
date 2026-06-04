@@ -1,11 +1,20 @@
 import { projectColorWithGroups, findGroup } from '../../lib/projectGroups.js';
 import { projectHealth } from '../../lib/stations.js';
+import { deliverableStatus } from '../../lib/deliverableStatus.js';
 
 const HEALTH_COLOR = {
   green: '#1d9e75',
   amber: '#ef9f27',
   red: '#e24b4a',
 };
+
+// Short date like "12 Jun" from an ISO yyyy-mm-dd string.
+function fmtShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T12:00:00');
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
 
 export default function ProjectCard({
   project,
@@ -20,6 +29,11 @@ export default function ProjectCard({
   const delivCount = (project.deliverables || []).length;
   const congressCount = (project.congresses || []).length;
   const health = projectHealth(project, projectTasks || []);
+
+  // Per-deliverable status lines (only those with something to show).
+  const delivStatuses = (project.deliverables || [])
+    .map((d) => ({ name: d.name, status: deliverableStatus(d) }))
+    .filter((x) => x.status);
 
   return (
     <button onClick={onClick} style={{ ...styles.card, borderTop: `3px solid ${color}` }}>
@@ -52,6 +66,30 @@ export default function ProjectCard({
         {delivCount > 0 && <span>{delivCount} deliverable{delivCount === 1 ? '' : 's'}</span>}
         {congressCount > 0 && <span>🏛 {congressCount}</span>}
       </div>
+      {delivStatuses.length > 0 && (
+        <div style={styles.delivStatusList}>
+          {delivStatuses.slice(0, 4).map((x, i) => (
+            <div key={i} style={styles.delivStatusRow}>
+              <span style={styles.delivStatusName}>{x.name}</span>
+              <span
+                style={{
+                  ...styles.delivStatusBadge,
+                  ...(x.status.kind === 'waiting' ? styles.badgeWaiting : {}),
+                  ...(x.status.kind === 'awaiting' ? styles.badgeAwaiting : {}),
+                  ...(x.status.complete ? styles.badgeComplete : {}),
+                }}
+              >
+                {x.status.icon ? `${x.status.icon} ` : ''}
+                {x.status.label}
+                {x.status.date ? ` · ${fmtShort(x.status.date)}` : ''}
+              </span>
+            </div>
+          ))}
+          {delivStatuses.length > 4 && (
+            <div style={styles.delivMore}>+ {delivStatuses.length - 4} more</div>
+          )}
+        </div>
+      )}
       {project.nextSteps && (
         <div style={styles.nextSteps}>{project.nextSteps}</div>
       )}
@@ -103,6 +141,53 @@ const styles = {
     color: 'var(--color-text-secondary)',
   },
   status: { fontSize: 11, fontWeight: 500 },
+  delivStatusList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+    marginTop: 6,
+  },
+  delivStatusRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    justifyContent: 'space-between',
+  },
+  delivStatusName: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    flex: 1,
+    minWidth: 0,
+  },
+  delivStatusBadge: {
+    fontSize: 10,
+    fontWeight: 500,
+    color: 'var(--color-text-tertiary)',
+    background: 'var(--color-background-secondary)',
+    borderRadius: 4,
+    padding: '1px 6px',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+  },
+  badgeWaiting: {
+    color: '#b06a00',
+    background: '#ef9f2722',
+  },
+  badgeAwaiting: {
+    color: '#185FA5',
+    background: '#185FA522',
+  },
+  badgeComplete: {
+    color: '#1d9e75',
+    background: '#1d9e7522',
+  },
+  delivMore: {
+    fontSize: 10,
+    color: 'var(--color-text-tertiary)',
+  },
   meta: {
     fontSize: 10,
     color: 'var(--color-text-secondary)',

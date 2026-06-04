@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
+import { collectDeliverableWaiting } from '../../lib/deliverableStatus.js';
 import {
   stationLastActivityAt,
   relativeTime,
@@ -101,6 +102,12 @@ const { overdueCommsList, dueTodayCommsList, staleStationsList } = useMemo(() =>
     return { overdueCommsList: overdue, dueTodayCommsList: dueToday, staleStationsList: stale };
   }, [projects, today]);
 
+  // Deliverable-level "waiting on [person]" markers, surfaced like comms.
+  const { overdueDelivWaiting, dueTodayDelivWaiting } = useMemo(() => {
+    const { overdue, dueToday } = collectDeliverableWaiting(projects, today);
+    return { overdueDelivWaiting: overdue, dueTodayDelivWaiting: dueToday };
+  }, [projects, today]);
+
   const upcomingCongresses = useMemo(() => {
     const now = new Date();
     const cutoff = new Date(now.getTime() + 14 * DAY_MS);
@@ -143,6 +150,8 @@ const totalItems =
     dueTodayTasks.length +
     overdueCommsList.length +
     dueTodayCommsList.length +
+    overdueDelivWaiting.length +
+    dueTodayDelivWaiting.length +
     staleStationsList.length +
     upcomingCongresses.length;
 
@@ -305,6 +314,56 @@ const totalItems =
       <div style={styles.moreLine}>
         + {dueTodayCommsList.length - 8} more
       </div>
+    )}
+  </Section>
+)}
+
+{/* Deliverables overdue back from someone */}
+{overdueDelivWaiting.length > 0 && (
+  <Section
+    title={`⏳ ${overdueDelivWaiting.length} deliverable${overdueDelivWaiting.length === 1 ? '' : 's'} overdue back`}
+    tone="red"
+  >
+    {overdueDelivWaiting.slice(0, 8).map((item, i) => (
+      <button
+        key={`${item.deliverable.id}-${i}`}
+        style={styles.delivWaitRow}
+        onClick={() => onJumpToProject(item.project.id)}
+        title="Go to project"
+      >
+        <span style={styles.delivWaitName}>
+          {item.deliverable.name} <span style={styles.delivWaitProj}>· {item.project.name}</span>
+        </span>
+        <span style={styles.delivWaitMeta}>with {item.name} · due {item.date}</span>
+      </button>
+    ))}
+    {overdueDelivWaiting.length > 8 && (
+      <div style={styles.moreLine}>+ {overdueDelivWaiting.length - 8} more</div>
+    )}
+  </Section>
+)}
+
+{/* Deliverables expected back today */}
+{dueTodayDelivWaiting.length > 0 && (
+  <Section
+    title={`⏳ ${dueTodayDelivWaiting.length} deliverable${dueTodayDelivWaiting.length === 1 ? '' : 's'} expected back today`}
+    tone="purple"
+  >
+    {dueTodayDelivWaiting.slice(0, 8).map((item, i) => (
+      <button
+        key={`${item.deliverable.id}-${i}`}
+        style={styles.delivWaitRow}
+        onClick={() => onJumpToProject(item.project.id)}
+        title="Go to project"
+      >
+        <span style={styles.delivWaitName}>
+          {item.deliverable.name} <span style={styles.delivWaitProj}>· {item.project.name}</span>
+        </span>
+        <span style={styles.delivWaitMeta}>with {item.name}</span>
+      </button>
+    ))}
+    {dueTodayDelivWaiting.length > 8 && (
+      <div style={styles.moreLine}>+ {dueTodayDelivWaiting.length - 8} more</div>
     )}
   </Section>
 )}
@@ -855,6 +914,32 @@ const styles = {
     paddingLeft: 10,
     paddingTop: 3,
   },
+  delivWaitRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
+    width: '100%',
+    textAlign: 'left',
+    background: 'transparent',
+    border: 'none',
+    padding: '6px 10px',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  delivWaitName: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: 'var(--color-text-primary)',
+  },
+  delivWaitProj: {
+    fontWeight: 400,
+    color: 'var(--color-text-tertiary)',
+  },
+  delivWaitMeta: {
+    fontSize: 10,
+    color: 'var(--color-text-secondary)',
+  },
   allClear: {
     background: '#1d9e7511',
     border: '0.5px solid #1d9e7544',
@@ -1059,5 +1144,6 @@ const projectStatusStyles = {
     flexShrink: 0,
   },
 };
+
 
 

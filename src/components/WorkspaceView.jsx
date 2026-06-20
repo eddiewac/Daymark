@@ -427,6 +427,7 @@ export default function WorkspaceView({
             onJumpToProject={() => setTab('projects')}
             onJumpToTrack={jumpToTrack}
             onToggleDone={handleToggleDone}
+            onUpdateTask={updateTask}
             runningTimer={time.runningTimer}
             onStartTimer={startTimer}
             onStopTimer={time.requestStop}
@@ -766,4 +767,3 @@ const styles = {
   bodyRow: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
   body: { flex: 1, display: 'flex', minHeight: 0 },
 };
-

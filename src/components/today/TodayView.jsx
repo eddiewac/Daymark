@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
 import { collectDeliverableWaiting } from '../../lib/deliverableStatus.js';
+import CloseDayPanel from './CloseDayPanel.jsx';
 import {
   stationLastActivityAt,
   relativeTime,
@@ -35,6 +36,7 @@ export default function TodayView({
   onJumpToProject,
   onJumpToTrack,
   onToggleDone,
+  onUpdateTask,
   runningTimer,
   onStartTimer,
   onStopTimer,
@@ -46,6 +48,7 @@ export default function TodayView({
   // Project status digest is collapsed by default so it never dominates the
   // Today tab — the header still shows the count, one click expands the list.
   const [projectStatusOpen, setProjectStatusOpen] = useState(false);
+  const [closeDayOpen, setCloseDayOpen] = useState(false);
 
   // ── Compute the data ────────────────────────────────────────────────────
   const overdueTasks = useMemo(
@@ -160,14 +163,23 @@ const totalItems =
     <div style={styles.scroll}>
       <div style={styles.wrap}>
         <div style={styles.greeting}>
-          <div style={styles.greetingTitle}>Today</div>
-          <div style={styles.greetingDate}>
-            {new Date().toLocaleDateString(undefined, {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-            })}
+          <div>
+            <div style={styles.greetingTitle}>Today</div>
+            <div style={styles.greetingDate}>
+              {new Date().toLocaleDateString(undefined, {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}
+            </div>
           </div>
+          <button
+            style={styles.closeDayBtn}
+            onClick={() => setCloseDayOpen(true)}
+            title="Recap today and set up tomorrow"
+          >
+            🌙 Close out day
+          </button>
         </div>
 
         {/* Priority */}
@@ -528,6 +540,21 @@ const totalItems =
             </div>
           )}
       </div>
+
+      {closeDayOpen && (
+        <CloseDayPanel
+          tasks={tasks}
+          projects={projects}
+          todayPriority={todayPriority}
+          onRollForward={(taskId) => {
+            const t = new Date();
+            t.setDate(t.getDate() + 1);
+            onUpdateTask && onUpdateTask(taskId, { dueDate: t.toISOString().slice(0, 10) });
+          }}
+          onJumpToProject={onJumpToProject}
+          onClose={() => setCloseDayOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -830,6 +857,21 @@ const styles = {
   },
   greeting: {
     paddingBottom: 6,
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  closeDayBtn: {
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: 500,
+    padding: '7px 14px',
+    borderRadius: 18,
+    border: '0.5px solid var(--color-border-secondary)',
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
   },
   greetingTitle: {
     fontSize: 22,
@@ -1144,6 +1186,3 @@ const projectStatusStyles = {
     flexShrink: 0,
   },
 };
-
-
-

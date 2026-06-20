@@ -32,20 +32,57 @@ import FocusBox from './FocusBox.jsx';
 import QuickCommPrompt from './QuickCommPrompt.jsx';
 import { DEFAULT_COMM_PILLS } from './projects/CommsTab.jsx';
 
-const TABS = [
-  { key: 'today', label: 'Today' },
-  { key: 'tasks', label: 'Tasks' },
-  { key: 'plan', label: 'Plan' },
-  { key: 'projects', label: 'Projects' },
-  { key: 'track', label: '🚂 Track' },
-  { key: 'resource', label: '👥 Resource' },
-  { key: 'status', label: 'Status' },
-  { key: 'notes', label: 'Notes' },
-  { key: 'notepad', label: 'Notepad' },
-  { key: 'time', label: 'Timesheet' },
-  { key: 'export', label: 'Export' },
-  { key: 'congresses', label: 'Congresses' },
-  { key: 'settings', label: 'Settings' },
+// Tab keys are unchanged — only their *presentation* is grouped. Each key still
+// routes exactly as before via setTab(key). NAV defines the grouped structure:
+// standalone tabs sit at the top level; groups reveal their tabs on hover (and
+// land on their first/default tab when the group header itself is clicked).
+const TAB_LABELS = {
+  today: 'Today',
+  tasks: 'Tasks',
+  plan: 'Plan',
+  projects: 'Projects',
+  track: '🚂 Track',
+  resource: '👥 Resource',
+  status: 'Status',
+  notes: 'Notes',
+  notepad: 'Notepad',
+  time: 'Timesheet',
+  export: 'Export',
+  congresses: 'Congresses',
+  settings: 'Settings',
+};
+
+const NAV = [
+  { type: 'tab', key: 'today' },
+  {
+    type: 'group',
+    id: 'work',
+    label: 'Work',
+    color: '#185FA5',
+    // First key is the default landing when the group header is clicked.
+    keys: ['projects', 'tasks', 'plan', 'track', 'resource', 'status'],
+  },
+  {
+    type: 'group',
+    id: 'record',
+    label: 'Record',
+    color: '#0F6E56',
+    keys: ['time', 'notes', 'notepad', 'export'],
+  },
+  { type: 'tab', key: 'congresses' },
+];
+
+// Which group (if any) a tab key belongs to — used to highlight the active
+// group header when one of its tabs is selected.
+const KEY_TO_GROUP = {};
+NAV.forEach((n) => {
+  if (n.type === 'group') n.keys.forEach((k) => { KEY_TO_GROUP[k] = n.id; });
+});
+
+// All valid tab keys, for persistence validation.
+const ALL_TAB_KEYS = [
+  'today', 'tasks', 'plan', 'projects', 'track', 'resource', 'status',
+  'notes', 'notepad', 'time', 'export', 'congresses', 'settings',
 ];
 
 export default function WorkspaceView({
@@ -66,7 +103,7 @@ export default function WorkspaceView({
     try {
       const stored = localStorage.getItem(tabStorageKey);
       // Validate that the stored value is one of the known tabs
-      if (stored && TABS.some((t) => t.key === stored)) return stored;
+      if (stored && ALL_TAB_KEYS.includes(stored)) return stored;
     } catch {}
     return 'tasks';
   });
@@ -81,6 +118,9 @@ export default function WorkspaceView({
 
   // Focus box visibility — auto-opens when timer starts, closes on stop or manual close
   const [focusOpen, setFocusOpen] = useState(false);
+  // Which nav group's flyout is currently revealed (hover on laptop, tap on
+  // touch). Null when none is open.
+  const [openGroup, setOpenGroup] = useState(null);
 
   const {
     allTasks,
@@ -374,22 +414,96 @@ export default function WorkspaceView({
         />
       )}
       <div style={styles.tabBar}>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            disabled={t.disabled}
-            onClick={() => !t.disabled && setTab(t.key)}
-            style={{
-              ...styles.tab,
-              ...(tab === t.key ? styles.tabActive : {}),
-              ...(t.disabled ? styles.tabDisabled : {}),
-            }}
-            title={t.disabled ? 'Coming in next migration session' : ''}
-          >
-            {t.label}
-            {t.disabled && <span style={styles.soonBadge}>soon</span>}
-          </button>
-        ))}
+        {NAV.map((node) => {
+          if (node.type === 'tab') {
+            const k = node.key;
+            return (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                style={{
+                  ...styles.tab,
+                  ...(tab === k ? styles.tabActive : {}),
+                }}
+              >
+                {TAB_LABELS[k]}
+              </button>
+            );
+          }
+          // Group node — header that reveals a flyout of its tabs.
+          const isOpen = openGroup === node.id;
+          const groupActive = KEY_TO_GROUP[tab] === node.id;
+          return (
+            <div
+              key={node.id}
+              style={styles.navGroup}
+              onMouseEnter={() => setOpenGroup(node.id)}
+              onMouseLeave={() => setOpenGroup((g) => (g === node.id ? null : g))}
+            >
+              <button
+                onClick={() => {
+                  // Tap/click the header: on touch (no hover) first tap opens;
+                  // otherwise it lands on the group's default (first) tab.
+                  const noHover =
+                    typeof window !== 'undefined' &&
+                    window.matchMedia &&
+                    window.matchMedia('(hover: none)').matches;
+                  if (noHover && !isOpen) {
+                    setOpenGroup(node.id);
+                  } else {
+                    setTab(node.keys[0]);
+                    setOpenGroup(null);
+                  }
+                }}
+                style={{
+                  ...styles.tab,
+                  ...(groupActive ? styles.tabActive : {}),
+                }}
+              >
+                {node.label}
+                <span style={styles.navCaret}>▾</span>
+              </button>
+              {isOpen && (
+                <div style={styles.flyout}>
+                  <div style={styles.flyoutBridge} />
+                  {node.keys.map((k) => (
+                    <button
+                      key={k}
+                      onClick={() => {
+                        setTab(k);
+                        setOpenGroup(null);
+                      }}
+                      style={{
+                        ...styles.flyItem,
+                        ...(tab === k ? styles.flyItemActive : {}),
+                      }}
+                    >
+                      <span
+                        style={{
+                          ...styles.flyDot,
+                          ...(tab === k ? { background: node.color } : {}),
+                        }}
+                      />
+                      {TAB_LABELS[k]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {/* Settings — standalone gear, separate from the content groups. */}
+        <button
+          onClick={() => setTab('settings')}
+          style={{
+            ...styles.tab,
+            ...styles.settingsTab,
+            ...(tab === 'settings' ? styles.tabActive : {}),
+          }}
+          title="Settings"
+        >
+          ⚙
+        </button>
         {/* Open focus button when timer is running but focus box is hidden */}
         {time.runningTimer && !focusOpen && (
           <button
@@ -727,6 +841,68 @@ const styles = {
     background: 'var(--accent-soft)',
     color: 'var(--accent)',
     fontWeight: 500,
+  },
+  navGroup: {
+    position: 'relative',
+    display: 'flex',
+  },
+  navCaret: {
+    fontSize: 8,
+    opacity: 0.6,
+    marginLeft: 1,
+  },
+  flyout: {
+    position: 'absolute',
+    top: 'calc(100% + 4px)',
+    left: 0,
+    minWidth: 180,
+    background: 'var(--bg-surface)',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 10,
+    boxShadow: '0 10px 32px rgba(0,0,0,0.14)',
+    padding: 5,
+    zIndex: 60,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1,
+  },
+  flyoutBridge: {
+    position: 'absolute',
+    top: -6,
+    left: 0,
+    right: 0,
+    height: 6,
+  },
+  flyItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '7px 10px',
+    fontSize: 12.5,
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 7,
+    color: 'var(--color-text-primary)',
+    whiteSpace: 'nowrap',
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+  },
+  flyItemActive: {
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    fontWeight: 500,
+  },
+  flyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    background: 'var(--color-text-tertiary)',
+    flexShrink: 0,
+  },
+  settingsTab: {
+    fontSize: 14,
+    padding: '5px 10px',
   },
   tabDisabled: { opacity: 0.5, cursor: 'not-allowed' },
   soonBadge: {

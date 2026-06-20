@@ -119,8 +119,30 @@ export default function WorkspaceView({
   // Focus box visibility — auto-opens when timer starts, closes on stop or manual close
   const [focusOpen, setFocusOpen] = useState(false);
   // Which nav group's flyout is currently revealed (hover on laptop, tap on
-  // touch). Null when none is open.
+  // touch), plus the screen position to anchor its flyout. Null when none open.
+  // The flyout is rendered position:fixed so it escapes the tab bar's
+  // horizontal overflow clipping and floats above the page.
   const [openGroup, setOpenGroup] = useState(null);
+  const [flyAnchor, setFlyAnchor] = useState({ left: 0, top: 0 });
+  const openFlyout = (id, el) => {
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setFlyAnchor({ left: r.left, top: r.bottom + 1 });
+    }
+    setOpenGroup(id);
+  };
+  // A fixed-position flyout would drift if the page scrolls or resizes while
+  // open, so close it on either.
+  useEffect(() => {
+    if (!openGroup) return;
+    const close = () => setOpenGroup(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [openGroup]);
 
   const {
     allTasks,
@@ -433,15 +455,18 @@ export default function WorkspaceView({
           // Group node — header that reveals a flyout of its tabs.
           const isOpen = openGroup === node.id;
           const groupActive = KEY_TO_GROUP[tab] === node.id;
+          // When a tab inside this group is active, show it in the header so you
+          // always know where you are (e.g. "Work · Status").
+          const activeChildLabel = groupActive ? TAB_LABELS[tab] : null;
           return (
             <div
               key={node.id}
               style={styles.navGroup}
-              onMouseEnter={() => setOpenGroup(node.id)}
+              onMouseEnter={(e) => openFlyout(node.id, e.currentTarget.firstChild)}
               onMouseLeave={() => setOpenGroup((g) => (g === node.id ? null : g))}
             >
               <button
-                onClick={() => {
+                onClick={(e) => {
                   // Tap/click the header: on touch (no hover) first tap opens;
                   // otherwise it lands on the group's default (first) tab.
                   const noHover =
@@ -449,7 +474,7 @@ export default function WorkspaceView({
                     window.matchMedia &&
                     window.matchMedia('(hover: none)').matches;
                   if (noHover && !isOpen) {
-                    setOpenGroup(node.id);
+                    openFlyout(node.id, e.currentTarget);
                   } else {
                     setTab(node.keys[0]);
                     setOpenGroup(null);
@@ -461,11 +486,21 @@ export default function WorkspaceView({
                 }}
               >
                 {node.label}
+                {activeChildLabel && (
+                  <span style={styles.activeChild}>· {activeChildLabel}</span>
+                )}
                 <span style={styles.navCaret}>▾</span>
               </button>
               {isOpen && (
-                <div style={styles.flyout}>
-                  <div style={styles.flyoutBridge} />
+                <div
+                  style={{
+                    ...styles.flyout,
+                    left: flyAnchor.left,
+                    top: flyAnchor.top,
+                  }}
+                  onMouseEnter={() => setOpenGroup(node.id)}
+                  onMouseLeave={() => setOpenGroup(null)}
+                >
                   {node.keys.map((k) => (
                     <button
                       key={k}
@@ -852,26 +887,24 @@ const styles = {
     marginLeft: 1,
   },
   flyout: {
-    position: 'absolute',
-    top: 'calc(100% + 4px)',
-    left: 0,
-    minWidth: 180,
+    position: 'fixed',
+    minWidth: 184,
     background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 10,
-    boxShadow: '0 10px 32px rgba(0,0,0,0.14)',
+    boxShadow: '0 12px 36px rgba(0,0,0,0.18)',
     padding: 5,
-    zIndex: 60,
+    zIndex: 3000,
     display: 'flex',
     flexDirection: 'column',
     gap: 1,
   },
+  activeChild: {
+    fontWeight: 600,
+    marginLeft: 2,
+  },
   flyoutBridge: {
-    position: 'absolute',
-    top: -6,
-    left: 0,
-    right: 0,
-    height: 6,
+    display: 'none',
   },
   flyItem: {
     display: 'flex',

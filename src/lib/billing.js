@@ -80,5 +80,51 @@ export function isWorkspaceOwner(ws, userId) {
 }
 
 // ── Pricing (single source of truth for the UI) ─────────────────────────────
-export const WORKSPACE_PRICE_USD = 25; // per workspace, per month
+//
+// Two tiers:
+//   • Standard — flat per-workspace, unlimited members. The differentiator:
+//     one price per team, no per-seat tax on collaboration.
+//   • Enterprise — custom pricing for large agencies / company-wide rollout.
+//     Procurement at that scale expects a custom quote, so we don't publish a
+//     number; the UI shows "Contact us".
+export const WORKSPACE_PRICE_USD = 29; // Standard: per workspace, per month
 export const TRIAL_DAYS = 14;
+
+// Tier definitions for the pricing UI to render from. Keeping this here means
+// the pricing page, settings, and any upgrade prompts all stay in sync.
+export const PRICING_TIERS = [
+  {
+    id: 'standard',
+    name: 'Standard',
+    priceUsd: WORKSPACE_PRICE_USD,
+    priceLabel: `$${WORKSPACE_PRICE_USD}`,
+    period: '/workspace /month',
+    tagline: 'One flat price per team — unlimited members.',
+    features: [
+      'Unlimited members per workspace',
+      'All projects, deliverables & tracking',
+      'Resourcing & cross-workspace sharing',
+      'Congress planning',
+      `${TRIAL_DAYS}-day free trial`,
+    ],
+    cta: 'Start free trial',
+    custom: false,
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    priceUsd: null,
+    priceLabel: 'Custom',
+    period: '',
+    tagline: 'For large agencies and company-wide rollouts.',
+    features: [
+      'Everything in Standard',
+      'Volume pricing across many teams',
+      'Procurement & invoicing support',
+      'Onboarding & priority support',
+      'Security review & custom terms',
+    ],
+    cta: 'Contact us',
+    custom: true,
+  },
+];

@@ -325,6 +325,15 @@ function BillingSection({ workspace, isOwner }) {
           Only the workspace owner can manage billing.
         </div>
       )}
+
+      {/* Enterprise pointer — a sales conversation, not a self-serve tier.
+          Large agencies / company-wide rollouts get custom pricing. */}
+      <div style={billingStyles.enterpriseNote}>
+        Large agency or rolling out company-wide?{' '}
+        <a href="mailto:hello@getdaymark.com?subject=Daymark%20Enterprise" style={billingStyles.enterpriseLink}>
+          Ask about Enterprise →
+        </a>
+      </div>
     </section>
   );
 }
@@ -608,5 +617,18 @@ const billingStyles = {
     fontSize: 11,
     color: 'var(--color-text-tertiary)',
     fontStyle: 'italic',
+  },
+  enterpriseNote: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTop: '0.5px solid var(--color-border-tertiary)',
+    fontSize: 11.5,
+    color: 'var(--color-text-secondary)',
+  },
+  enterpriseLink: {
+    color: 'var(--accent)',
+    fontWeight: 500,
+    textDecoration: 'none',
+    whiteSpace: 'nowrap',
   },
 };

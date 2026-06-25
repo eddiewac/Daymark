@@ -90,6 +90,26 @@ export default function TrackView({
   const [focusKey, setFocusKey] = useState(null);
   const [seedingForId, setSeedingForId] = useState(null);
   const [duplicating, setDuplicating] = useState(null); // null | { delivId, taskCount }
+  // Quick "add a task named after this station" from the train. Holds the
+  // station id whose date-picker is open, and the chosen date.
+  const [taskForStation, setTaskForStation] = useState(null);
+  const [taskDate, setTaskDate] = useState('');
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const openStationTask = (stationId) => {
+    setTaskForStation((cur) => (cur === stationId ? null : stationId));
+    setTaskDate(todayISO());
+  };
+  const confirmStationTask = async (projectName, station) => {
+    if (!onAddTask) return;
+    await onAddTask({
+      title: station.name || 'Station task',
+      project: projectName || '',
+      stationId: station.id,
+      dueDate: taskDate || todayISO(),
+    });
+    setTaskForStation(null);
+    setTaskDate('');
+  };
   const color = projectColor(project.name, allProjects);
   const deliverables = project.deliverables || [];
 
@@ -458,6 +478,31 @@ export default function TrackView({
                               {awaiting > 0 && (
                                 <div style={styles.trainAwaiting}>⟳ {awaiting}</div>
                               )}
+                              {/* Quick add-task: creates an ordinary task named
+                                  after this station, dated (default today). */}
+                              <button
+                                onClick={() => openStationTask(s.id)}
+                                style={styles.trainAddTask}
+                                title={`Add a task named “${s.name}” to your task list`}
+                              >
+                                ＋ task
+                              </button>
+                              {taskForStation === s.id && (
+                                <div style={styles.trainTaskPicker} data-kaspa-block>
+                                  <input
+                                    type="date"
+                                    value={taskDate}
+                                    onChange={(e) => setTaskDate(e.target.value)}
+                                    style={styles.trainTaskDate}
+                                  />
+                                  <button
+                                    onClick={() => confirmStationTask(project?.name, s)}
+                                    style={styles.trainTaskGo}
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              )}
                               {!s.done && (() => {
                                 const lastAct = stationLastActivityAt(s);
                                 if (!lastAct) return null;
@@ -744,5 +789,43 @@ const styles = {
     fontWeight: 600,
     marginTop: 4,
   },
+  trainAddTask: {
+    marginTop: 5,
+    fontSize: 9,
+    fontWeight: 500,
+    padding: '2px 7px',
+    borderRadius: 10,
+    border: '0.5px solid var(--color-border-secondary)',
+    background: 'transparent',
+    color: 'var(--accent)',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  trainTaskPicker: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 4,
+  },
+  trainTaskDate: {
+    fontSize: 9,
+    padding: '1px 3px',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 4,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+    width: 92,
+  },
+  trainTaskGo: {
+    fontSize: 9,
+    fontWeight: 600,
+    padding: '2px 7px',
+    borderRadius: 10,
+    border: 'none',
+    background: 'var(--accent)',
+    color: '#fff',
+    cursor: 'pointer',
+  },
 };
+
 

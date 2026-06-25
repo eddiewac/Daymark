@@ -77,6 +77,25 @@ export default function StationFocus({
     setNewTaskAssignee('');
   };
 
+  // Quick "add this station as a task" — names the task after the station and
+  // sets a due date (defaults to the station's target date, or today). Creates
+  // an ordinary task linked via stationId, so it appears in the task list and
+  // in Today if dated today.
+  const [stationTaskDate, setStationTaskDate] = useState(
+    station.targetDate || new Date().toISOString().slice(0, 10)
+  );
+  const [stationTaskAdded, setStationTaskAdded] = useState(false);
+  const addStationAsTask = async () => {
+    await onAddTask({
+      title: station.name || 'Station task',
+      project: project?.name || '',
+      stationId: station.id,
+      dueDate: stationTaskDate || new Date().toISOString().slice(0, 10),
+    });
+    setStationTaskAdded(true);
+    setTimeout(() => setStationTaskAdded(false), 2500);
+  };
+
   return (
     <div style={styles.wrap}>
       {/* Header */}
@@ -141,6 +160,29 @@ export default function StationFocus({
                   style={styles.input}
                 />
               </div>
+            </div>
+
+            {/* Add this station to your task list — named after the station,
+                with a due date (defaults to the target date, or today). */}
+            <div style={styles.addAsTaskRow}>
+              <span style={styles.addAsTaskLabel}>Add this station as a task —</span>
+              <span style={styles.addAsTaskName}>“{station.name || 'station'}”</span>
+              <span style={styles.addAsTaskLabel}>due</span>
+              <input
+                type="date"
+                value={stationTaskDate}
+                onChange={(e) => setStationTaskDate(e.target.value)}
+                style={styles.addAsTaskDate}
+              />
+              <button
+                onClick={addStationAsTask}
+                style={{ ...styles.addAsTaskBtn, background: color }}
+              >
+                ＋ Add to tasks
+              </button>
+              {stationTaskAdded && (
+                <span style={styles.addAsTaskDone}>✓ Added</span>
+              )}
             </div>
 
             <div style={styles.fieldRow}>
@@ -364,32 +406,6 @@ export default function StationFocus({
                           {t.dueDate}
                         </span>
                       )}
-
-                      {/* Inline estimate (hours) — saves on blur. Uncontrolled
-                          so typing doesn't fight live updates; keyed by task id
-                          + current estimate so external changes reset it. */}
-                      <input
-                        key={`est-${t.id}-${t.estimate ?? ''}`}
-                        type="number"
-                        step="0.25"
-                        min="0"
-                        defaultValue={t.estimate ?? ''}
-                        onBlur={(e) => {
-                          const raw = e.target.value;
-                          const num = raw === '' ? null : Number(raw);
-                          const cleaned =
-                            Number.isFinite(num) && num >= 0 ? num : null;
-                          if (cleaned !== (t.estimate ?? null)) {
-                            onUpdateTask(t.id, { estimate: cleaned });
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') e.currentTarget.blur();
-                        }}
-                        placeholder="h"
-                        title="Estimated hours"
-                        style={enrichedStyles.estInput}
-                      />
 
                       {/* Inline date picker (popover) */}
                       <div style={{ position: 'relative' }}>
@@ -651,6 +667,48 @@ const styles = {
   },
   tasksWrap: { display: 'flex', flexDirection: 'column', gap: 10 },
   addTaskRow: { display: 'flex', gap: 6 },
+  addAsTaskRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    padding: '10px 12px',
+    marginTop: 4,
+    marginBottom: 8,
+    background: 'var(--accent-soft)',
+    borderRadius: 8,
+  },
+  addAsTaskLabel: {
+    fontSize: 12,
+    color: 'var(--color-text-secondary)',
+  },
+  addAsTaskName: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+  },
+  addAsTaskDate: {
+    fontSize: 12,
+    padding: '4px 8px',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 6,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+  },
+  addAsTaskBtn: {
+    fontSize: 12,
+    fontWeight: 500,
+    padding: '5px 12px',
+    border: 'none',
+    borderRadius: 16,
+    color: '#fff',
+    cursor: 'pointer',
+  },
+  addAsTaskDone: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: '#1d9e75',
+  },
   taskInput: {
     flex: 1,
     padding: '6px 10px',
@@ -788,19 +846,6 @@ const enrichedStyles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  estInput: {
-    width: 44,
-    height: 22,
-    padding: '0 6px',
-    fontSize: 11,
-    border: '0.5px solid var(--color-border-tertiary)',
-    borderRadius: 6,
-    background: 'var(--bg-surface)',
-    color: 'var(--color-text-primary)',
-    textAlign: 'right',
-    outline: 'none',
-    flexShrink: 0,
   },
   datePopover: {
     position: 'absolute',

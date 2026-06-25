@@ -25,10 +25,13 @@ function mkStation(name = 'New station') {
   };
 }
 
-export default function StationsEditor({ deliverable, onChange, stationTemplates }) {
+export default function StationsEditor({ deliverable, onChange, stationTemplates, onAddTask, projectName }) {
   const [editingId, setEditingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [subTab, setSubTab] = useState('details'); // details | comms
+  // Station id whose "add task" date picker is open, and the chosen date.
+  const [taskForStation, setTaskForStation] = useState(null);
+  const [taskDate, setTaskDate] = useState('');
   const stations = deliverable.stations || [];
 
   // Find the first incomplete station - that's the "current" one
@@ -81,6 +84,26 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
           : s
       )
     );
+  };
+
+  // Create a task named after the station, linked via stationId, with the
+  // chosen due date. The task behaves exactly like any other task — it appears
+  // in the task list and, if dated today, in Today. Defaults the date to today.
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const openTaskPicker = (stationId) => {
+    setTaskForStation(stationId);
+    setTaskDate(todayISO());
+  };
+  const confirmCreateTask = async (station) => {
+    if (!onAddTask) return;
+    await onAddTask({
+      title: station.name || 'Station task',
+      project: projectName || '',
+      stationId: station.id,
+      dueDate: taskDate || todayISO(),
+    });
+    setTaskForStation(null);
+    setTaskDate('');
   };
 
   if (stations.length === 0) {
@@ -277,6 +300,17 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
                 })()}
 
                 <button
+                  onClick={() =>
+                    taskForStation === s.id
+                      ? setTaskForStation(null)
+                      : openTaskPicker(s.id)
+                  }
+                  style={styles.iconBtn}
+                  title="Add a task for this station (named after it)"
+                >
+                  ＋☑
+                </button>
+                <button
                   onClick={() => setExpandedId(isExpanded ? null : s.id)}
                   style={styles.iconBtn}
                   title={isExpanded ? 'Collapse' : 'Expand'}
@@ -310,6 +344,35 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
                   ×
                 </button>
               </div>
+
+              {/* Add-task strip — name comes from the station; pick the due
+                  date (defaults today) and confirm. Creates an ordinary task
+                  linked to this station. */}
+              {taskForStation === s.id && (
+                <div style={styles.addTaskStrip}>
+                  <span style={styles.addTaskLabel}>
+                    Add task “{s.name || 'station'}” — due
+                  </span>
+                  <input
+                    type="date"
+                    value={taskDate}
+                    onChange={(e) => setTaskDate(e.target.value)}
+                    style={styles.addTaskDate}
+                  />
+                  <button
+                    onClick={() => confirmCreateTask(s)}
+                    style={styles.addTaskConfirm}
+                  >
+                    Add to tasks
+                  </button>
+                  <button
+                    onClick={() => setTaskForStation(null)}
+                    style={styles.addTaskCancel}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
 
               {isExpanded && (
                 <div style={styles.expanded}>
@@ -566,6 +629,46 @@ const styles = {
     fontSize: 14,
     borderRadius: 4,
   },
+  addTaskStrip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    padding: '8px 10px 8px 34px',
+    background: 'var(--accent-soft)',
+    borderRadius: 6,
+    marginTop: 2,
+  },
+  addTaskLabel: {
+    fontSize: 11.5,
+    color: 'var(--color-text-secondary)',
+  },
+  addTaskDate: {
+    fontSize: 11.5,
+    padding: '3px 6px',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 5,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+  },
+  addTaskConfirm: {
+    fontSize: 11.5,
+    fontWeight: 500,
+    padding: '4px 10px',
+    border: 'none',
+    borderRadius: 14,
+    background: 'var(--accent)',
+    color: '#fff',
+    cursor: 'pointer',
+  },
+  addTaskCancel: {
+    fontSize: 11.5,
+    padding: '4px 8px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--color-text-tertiary)',
+    cursor: 'pointer',
+  },
   expanded: {
     paddingTop: 6,
     paddingLeft: 24,
@@ -624,3 +727,4 @@ const styles = {
     color: 'var(--color-text-secondary)',
   },
 };
+

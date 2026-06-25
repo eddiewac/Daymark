@@ -14,6 +14,7 @@ export default function ProjectDetail({
   stationTemplates,
   projectGroups,
   onUpdate,
+  onAddTask,
   onDelete,
   onDeleteTask,
   onTrack,
@@ -300,6 +301,8 @@ export default function ProjectDetail({
           <DeliverableEditor
             deliverables={draft.deliverables || []}
             stationTemplates={stationTemplates}
+            onAddTask={onAddTask}
+            projectName={project.name}
             onChange={(deliverables) => {
               const updated = { ...draft, deliverables };
               setDraft(updated);
@@ -650,3 +653,4 @@ const handoffStyles = {
   },
   msg: { fontSize: 11, color: '#1d9e75', fontWeight: 500 },
 };
+

@@ -242,6 +242,7 @@ export default function ProjectsPanel({
               stationTemplates={stationTemplates}
               projectGroups={projectGroups || []}
               onUpdate={onUpdate}
+              onAddTask={onAddTask}
               onDelete={onDelete}
               onDeleteTask={onDeleteTask}
               onTrack={() => {
@@ -365,4 +366,5 @@ const styles = {
     flexDirection: 'column',
   },
 };
+
 

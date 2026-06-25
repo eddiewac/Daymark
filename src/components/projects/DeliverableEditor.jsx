@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { uid } from '../../lib/utils.js';
 import StationsEditor from './StationsEditor.jsx';
 
-export default function DeliverableEditor({ deliverables, onChange, stationTemplates }) {
+export default function DeliverableEditor({ deliverables, onChange, stationTemplates, onAddTask, projectName }) {
   const [editingId, setEditingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
@@ -158,7 +158,7 @@ export default function DeliverableEditor({ deliverables, onChange, stationTempl
 
             {isExpanded && (
               <div style={styles.delivBody}>
-                <StationsEditor deliverable={d} onChange={updateDeliverable} stationTemplates={stationTemplates} />
+                <StationsEditor deliverable={d} onChange={updateDeliverable} stationTemplates={stationTemplates} onAddTask={onAddTask} projectName={projectName} />
               </div>
             )}
           </div>
@@ -286,3 +286,4 @@ const styles = {
     marginTop: 4,
   },
 };
+

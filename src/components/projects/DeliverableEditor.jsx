@@ -142,7 +142,16 @@ export default function DeliverableEditor({ deliverables, onChange, stationTempl
               <input
                 type="text"
                 value={d.waitingOnName || ''}
-                onChange={(e) => update(d.id, { waitingOnName: e.target.value })}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  // If the name is cleared, also clear the date — otherwise a
+                  // stale date would be stuck in a now-disabled field.
+                  if (!name.trim()) {
+                    update(d.id, { waitingOnName: name, waitingOnDate: '' });
+                  } else {
+                    update(d.id, { waitingOnName: name });
+                  }
+                }}
                 placeholder="(e.g. Jess, client) — optional"
                 style={styles.waitingNameInput}
               />

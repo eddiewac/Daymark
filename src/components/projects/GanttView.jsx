@@ -393,6 +393,7 @@ export default function GanttView({ projects, congresses }) {
 const styles = {
   wrap: {
     flex: 1,
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     background: 'var(--bg-surface)',
@@ -407,7 +408,7 @@ const styles = {
   },
   toolTitle: { fontSize: 13, fontWeight: 600 },
   toolMeta: { fontSize: 11, color: 'var(--color-text-secondary)' },
-  layout: { flex: 1, display: 'flex', overflow: 'hidden' },
+  layout: { flex: 1, display: 'flex', overflow: 'hidden', minWidth: 0 },
   labelCol: {
     width: LABEL_W,
     flexShrink: 0,
@@ -436,7 +437,7 @@ const styles = {
     textOverflow: 'ellipsis',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
   },
-  scrollArea: { flex: 1, overflow: 'auto' },
+  scrollArea: { flex: 1, overflow: 'auto', minWidth: 0 },
   header: {
     position: 'sticky',
     top: 0,

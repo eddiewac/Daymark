@@ -505,9 +505,10 @@ const styles = {
     fontFamily: 'inherit',
     resize: 'vertical',
   },
-  formRow: { display: 'flex', gap: 6 },
+  formRow: { display: 'flex', gap: 6, flexWrap: 'wrap' },
   select: {
     flex: 1,
+    minWidth: 110,
     padding: '5px 8px',
     border: '0.5px solid var(--color-border-primary)',
     borderRadius: 6,

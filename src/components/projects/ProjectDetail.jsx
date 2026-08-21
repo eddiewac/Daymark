@@ -81,6 +81,10 @@ export default function ProjectDetail({
     const h = Number(t.outOfScopeHours);
     return sum + (Number.isFinite(h) ? h : 0);
   }, 0);
+  // Partial out-of-scope entries logged in the moment (scope creep on tasks
+  // that are otherwise in scope). Separate from whole-task OOS above.
+  const partialOosEntries = projectTasks.flatMap((t) => t.oosEntries || []);
+  const partialOosHours = partialOosEntries.reduce((s, e) => s + (e.hours || 0), 0);
 
   return (
     <div style={styles.wrap}>
@@ -206,15 +210,30 @@ export default function ProjectDetail({
           </div>
         )}
 
-        {/* Out of scope summary */}
-        {oosTasks.length > 0 && (
+        {/* Out of scope summary — whole-task OOS and partial scope-creep */}
+        {(oosTasks.length > 0 || partialOosEntries.length > 0) && (
           <div style={oosBoxStyles.box}>
             <span style={oosBoxStyles.icon}>⚠</span>
             <span style={oosBoxStyles.text}>
-              <strong>{oosTasks.length}</strong> out-of-scope task{oosTasks.length === 1 ? '' : 's'}
-              {oosHours > 0 && (
+              {oosTasks.length > 0 && (
                 <>
-                  {' '}· <strong>{oosHours}</strong> extra hour{oosHours === 1 ? '' : 's'} estimated
+                  <strong>{oosTasks.length}</strong> out-of-scope task{oosTasks.length === 1 ? '' : 's'}
+                  {oosHours > 0 && (
+                    <>
+                      {' '}· <strong>{oosHours}</strong> extra hour{oosHours === 1 ? '' : 's'} estimated
+                    </>
+                  )}
+                </>
+              )}
+              {partialOosEntries.length > 0 && (
+                <>
+                  {oosTasks.length > 0 ? <br /> : null}
+                  <strong>{partialOosEntries.length}</strong> scope-creep item{partialOosEntries.length === 1 ? '' : 's'} logged
+                  {partialOosHours > 0 && (
+                    <>
+                      {' '}· <strong>{partialOosHours.toFixed(1)}</strong>h beyond scope
+                    </>
+                  )}
                 </>
               )}
             </span>

@@ -35,6 +35,15 @@ export default function ProjectCard({
     .map((d) => ({ name: d.name, status: deliverableStatus(d) }))
     .filter((x) => x.status);
 
+  // Scope-creep rollup: partial out-of-scope entries logged across this
+  // project's tasks (real-time view of scope drift). Whole-task-OOS tasks are
+  // counted separately below.
+  const oosEntries = (projectTasks || []).flatMap((t) => t.oosEntries || []);
+  const oosHours = oosEntries.reduce((s, e) => s + (e.hours || 0), 0);
+  const oosItemCount = oosEntries.length;
+  const wholeOosCount = (projectTasks || []).filter((t) => t.outOfScope).length;
+  const hasScopeCreep = oosItemCount > 0 || wholeOosCount > 0;
+
   return (
     <button onClick={onClick} style={{ ...styles.card, borderTop: `3px solid ${color}` }}>
       <div style={styles.titleRow}>
@@ -87,6 +96,23 @@ export default function ProjectCard({
           ))}
           {delivStatuses.length > 4 && (
             <div style={styles.delivMore}>+ {delivStatuses.length - 4} more</div>
+          )}
+        </div>
+      )}
+      {hasScopeCreep && (
+        <div style={styles.scopeCreep} title="Out-of-scope work logged against this project">
+          ⚠ Scope:{' '}
+          {oosItemCount > 0 && (
+            <span style={styles.scopeCreepVal}>
+              {oosItemCount} item{oosItemCount === 1 ? '' : 's'}
+              {oosHours > 0 ? ` · ${oosHours.toFixed(1)}h` : ''}
+            </span>
+          )}
+          {wholeOosCount > 0 && (
+            <span style={styles.scopeCreepVal}>
+              {oosItemCount > 0 ? ' · ' : ''}
+              {wholeOosCount} OOS task{wholeOosCount === 1 ? '' : 's'}
+            </span>
           )}
         </div>
       )}
@@ -204,6 +230,15 @@ const styles = {
     WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
+  },
+  scopeCreep: {
+    fontSize: 10.5,
+    color: '#BA7517',
+    marginTop: 6,
+    fontWeight: 500,
+  },
+  scopeCreepVal: {
+    fontWeight: 600,
   },
 };
 

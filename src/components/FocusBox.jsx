@@ -232,6 +232,27 @@ function OutOfScopeSection({ task, onUpdateTask }) {
         )}
       </div>
 
+      {/* Whole-task OOS toggle — marks the ENTIRE task out of scope (its logged
+          time counts as OOS). Distinct from the per-item entries below, which
+          flag partial scope creep on an otherwise in-scope task. */}
+      <label style={oosStyles.wholeToggle}>
+        <input
+          type="checkbox"
+          checked={!!task.outOfScope}
+          onChange={(e) => onUpdateTask(task.id, { outOfScope: e.target.checked })}
+        />
+        <span style={oosStyles.wholeToggleText}>
+          This whole task is out of scope
+          <span style={oosStyles.wholeToggleHint}>
+            {' '}— all its logged time is OOS (shows flagged on the timesheet)
+          </span>
+        </span>
+      </label>
+
+      <div style={oosStyles.divider}>
+        <span style={oosStyles.dividerText}>or log just the extra bits</span>
+      </div>
+
       {entries.length > 0 && (
         <div style={oosStyles.list}>
           {entries.map((e) => (
@@ -294,6 +315,38 @@ const oosStyles = {
     marginBottom: 6,
   },
   title: { fontSize: 12, fontWeight: 600, color: '#BA7517' },
+  wholeToggle: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 8,
+    cursor: 'pointer',
+    fontSize: 12,
+    padding: '4px 0 8px',
+  },
+  wholeToggleText: {
+    color: 'var(--color-text-primary)',
+    fontWeight: 500,
+    lineHeight: 1.35,
+  },
+  wholeToggleHint: {
+    fontWeight: 400,
+    color: 'var(--color-text-secondary)',
+  },
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '2px 0 8px',
+    borderTop: '0.5px dashed #BA751733',
+    position: 'relative',
+  },
+  dividerText: {
+    fontSize: 10,
+    color: 'var(--color-text-tertiary)',
+    background: '#FBF6EE',
+    padding: '0 8px',
+    marginTop: -7,
+  },
   total: { fontSize: 11, color: '#BA7517', fontWeight: 500 },
   list: { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 },
   entry: {

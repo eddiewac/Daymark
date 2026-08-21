@@ -154,9 +154,6 @@ export default function TimesheetPanel({
                   );
                 })}
                 <th style={{ ...styles.th, ...styles.totalCol }}>Total</th>
-                <th style={{ ...styles.th, ...styles.oosCol }} title="Out-of-scope hours logged against this task">
-                  OOS
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -169,7 +166,7 @@ export default function TimesheetPanel({
                 const isRunning = runningTimer?.taskId === t.id;
                 const projColor = projectColor(t.project, projects);
                 return (
-                  <tr key={t.id}>
+                  <tr key={t.id} style={t.outOfScope ? styles.oosRowTint : undefined}>
                     <td style={{ ...styles.td, ...styles.taskCol, ...styles.taskCell }}>
                       {canTrack && (
                         <button
@@ -196,6 +193,18 @@ export default function TimesheetPanel({
                           }}
                         >
                           {t.title || '(untitled)'}
+                          {t.outOfScope && (
+                            <span
+                              style={styles.oosBadgeWhole}
+                              title={
+                                t.outOfScopeNotes
+                                  ? `Out of scope — ${t.outOfScopeNotes}`
+                                  : 'This whole task is out of scope'
+                              }
+                            >
+                              OOS
+                            </span>
+                          )}
                         </div>
                         {t.project && (
                           <div
@@ -268,23 +277,6 @@ export default function TimesheetPanel({
                     >
                       {taskTotal > 0 ? taskTotal.toFixed(2) : ''}
                     </td>
-                    <td style={{ ...styles.td, ...styles.oosCol, ...styles.oosCell }}>
-                      {(() => {
-                        const oos = (t.oosEntries || []).reduce((s, e) => s + (e.hours || 0), 0);
-                        const count = (t.oosEntries || []).length;
-                        if (count === 0) return '';
-                        return (
-                          <span
-                            style={styles.oosBadge}
-                            title={(t.oosEntries || [])
-                              .map((e) => `${e.description}${e.hours ? ` (${e.hours}h)` : ''}`)
-                              .join('\n')}
-                          >
-                            {oos > 0 ? `${oos.toFixed(2)}h` : `${count}`}
-                          </span>
-                        );
-                      })()}
-                    </td>
                   </tr>
                 );
               })}
@@ -317,24 +309,6 @@ export default function TimesheetPanel({
                   }}
                 >
                   {weekTotal > 0 ? weekTotal.toFixed(2) : ''}
-                </td>
-                <td
-                  style={{
-                    ...styles.td,
-                    ...styles.oosCol,
-                    fontWeight: 700,
-                    textAlign: 'center',
-                    fontFamily: 'monospace',
-                    color: '#BA7517',
-                  }}
-                >
-                  {(() => {
-                    const totalOos = visibleTasks.reduce(
-                      (s, t) => s + (t.oosEntries || []).reduce((a, e) => a + (e.hours || 0), 0),
-                      0
-                    );
-                    return totalOos > 0 ? totalOos.toFixed(2) : '';
-                  })()}
                 </td>
               </tr>
             </tbody>
@@ -427,18 +401,20 @@ const styles = {
   taskCol: { width: '38%', textAlign: 'left', paddingLeft: 14, paddingRight: 8 },
   dayCol: { width: '7%', minWidth: 78 },
   totalCol: { width: '8%', minWidth: 70, textAlign: 'center', fontFamily: 'monospace' },
-  oosCol: { width: '8%', minWidth: 64, textAlign: 'center' },
-  oosCell: { textAlign: 'center', padding: '8px 4px' },
-  oosBadge: {
+  oosBadgeWhole: {
     display: 'inline-block',
-    fontSize: 11,
-    fontFamily: 'monospace',
-    fontWeight: 600,
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: '0.04em',
     color: '#BA7517',
-    background: '#BA751718',
-    borderRadius: 8,
-    padding: '2px 7px',
-    cursor: 'default',
+    background: '#BA751722',
+    borderRadius: 5,
+    padding: '1px 6px',
+    marginLeft: 6,
+    verticalAlign: 'middle',
+  },
+  oosRowTint: {
+    background: '#BA75170A',
   },
   taskCell: {
     display: 'flex',

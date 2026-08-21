@@ -115,6 +115,14 @@ export default function FocusBox({
           </div>
         )}
 
+        {/* Out-of-scope capture — log work beyond scope in the moment.
+            Each entry is { id, description, hours, loggedAt }; they roll up
+            to the timesheet and (later) a per-project scope-creep total. */}
+        <OutOfScopeSection
+          task={task}
+          onUpdateTask={onUpdateTask}
+        />
+
         {/* Project brief */}
         {project && (
           <ProjectBrief project={project} onUpdate={onUpdateProject} />
@@ -183,6 +191,170 @@ function ChecklistBlock({ tag, items, progress, onToggle }) {
     </div>
   );
 }
+
+// ── Out-of-scope capture ─────────────────────────────────────────────────────
+// Logs work done beyond the contracted scope, in the moment. Each entry is
+// { id, description, hours, loggedAt }. Stored as task.oosEntries and rolled
+// up on the timesheet (and later a per-project scope-creep total).
+function OutOfScopeSection({ task, onUpdateTask }) {
+  const entries = task.oosEntries || [];
+  const [desc, setDesc] = useState('');
+  const [hours, setHours] = useState('');
+
+  const add = () => {
+    if (!desc.trim()) return;
+    const entry = {
+      id: 'oos_' + Math.random().toString(36).slice(2, 9),
+      description: desc.trim(),
+      hours: hours === '' ? null : Number(hours),
+      loggedAt: Date.now(),
+    };
+    onUpdateTask(task.id, { oosEntries: [...entries, entry] });
+    setDesc('');
+    setHours('');
+  };
+
+  const remove = (id) => {
+    onUpdateTask(task.id, { oosEntries: entries.filter((e) => e.id !== id) });
+  };
+
+  const totalHours = entries.reduce((s, e) => s + (e.hours || 0), 0);
+
+  return (
+    <div style={oosStyles.wrap}>
+      <div style={oosStyles.header}>
+        <span style={oosStyles.title}>⚠ Out of scope</span>
+        {entries.length > 0 && (
+          <span style={oosStyles.total}>
+            {entries.length} item{entries.length === 1 ? '' : 's'}
+            {totalHours > 0 ? ` · ${totalHours.toFixed(2)}h` : ''}
+          </span>
+        )}
+      </div>
+
+      {entries.length > 0 && (
+        <div style={oosStyles.list}>
+          {entries.map((e) => (
+            <div key={e.id} style={oosStyles.entry}>
+              <span style={oosStyles.entryDesc}>{e.description}</span>
+              {e.hours != null && (
+                <span style={oosStyles.entryHours}>{Number(e.hours).toFixed(2)}h</span>
+              )}
+              <button
+                onClick={() => remove(e.id)}
+                style={oosStyles.entryDel}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={oosStyles.addRow}>
+        <input
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="What went out of scope? (e.g. 2 extra slides)"
+          style={oosStyles.descInput}
+        />
+        <input
+          type="number"
+          step="0.25"
+          min="0"
+          value={hours}
+          onChange={(e) => setHours(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="hrs"
+          style={oosStyles.hoursInput}
+          title="Rough hours (optional)"
+        />
+        <button onClick={add} style={oosStyles.addBtn} title="Log out-of-scope work">
+          + Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const oosStyles = {
+  wrap: {
+    marginTop: 10,
+    padding: '10px 12px',
+    background: '#BA751710',
+    border: '0.5px solid #BA751733',
+    borderRadius: 10,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  title: { fontSize: 12, fontWeight: 600, color: '#BA7517' },
+  total: { fontSize: 11, color: '#BA7517', fontWeight: 500 },
+  list: { display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 },
+  entry: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '4px 8px',
+    background: 'var(--bg-surface)',
+    borderRadius: 6,
+    fontSize: 12,
+  },
+  entryDesc: { flex: 1, color: 'var(--color-text-primary)' },
+  entryHours: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: '#BA7517',
+    fontWeight: 500,
+  },
+  entryDel: {
+    width: 18,
+    height: 18,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--color-text-tertiary)',
+    fontSize: 14,
+    cursor: 'pointer',
+    lineHeight: 1,
+  },
+  addRow: { display: 'flex', gap: 6, alignItems: 'center' },
+  descInput: {
+    flex: 1,
+    padding: '5px 8px',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 6,
+    fontSize: 12,
+    background: 'var(--bg-surface)',
+    outline: 'none',
+  },
+  hoursInput: {
+    width: 52,
+    padding: '5px 6px',
+    border: '0.5px solid var(--color-border-primary)',
+    borderRadius: 6,
+    fontSize: 12,
+    background: 'var(--bg-surface)',
+    outline: 'none',
+    textAlign: 'right',
+    fontFamily: 'monospace',
+  },
+  addBtn: {
+    padding: '5px 12px',
+    background: '#BA7517',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+};
 
 // ── Project brief ────────────────────────────────────────────────────────────
 function ProjectBrief({ project, onUpdate }) {

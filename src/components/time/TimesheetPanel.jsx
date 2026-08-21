@@ -154,6 +154,9 @@ export default function TimesheetPanel({
                   );
                 })}
                 <th style={{ ...styles.th, ...styles.totalCol }}>Total</th>
+                <th style={{ ...styles.th, ...styles.oosCol }} title="Out-of-scope hours logged against this task">
+                  OOS
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -265,6 +268,23 @@ export default function TimesheetPanel({
                     >
                       {taskTotal > 0 ? taskTotal.toFixed(2) : ''}
                     </td>
+                    <td style={{ ...styles.td, ...styles.oosCol, ...styles.oosCell }}>
+                      {(() => {
+                        const oos = (t.oosEntries || []).reduce((s, e) => s + (e.hours || 0), 0);
+                        const count = (t.oosEntries || []).length;
+                        if (count === 0) return '';
+                        return (
+                          <span
+                            style={styles.oosBadge}
+                            title={(t.oosEntries || [])
+                              .map((e) => `${e.description}${e.hours ? ` (${e.hours}h)` : ''}`)
+                              .join('\n')}
+                          >
+                            {oos > 0 ? `${oos.toFixed(2)}h` : `${count}`}
+                          </span>
+                        );
+                      })()}
+                    </td>
                   </tr>
                 );
               })}
@@ -297,6 +317,24 @@ export default function TimesheetPanel({
                   }}
                 >
                   {weekTotal > 0 ? weekTotal.toFixed(2) : ''}
+                </td>
+                <td
+                  style={{
+                    ...styles.td,
+                    ...styles.oosCol,
+                    fontWeight: 700,
+                    textAlign: 'center',
+                    fontFamily: 'monospace',
+                    color: '#BA7517',
+                  }}
+                >
+                  {(() => {
+                    const totalOos = visibleTasks.reduce(
+                      (s, t) => s + (t.oosEntries || []).reduce((a, e) => a + (e.hours || 0), 0),
+                      0
+                    );
+                    return totalOos > 0 ? totalOos.toFixed(2) : '';
+                  })()}
                 </td>
               </tr>
             </tbody>
@@ -389,6 +427,19 @@ const styles = {
   taskCol: { width: '38%', textAlign: 'left', paddingLeft: 14, paddingRight: 8 },
   dayCol: { width: '7%', minWidth: 78 },
   totalCol: { width: '8%', minWidth: 70, textAlign: 'center', fontFamily: 'monospace' },
+  oosCol: { width: '8%', minWidth: 64, textAlign: 'center' },
+  oosCell: { textAlign: 'center', padding: '8px 4px' },
+  oosBadge: {
+    display: 'inline-block',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    fontWeight: 600,
+    color: '#BA7517',
+    background: '#BA751718',
+    borderRadius: 8,
+    padding: '2px 7px',
+    cursor: 'default',
+  },
   taskCell: {
     display: 'flex',
     alignItems: 'center',

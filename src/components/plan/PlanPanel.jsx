@@ -6,6 +6,7 @@ import {
   sumEstimateHours,
   generateCapacityEmail,
 } from '../../lib/capacity.js';
+import TaskForm from '../tasks/TaskForm.jsx';
 
 // ── Week helpers ─────────────────────────────────────────────────────────────
 function startOfWeek(d) {
@@ -31,6 +32,11 @@ export default function PlanPanel({
   tasks,
   projects,
   loading,
+  categories,
+  priorities,
+  statuses,
+  members,
+  workspaceId,
   onUpdateTask,
   onToggleDone,
   blocks,
@@ -42,6 +48,13 @@ export default function PlanPanel({
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [showDone, setShowDone] = useState(false);
   const [dragOverDay, setDragOverDay] = useState(null);
+  // Task being edited in the overlay (opened by clicking a task in Plan).
+  const [editingTask, setEditingTask] = useState(null);
+  const onEditTask = setEditingTask;
+  const saveEdit = (formValues) => {
+    if (editingTask) onUpdateTask(editingTask.id, formValues);
+    setEditingTask(null);
+  };
   const [viewMode, setViewMode] = useState(() => {
     try {
       return localStorage.getItem('daymark-plan-view') || 'calendar';
@@ -195,6 +208,7 @@ export default function PlanPanel({
           runningTimer={runningTimer}
           onUpdateTask={onUpdateTask}
           onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
           onStartTimer={onStartTimer}
           onStopTimer={onStopTimer}
         />
@@ -213,6 +227,7 @@ export default function PlanPanel({
                     task={t}
                     projects={projects}
                     onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
                     overdue
                   />
                 ))}
@@ -233,6 +248,7 @@ export default function PlanPanel({
               onDragLeave={() => setDragOverDay(null)}
               onDrop={(taskId) => handleDrop(taskId, '')}
               onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
             />
 
             {days.map((d, i) => {
@@ -254,9 +270,34 @@ export default function PlanPanel({
                   onDragLeave={() => setDragOverDay(null)}
                   onDrop={(taskId) => handleDrop(taskId, dk)}
                   onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
                 />
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Edit overlay — opens the same TaskForm used in the Tasks view when a
+          task is clicked in either the list or calendar. */}
+      {editingTask && (
+        <div style={styles.editOverlay} onClick={() => setEditingTask(null)}>
+          <div style={styles.editModal} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.editHeader}>
+              <span style={styles.editTitle}>Edit task</span>
+              <button onClick={() => setEditingTask(null)} style={styles.editClose}>×</button>
+            </div>
+            <TaskForm
+              initialTask={editingTask}
+              projects={projects}
+              categories={categories}
+              priorities={priorities}
+              statuses={statuses}
+              members={members}
+              workspaceId={workspaceId}
+              onSave={saveEdit}
+              onCancel={() => setEditingTask(null)}
+            />
           </div>
         </div>
       )}
@@ -282,6 +323,7 @@ function PlanListView({
   runningTimer,
   onUpdateTask,
   onToggleDone,
+  onEditTask,
   onStartTimer,
   onStopTimer,
 }) {
@@ -425,6 +467,7 @@ function PlanListView({
               runningTimer={runningTimer}
               onUpdateTask={onUpdateTask}
               onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
               onStartTimer={onStartTimer}
               onStopTimer={onStopTimer}
               overdue
@@ -465,6 +508,7 @@ function PlanListView({
                   runningTimer={runningTimer}
                   onUpdateTask={onUpdateTask}
                   onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
                   onStartTimer={onStartTimer}
                   onStopTimer={onStopTimer}
                 />
@@ -496,6 +540,7 @@ function PlanListRow({
   runningTimer,
   onUpdateTask,
   onToggleDone,
+  onEditTask,
   onStartTimer,
   onStopTimer,
   overdue,
@@ -519,7 +564,11 @@ function PlanListRow({
         onChange={() => onToggleDone(task.id)}
         style={listStyles.check}
       />
-      <div style={listStyles.rowMain}>
+      <div
+        style={{ ...listStyles.rowMain, cursor: onEditTask ? 'pointer' : 'default' }}
+        onClick={() => onEditTask && onEditTask(task)}
+        title={onEditTask ? 'Click to edit' : undefined}
+      >
         <div
           style={{
             ...listStyles.title,
@@ -853,6 +902,7 @@ function BacklogColumn({
   onDragLeave,
   onDrop,
   onToggleDone,
+  onEditTask,
 }) {
   // Which project groups are expanded. Default: all collapsed.
   const [openGroups, setOpenGroups] = useState({});
@@ -936,6 +986,7 @@ function BacklogColumn({
                         task={t}
                         projects={projects}
                         onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
                       />
                     ))}
                   </div>
@@ -962,6 +1013,7 @@ function DayColumn({
   onDragLeave,
   onDrop,
   onToggleDone,
+  onEditTask,
   backlog,
 }) {
   return (
@@ -1009,6 +1061,7 @@ function DayColumn({
               task={t}
               projects={projects}
               onToggleDone={onToggleDone}
+                    onEditTask={onEditTask}
             />
           ))
         )}
@@ -1018,7 +1071,7 @@ function DayColumn({
 }
 
 // ── TaskCard ─────────────────────────────────────────────────────────────────
-function TaskCard({ task, projects, onToggleDone, overdue }) {
+function TaskCard({ task, projects, onToggleDone, onEditTask, overdue }) {
   const projColor = projectColor(task.project, projects);
 
   return (
@@ -1058,7 +1111,11 @@ function TaskCard({ task, projects, onToggleDone, overdue }) {
           </svg>
         )}
       </button>
-      <div style={cardStyles.body}>
+      <div
+        style={{ ...cardStyles.body, cursor: onEditTask ? 'pointer' : 'default' }}
+        onClick={() => onEditTask && onEditTask(task)}
+        title={onEditTask ? 'Click to edit' : undefined}
+      >
         <div
           style={{
             ...cardStyles.title,
@@ -1083,6 +1140,40 @@ function TaskCard({ task, projects, onToggleDone, overdue }) {
 }
 
 const styles = {
+  editOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.32)',
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingTop: '6vh',
+    zIndex: 2000,
+  },
+  editModal: {
+    width: 'min(560px, 94vw)',
+    maxHeight: '86vh',
+    overflowY: 'auto',
+    background: 'var(--bg-surface)',
+    borderRadius: 14,
+    boxShadow: '0 14px 48px rgba(0,0,0,0.24)',
+    padding: 18,
+  },
+  editHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  editTitle: { fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' },
+  editClose: {
+    fontSize: 22,
+    lineHeight: 1,
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--color-text-tertiary)',
+    cursor: 'pointer',
+  },
   wrap: {
     flex: 1,
     background: 'var(--bg-surface)',

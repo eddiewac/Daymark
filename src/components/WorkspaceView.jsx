@@ -624,6 +624,11 @@ export default function WorkspaceView({
             tasks={allTasks}
             projects={projects}
             loading={tasksLoading}
+            categories={settings.categories}
+            priorities={settings.priorities}
+            statuses={settings.statuses}
+            members={members}
+            workspaceId={workspaceId}
             onUpdateTask={updateTask}
             onToggleDone={handleToggleDone}
             onJumpToTrack={jumpToTrack}

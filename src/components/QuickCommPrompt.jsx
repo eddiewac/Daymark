@@ -27,7 +27,19 @@ function defaultExpectBy() {
   return d.toISOString().slice(0, 10);
 }
 
-export default function QuickCommPrompt({ taskTitle, pills, onPick, onDismiss }) {
+export default function QuickCommPrompt({
+  taskTitle,
+  pills,
+  stationName,
+  deliverableName,
+  stationDone,
+  doneCount,
+  stationCount,
+  nextStationName,
+  onCompleteStation,
+  onPick,
+  onDismiss,
+}) {
   const [leaving, setLeaving] = useState(false);
   const [expectBy, setExpectBy] = useState(defaultExpectBy);
   // Once the user touches the date, stop the auto-dismiss so the prompt doesn't
@@ -98,6 +110,37 @@ export default function QuickCommPrompt({ taskTitle, pills, onPick, onDismiss })
           title="Expected back date — when this surfaces on Today"
         />
       </div>
+
+      {/* Track progress + advance — show where the deliverable stands and let
+          the user mark this station complete in place, without navigating to
+          the project. */}
+      {stationName != null && stationCount > 0 && (
+        <div style={styles.trackCol}>
+          <div style={styles.trackProgress}>
+            <span style={styles.trackStation}>{stationName}</span>
+            <span style={styles.trackCount}>
+              {doneCount}/{stationCount}
+            </span>
+          </div>
+          {stationDone ? (
+            <div style={styles.trackDone}>
+              ✓ station complete
+              {nextStationName ? ` · next: ${nextStationName}` : ''}
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setTouched(true);
+                onCompleteStation && onCompleteStation();
+              }}
+              style={styles.trackBtn}
+              title="Mark this station complete"
+            >
+              Mark station complete →
+            </button>
+          )}
+        </div>
+      )}
       <button onClick={dismiss} style={styles.close} title="Dismiss">
         ×
       </button>
@@ -182,5 +225,52 @@ const styles = {
     fontSize: 18,
     color: 'var(--color-text-tertiary)',
     cursor: 'pointer',
+  },
+  trackCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+    paddingLeft: 12,
+    marginLeft: 4,
+    borderLeft: '0.5px solid var(--color-border-secondary)',
+    flexShrink: 0,
+  },
+  trackProgress: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trackStation: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: 'var(--color-text-primary)',
+    maxWidth: 120,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  trackCount: {
+    fontSize: 10,
+    color: 'var(--color-text-tertiary)',
+    background: 'var(--color-background-secondary)',
+    borderRadius: 8,
+    padding: '0 6px',
+  },
+  trackBtn: {
+    fontSize: 11,
+    fontWeight: 500,
+    padding: '3px 9px',
+    borderRadius: 12,
+    border: 'none',
+    background: 'var(--accent)',
+    color: '#fff',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  trackDone: {
+    fontSize: 10.5,
+    fontWeight: 500,
+    color: '#1d9e75',
+    whiteSpace: 'nowrap',
   },
 };

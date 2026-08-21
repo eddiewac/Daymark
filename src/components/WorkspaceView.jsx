@@ -270,15 +270,55 @@ export default function WorkspaceView({
     if (task && !wasDone) {
       const ctx = resolveStationForTask(task);
       if (ctx) {
+        // Work out the station's position in its deliverable and what's next,
+        // so the prompt can show track progress and offer to advance it.
+        const stations = ctx.deliverable.stations || [];
+        const idx = stations.findIndex((s) => s.id === ctx.station.id);
+        const doneCount = stations.filter((s) => s.done).length;
+        const nextStation = stations.slice(idx + 1).find((s) => !s.done) || null;
         setCommPrompt({
           taskId,
           taskTitle: task.title || '(untitled)',
           projectId: ctx.project.id,
+          deliverableName: ctx.deliverable.name || '',
           stationId: ctx.station.id,
+          stationName: ctx.station.name || '',
+          stationDone: !!ctx.station.done,
+          stationIndex: idx,
+          stationCount: stations.length,
+          doneCount,
+          nextStationName: nextStation ? nextStation.name : null,
           pills: ctx.station.commPills || DEFAULT_COMM_PILLS,
         });
       }
     }
+  };
+
+  // Mark the prompt's station complete (mirrors StationsEditor.toggleDone).
+  // Advances the track in place, without navigating to the project.
+  const completeStationFromPrompt = () => {
+    if (!commPrompt) return;
+    const project = (projects || []).find((p) => p.id === commPrompt.projectId);
+    if (!project) {
+      setCommPrompt(null);
+      return;
+    }
+    const deliverables = (project.deliverables || []).map((d) => ({
+      ...d,
+      stations: (d.stations || []).map((s) =>
+        s.id === commPrompt.stationId
+          ? { ...s, done: true, completedAt: new Date().toISOString() }
+          : s
+      ),
+    }));
+    updateProject(project.id, { deliverables });
+    // Update the prompt in place so it reflects the just-advanced state
+    // (station now done) rather than closing — the user still sees the payoff.
+    setCommPrompt((prev) =>
+      prev
+        ? { ...prev, stationDone: true, doneCount: prev.doneCount + (prev.stationDone ? 0 : 1) }
+        : prev
+    );
   };
 
   // Append a comm to the prompt's station, then dismiss the prompt.
@@ -841,6 +881,13 @@ export default function WorkspaceView({
         <QuickCommPrompt
           taskTitle={commPrompt.taskTitle}
           pills={commPrompt.pills}
+          stationName={commPrompt.stationName}
+          deliverableName={commPrompt.deliverableName}
+          stationDone={commPrompt.stationDone}
+          doneCount={commPrompt.doneCount}
+          stationCount={commPrompt.stationCount}
+          nextStationName={commPrompt.nextStationName}
+          onCompleteStation={completeStationFromPrompt}
           onPick={logCommFromPrompt}
           onDismiss={() => setCommPrompt(null)}
         />

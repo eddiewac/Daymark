@@ -3,6 +3,7 @@ import ProjectCard from './ProjectCard.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import GanttView from './GanttView.jsx';
 import TrackView from './track/TrackView.jsx';
+import ProjectTracker from './ProjectTracker.jsx';
 import { groupProjects } from '../../lib/projectGroups.js';
 
 export default function ProjectsPanel({
@@ -108,6 +109,7 @@ export default function ProjectsPanel({
             { key: 'grid', label: 'Grid' },
             { key: 'gantt', label: 'Gantt' },
             { key: 'track', label: '🚂 Track' },
+            { key: 'tracker', label: '📋 Tracker' },
           ].map((v) => (
             <button
               key={v.key}
@@ -199,6 +201,15 @@ export default function ProjectsPanel({
             </div>
           ) : view === 'gantt' ? (
             <GanttView projects={visible} congresses={congresses || []} />
+          ) : view === 'tracker' ? (
+            <ProjectTracker
+              projects={visible}
+              allProjects={projects}
+              projectGroups={projectGroups || []}
+              tasks={tasks}
+              onUpdate={onUpdate}
+              onOpenProject={(id) => setActiveId(id)}
+            />
           ) : (
             // Track picker - choose a project to enter Track mode
             <div style={styles.gridScroll}>

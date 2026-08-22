@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { projectColorWithGroups } from '../../lib/projectGroups.js';
 import { projectHealth } from '../../lib/stations.js';
 import { deliverableStatus } from '../../lib/deliverableStatus.js';
 
@@ -19,17 +18,7 @@ function fmtShort(iso) {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-function fmtRelative(ts) {
-  if (!ts) return 'never';
-  const days = Math.floor((Date.now() - ts) / DAY_MS);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return new Date(ts).toLocaleDateString();
-}
-
-// Earliest upcoming deliverable due date (or earliest overall if all past).
+// Earliest upcoming deliverable due date (or latest if all past).
 function nextDeadline(project) {
   const dates = (project.deliverables || [])
     .map((d) => d.dueDate)
@@ -37,60 +26,87 @@ function nextDeadline(project) {
     .sort();
   if (dates.length === 0) return null;
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = dates.find((d) => d >= today);
-  return upcoming || dates[dates.length - 1];
+  return dates.find((d) => d >= today) || dates[dates.length - 1];
 }
 
-// "Stale" = tracker notes not updated within STALE_DAYS (or never).
 function isStale(project) {
   const ts = project.trackerUpdatedAt;
   if (!ts) return true;
   return Date.now() - ts > STALE_DAYS * DAY_MS;
 }
 
-export default function ProjectTracker({
-  projects,
-  allProjects,
-  projectGroups,
-  tasks,
-  onUpdate,
-  onOpenProject,
-}) {
-  const [activeId, setActiveId] = useState(projects[0]?.id || null);
-  const [sortBy, setSortBy] = useState('stale'); // stale | deadline | name
-
-  // Keep a valid selection as the list changes.
-  useEffect(() => {
-    if (!projects.find((p) => p.id === activeId)) {
-      setActiveId(projects[0]?.id || null);
-    }
-  }, [projects, activeId]);
-
-  const tasksFor = (name) => (tasks || []).filter((t) => t.project === name);
-
-  const sorted = useMemo(() => {
-    const arr = [...projects];
-    if (sortBy === 'name') {
-      arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    } else if (sortBy === 'deadline') {
-      arr.sort((a, b) => (nextDeadline(a) || '9999').localeCompare(nextDeadline(b) || '9999'));
-    } else {
-      // stale first (never-updated, then oldest), then the rest
-      arr.sort((a, b) => (a.trackerUpdatedAt || 0) - (b.trackerUpdatedAt || 0));
-    }
-    return arr;
-  }, [projects, sortBy]);
-
-  const active = projects.find((p) => p.id === activeId);
-  const staleCount = projects.filter(isStale).length;
-
-  // Advance to the next project in the sorted list (the "sweep" motion).
-  const goNext = () => {
-    const idx = sorted.findIndex((p) => p.id === activeId);
-    const next = sorted[idx + 1];
-    if (next) setActiveId(next.id);
+// Compute derived fields for a project row, once.
+function buildRow(project, tasks) {
+  const projectTasks = (tasks || []).filter((t) => t.project === project.name);
+  const health = projectHealth(project, projectTasks);
+  const delivs = project.deliverables || [];
+  const delivDone = delivs.filter((d) => d.done).length;
+  const waiting = delivs
+    .map((d) => ({ name: d.name, status: deliverableStatus(d) }))
+    .filter((x) => x.status && (x.status.kind === 'waiting' || x.status.kind === 'awaiting'));
+  const oosEntries = projectTasks.flatMap((t) => t.oosEntries || []);
+  const oosHours = oosEntries.reduce((s, e) => s + (e.hours || 0), 0);
+  const wholeOos = projectTasks.filter((t) => t.outOfScope).length;
+  return {
+    project,
+    health,
+    deadline: nextDeadline(project),
+    delivLabel: delivs.length ? `${delivDone}/${delivs.length}` : '',
+    waitingLabel: waiting.length
+      ? waiting
+          .map((w) => `${w.status.icon || ''} ${w.name}${w.status.date ? ` ${fmtShort(w.status.date)}` : ''}`)
+          .join(', ')
+      : '',
+    scopeLabel:
+      oosEntries.length > 0 || wholeOos > 0
+        ? `${oosEntries.length ? `${oosEntries.length} item${oosEntries.length === 1 ? '' : 's'}${oosHours > 0 ? ` ${oosHours.toFixed(1)}h` : ''}` : ''}${wholeOos ? `${oosEntries.length ? ', ' : ''}${wholeOos} OOS` : ''}`
+        : '',
+    stale: isStale(project),
   };
-  const hasNext = sorted.findIndex((p) => p.id === activeId) < sorted.length - 1;
+}
+
+// Column definitions. `sortVal` returns a comparable value.
+const COLUMNS = [
+  { key: 'name', label: 'Project', width: 180, sortVal: (r) => (r.project.name || '').toLowerCase() },
+  { key: 'status', label: 'Status', width: 120, sortVal: (r) => (r.project.status || '').toLowerCase() },
+  { key: 'health', label: 'Health', width: 68, sortVal: (r) => ({ red: 0, amber: 1, green: 2 }[r.health.status] ?? 3) },
+  { key: 'deadline', label: 'Next due', width: 88, sortVal: (r) => r.deadline || '9999' },
+  { key: 'deliverables', label: 'Deliv.', width: 66, sortVal: (r) => r.delivLabel },
+  { key: 'waiting', label: 'Waiting on', width: 160, sortVal: (r) => r.waitingLabel },
+  { key: 'scope', label: 'Scope', width: 110, sortVal: (r) => r.scopeLabel },
+  { key: 'nextSteps', label: 'Next steps', width: 260, editable: true, field: 'nextSteps', sortVal: (r) => r.project.nextSteps || '' },
+  { key: 'blockers', label: 'Blockers', width: 220, editable: true, field: 'blockers', sortVal: (r) => r.project.blockers || '' },
+];
+
+export default function ProjectTracker({ projects, tasks, onUpdate, onOpenProject }) {
+  const [sortKey, setSortKey] = useState('deadline');
+  const [sortDir, setSortDir] = useState('asc');
+  const [editing, setEditing] = useState(null); // { projectId, field }
+
+  const rows = useMemo(() => projects.map((p) => buildRow(p, tasks)), [projects, tasks]);
+
+  const sortedRows = useMemo(() => {
+    const col = COLUMNS.find((c) => c.key === sortKey) || COLUMNS[0];
+    const arr = [...rows].sort((a, b) => {
+      const av = col.sortVal(a);
+      const bv = col.sortVal(b);
+      if (av < bv) return -1;
+      if (av > bv) return 1;
+      return 0;
+    });
+    return sortDir === 'desc' ? arr.reverse() : arr;
+  }, [rows, sortKey, sortDir]);
+
+  const toggleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const staleCount = rows.filter((r) => r.stale).length;
 
   if (projects.length === 0) {
     return <div style={styles.empty}>No projects to track.</div>;
@@ -98,337 +114,294 @@ export default function ProjectTracker({
 
   return (
     <div style={styles.wrap}>
-      {/* Left: project list */}
-      <div style={styles.list}>
-        <div style={styles.listHeader}>
-          <span style={styles.listTitle}>
-            {staleCount > 0 ? `${staleCount} need${staleCount === 1 ? 's' : ''} an update` : 'All up to date'}
-          </span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            style={styles.sortSelect}
-            title="Sort projects"
-          >
-            <option value="stale">Stale first</option>
-            <option value="deadline">By deadline</option>
-            <option value="name">By name</option>
-          </select>
-        </div>
-        <div style={styles.listScroll}>
-          {sorted.map((p) => {
-            const health = projectHealth(p, tasksFor(p.name));
-            const stale = isStale(p);
-            const isActive = p.id === activeId;
-            const dl = nextDeadline(p);
-            return (
-              <button
-                key={p.id}
-                onClick={() => setActiveId(p.id)}
-                style={{
-                  ...styles.listItem,
-                  ...(isActive ? styles.listItemActive : {}),
-                }}
-              >
-                <span
-                  style={{
-                    ...styles.healthDot,
-                    background: HEALTH_COLOR[health.status] || HEALTH_COLOR.green,
-                  }}
-                />
-                <span style={styles.listName}>{p.name || '(untitled)'}</span>
-                {dl && <span style={styles.listDeadline}>{fmtShort(dl)}</span>}
-                <span
-                  style={{
-                    ...styles.staleMark,
-                    ...(stale ? styles.staleMarkOn : styles.staleMarkOff),
-                  }}
-                  title={stale ? 'Notes need updating' : `Updated ${fmtRelative(p.trackerUpdatedAt)}`}
-                >
-                  {stale ? '✎' : '✓'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <div style={styles.toolbar}>
+        <span style={styles.toolbarText}>
+          {projects.length} project{projects.length === 1 ? '' : 's'}
+          {staleCount > 0 && <span style={styles.staleCount}> · {staleCount} need updating</span>}
+        </span>
+        <span style={styles.toolbarHint}>
+          Click a Next steps / Blockers cell to edit · click a header to sort
+        </span>
       </div>
 
-      {/* Right: focused editor */}
-      <div style={styles.editorPane}>
-        {active ? (
-          <ProjectEditor
-            key={active.id}
-            project={active}
-            projectTasks={tasksFor(active.name)}
-            onUpdate={onUpdate}
-            onOpenProject={onOpenProject}
-            onNext={hasNext ? goNext : null}
-          />
-        ) : (
-          <div style={styles.empty}>Select a project.</div>
-        )}
+      <div style={styles.scroll}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              {COLUMNS.map((col) => (
+                <th
+                  key={col.key}
+                  onClick={() => toggleSort(col.key)}
+                  style={{ ...styles.th, width: col.width, minWidth: col.width }}
+                  title="Click to sort"
+                >
+                  {col.label}
+                  {sortKey === col.key && (
+                    <span style={styles.sortArrow}>{sortDir === 'asc' ? ' ▲' : ' ▼'}</span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map((r) => (
+              <tr key={r.project.id} style={{ ...styles.tr, ...(r.stale ? styles.trStale : {}) }}>
+                {COLUMNS.map((col) => (
+                  <td key={col.key} style={{ ...styles.td, width: col.width, minWidth: col.width }}>
+                    <Cell
+                      col={col}
+                      row={r}
+                      editing={editing}
+                      setEditing={setEditing}
+                      onUpdate={onUpdate}
+                      onOpenProject={onOpenProject}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
-// ── Focused editor for one project ───────────────────────────────────────────
-function ProjectEditor({ project, projectTasks, onUpdate, onOpenProject, onNext }) {
-  const [nextSteps, setNextSteps] = useState(project.nextSteps || '');
-  const [blockers, setBlockers] = useState(project.blockers || '');
-  const [savedFlash, setSavedFlash] = useState(false);
-  const saveTimer = useRef(null);
+// ── Individual cell renderer ─────────────────────────────────────────────────
+function Cell({ col, row, editing, setEditing, onUpdate, onOpenProject }) {
+  const { project, health } = row;
 
-  // Reset when the project changes.
+  // Editable text cells (Next steps, Blockers)
+  if (col.editable) {
+    const isEditing =
+      editing && editing.projectId === project.id && editing.field === col.field;
+    if (isEditing) {
+      return (
+        <EditCell
+          initial={project[col.field] || ''}
+          onSave={(val) => {
+            onUpdate(project.id, { [col.field]: val, trackerUpdatedAt: Date.now() });
+            setEditing(null);
+          }}
+          onCancel={() => setEditing(null)}
+        />
+      );
+    }
+    const text = project[col.field] || '';
+    return (
+      <div
+        style={styles.editablePreview}
+        onClick={() => setEditing({ projectId: project.id, field: col.field })}
+        title={text || 'Click to add'}
+      >
+        {text ? (
+          <span style={styles.previewText}>{text}</span>
+        ) : (
+          <span style={styles.previewEmpty}>＋</span>
+        )}
+      </div>
+    );
+  }
+
+  // Read-only cells
+  switch (col.key) {
+    case 'name':
+      return (
+        <button onClick={() => onOpenProject(project.id)} style={styles.nameBtn} title="Open full project">
+          <span style={styles.nameText}>{project.name || '(untitled)'}</span>
+        </button>
+      );
+    case 'status':
+      return <span style={styles.readText}>{project.status || ''}</span>;
+    case 'health':
+      return (
+        <span
+          style={{ ...styles.healthDot, background: HEALTH_COLOR[health.status] || HEALTH_COLOR.green }}
+          title={health.reasons?.length ? health.reasons.join(' · ') : 'No issues'}
+        />
+      );
+    case 'deadline':
+      return <span style={styles.readMono}>{fmtShort(row.deadline)}</span>;
+    case 'deliverables':
+      return <span style={styles.readMono}>{row.delivLabel}</span>;
+    case 'waiting':
+      return (
+        <span style={styles.readTextClip} title={row.waitingLabel}>
+          {row.waitingLabel}
+        </span>
+      );
+    case 'scope':
+      return row.scopeLabel ? (
+        <span style={styles.scopeBadge} title="Out-of-scope work">
+          ⚠ {row.scopeLabel}
+        </span>
+      ) : null;
+    default:
+      return null;
+  }
+}
+
+// ── Inline editor for a text cell ────────────────────────────────────────────
+function EditCell({ initial, onSave, onCancel }) {
+  const [val, setVal] = useState(initial);
+  const ref = useRef(null);
+
   useEffect(() => {
-    setNextSteps(project.nextSteps || '');
-    setBlockers(project.blockers || '');
-  }, [project.id]);
-
-  // Debounced auto-save; stamps trackerUpdatedAt so the stale marker updates.
-  useEffect(() => {
-    const unchanged =
-      nextSteps === (project.nextSteps || '') && blockers === (project.blockers || '');
-    if (unchanged) return;
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      onUpdate(project.id, {
-        nextSteps,
-        blockers,
-        trackerUpdatedAt: Date.now(),
-      });
-      setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 1500);
-    }, 700);
-    return () => clearTimeout(saveTimer.current);
-  }, [nextSteps, blockers]);
-
-  // Read-only context
-  const delivs = project.deliverables || [];
-  const delivDone = delivs.filter((d) => d.done).length;
-  const waiting = delivs
-    .map((d) => ({ name: d.name, status: deliverableStatus(d) }))
-    .filter((x) => x.status && (x.status.kind === 'waiting' || x.status.kind === 'awaiting'));
-  const oosEntries = (projectTasks || []).flatMap((t) => t.oosEntries || []);
-  const oosHours = oosEntries.reduce((s, e) => s + (e.hours || 0), 0);
-  const wholeOos = (projectTasks || []).filter((t) => t.outOfScope).length;
+    ref.current?.focus();
+    ref.current?.setSelectionRange(val.length, val.length);
+  }, []);
 
   return (
-    <div style={styles.editor}>
-      <div style={styles.editorHeader}>
-        <button onClick={() => onOpenProject(project.id)} style={styles.editorTitle} title="Open full project">
-          {project.name || '(untitled)'}
-        </button>
-        <div style={styles.editorHeaderRight}>
-          {savedFlash && <span style={styles.savedFlash}>✓ Saved</span>}
-          {onNext && (
-            <button onClick={onNext} style={styles.nextBtn} title="Next project">
-              Next →
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Read-only context strip */}
-      <div style={styles.contextStrip}>
-        {project.status && <span style={styles.ctxPill}>{project.status}</span>}
-        {delivs.length > 0 && (
-          <span style={styles.ctxItem}>
-            {delivDone}/{delivs.length} deliverables
-          </span>
-        )}
-        {waiting.map((w, i) => (
-          <span key={i} style={styles.ctxWaiting} title={w.name}>
-            {w.status.icon} {w.name}
-            {w.status.date ? ` · ${fmtShort(w.status.date)}` : ''}
-          </span>
-        ))}
-        {(oosEntries.length > 0 || wholeOos > 0) && (
-          <span style={styles.ctxScope}>
-            ⚠ {oosEntries.length > 0 ? `${oosEntries.length} scope item${oosEntries.length === 1 ? '' : 's'}${oosHours > 0 ? ` · ${oosHours.toFixed(1)}h` : ''}` : ''}
-            {wholeOos > 0 ? `${oosEntries.length > 0 ? ' · ' : ''}${wholeOos} OOS task${wholeOos === 1 ? '' : 's'}` : ''}
-          </span>
-        )}
-      </div>
-
-      {/* Editable working fields */}
-      <div style={styles.fieldBlock}>
-        <label style={styles.fieldLabel}>Next steps</label>
-        <textarea
-          value={nextSteps}
-          onChange={(e) => setNextSteps(e.target.value)}
-          placeholder="What happens next on this project…"
-          style={styles.textarea}
-        />
-      </div>
-      <div style={styles.fieldBlock}>
-        <label style={styles.fieldLabel}>Blockers</label>
-        <textarea
-          value={blockers}
-          onChange={(e) => setBlockers(e.target.value)}
-          placeholder="Anything holding this up…"
-          style={{ ...styles.textarea, minHeight: 90 }}
-        />
-      </div>
+    <div style={styles.editWrap}>
+      <textarea
+        ref={ref}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={() => onSave(val)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            onCancel();
+          } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            onSave(val);
+          }
+        }}
+        style={styles.editArea}
+        placeholder="Type…  (Esc to cancel, ⌘/Ctrl+Enter to save)"
+      />
     </div>
   );
 }
 
 const styles = {
-  wrap: { flex: 1, display: 'flex', minHeight: 0, background: 'var(--bg-surface)' },
-  list: {
-    width: 300,
-    minWidth: 300,
-    borderRight: '0.5px solid var(--color-border-tertiary)',
-    display: 'flex',
-    flexDirection: 'column',
-    background: 'var(--color-background-tertiary)',
-  },
-  listHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    padding: '10px 12px',
-    borderBottom: '0.5px solid var(--color-border-tertiary)',
-  },
-  listTitle: { fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)' },
-  sortSelect: {
-    fontSize: 11,
-    padding: '3px 6px',
-    border: '0.5px solid var(--color-border-secondary)',
-    borderRadius: 6,
-    background: 'var(--bg-surface)',
-    outline: 'none',
-  },
-  listScroll: { flex: 1, overflowY: 'auto', padding: 8, display: 'flex', flexDirection: 'column', gap: 3 },
-  listItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    padding: '8px 10px',
-    background: 'transparent',
-    border: '0.5px solid transparent',
-    borderRadius: 8,
-    cursor: 'pointer',
-    textAlign: 'left',
-  },
-  listItemActive: {
-    background: 'var(--bg-surface)',
-    borderColor: 'var(--accent)',
-  },
-  healthDot: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
-  listName: {
-    flex: 1,
-    fontSize: 12,
-    color: 'var(--color-text-primary)',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    minWidth: 0,
-  },
-  listDeadline: { fontSize: 10, color: 'var(--color-text-tertiary)', flexShrink: 0 },
-  staleMark: { fontSize: 12, flexShrink: 0, width: 16, textAlign: 'center' },
-  staleMarkOn: { color: '#ef9f27', fontWeight: 700 },
-  staleMarkOff: { color: '#1d9e75' },
-  editorPane: { flex: 1, display: 'flex', minWidth: 0 },
-  editor: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    padding: 20,
-    gap: 14,
-    overflowY: 'auto',
-  },
-  editorHeader: {
+  wrap: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-surface)' },
+  toolbar: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    padding: '8px 14px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
   },
-  editorTitle: {
-    fontSize: 18,
+  toolbarText: { fontSize: 12, fontWeight: 500, color: 'var(--color-text-primary)' },
+  staleCount: { color: '#b06a00', fontWeight: 500 },
+  toolbarHint: { fontSize: 11, color: 'var(--color-text-tertiary)' },
+  scroll: { flex: 1, overflow: 'auto' },
+  table: { borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' },
+  th: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 5,
+    background: 'var(--color-background-secondary)',
+    fontSize: 11,
     fontWeight: 600,
-    color: 'var(--color-text-primary)',
+    color: 'var(--color-text-secondary)',
+    textAlign: 'left',
+    padding: '8px 10px',
+    borderBottom: '0.5px solid var(--color-border-primary)',
+    borderRight: '0.5px solid var(--color-border-tertiary)',
+    cursor: 'pointer',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+  },
+  sortArrow: { fontSize: 9, color: 'var(--accent)' },
+  tr: { borderBottom: '0.5px solid var(--color-border-tertiary)' },
+  trStale: { background: '#ef9f2708' },
+  td: {
+    padding: '4px 10px',
+    borderRight: '0.5px solid var(--color-border-tertiary)',
+    verticalAlign: 'middle',
+    fontSize: 12,
+    overflow: 'hidden',
+  },
+  nameBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
     background: 'transparent',
     border: 'none',
     padding: 0,
     cursor: 'pointer',
     textAlign: 'left',
-    textDecoration: 'underline',
-    textDecorationColor: 'transparent',
+    width: '100%',
+    minWidth: 0,
   },
-  editorHeaderRight: { display: 'flex', alignItems: 'center', gap: 10 },
-  savedFlash: { fontSize: 11, color: '#1d9e75', fontWeight: 500 },
-  nextBtn: {
-    padding: '5px 14px',
-    background: 'var(--accent)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
+  nameText: {
     fontSize: 12,
     fontWeight: 500,
-    cursor: 'pointer',
-  },
-  contextStrip: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 6,
-    alignItems: 'center',
-  },
-  ctxPill: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: 'var(--color-text-secondary)',
-    background: 'var(--color-background-secondary)',
-    borderRadius: 10,
-    padding: '2px 8px',
-  },
-  ctxItem: {
-    fontSize: 11,
-    color: 'var(--color-text-secondary)',
-    background: 'var(--color-background-secondary)',
-    borderRadius: 10,
-    padding: '2px 8px',
-  },
-  ctxWaiting: {
-    fontSize: 11,
-    color: '#b06a00',
-    background: '#ef9f2722',
-    borderRadius: 10,
-    padding: '2px 8px',
-    maxWidth: 220,
+    color: 'var(--color-text-primary)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  ctxScope: {
+  readText: {
+    fontSize: 12,
+    color: 'var(--color-text-secondary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'block',
+  },
+  readTextClip: {
     fontSize: 11,
+    color: '#b06a00',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'block',
+  },
+  readMono: { fontSize: 11, fontFamily: 'monospace', color: 'var(--color-text-secondary)' },
+  healthDot: { display: 'inline-block', width: 9, height: 9, borderRadius: '50%' },
+  scopeBadge: {
+    fontSize: 10,
+    fontWeight: 600,
     color: '#BA7517',
     background: '#BA751718',
-    borderRadius: 10,
-    padding: '2px 8px',
-    fontWeight: 500,
+    borderRadius: 6,
+    padding: '1px 6px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    display: 'inline-block',
+    maxWidth: '100%',
   },
-  fieldBlock: { display: 'flex', flexDirection: 'column', gap: 5 },
-  fieldLabel: {
+  editablePreview: {
+    cursor: 'text',
+    minHeight: 22,
+    display: 'flex',
+    alignItems: 'center',
+    borderRadius: 4,
+    padding: '2px 4px',
+    margin: '-2px -4px',
+  },
+  previewText: {
     fontSize: 12,
-    fontWeight: 600,
-    color: 'var(--color-text-secondary)',
+    color: 'var(--color-text-primary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'block',
+    width: '100%',
   },
-  textarea: {
-    minHeight: 130,
-    padding: '10px 12px',
-    border: '0.5px solid var(--color-border-primary)',
-    borderRadius: 8,
-    fontSize: 13,
-    lineHeight: 1.5,
+  previewEmpty: { fontSize: 14, color: 'var(--color-text-tertiary)' },
+  editWrap: { position: 'relative' },
+  editArea: {
+    width: '100%',
+    minHeight: 80,
+    padding: '6px 8px',
+    border: '1px solid var(--accent)',
+    borderRadius: 6,
+    fontSize: 12,
+    lineHeight: 1.45,
     fontFamily: 'inherit',
     background: 'var(--bg-surface)',
     color: 'var(--color-text-primary)',
     outline: 'none',
     resize: 'vertical',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+    position: 'relative',
+    zIndex: 20,
   },
   empty: {
     flex: 1,

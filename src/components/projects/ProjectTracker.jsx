@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { projectHealth } from '../../lib/stations.js';
 import { deliverableStatus } from '../../lib/deliverableStatus.js';
+import { groupProjects, projectColorWithGroups } from '../../lib/projectGroups.js';
 
 const HEALTH_COLOR = {
   green: '#1d9e75',
@@ -78,24 +79,41 @@ const COLUMNS = [
   { key: 'blockers', label: 'Blockers', width: 220, editable: true, field: 'blockers', sortVal: (r) => r.project.blockers || '' },
 ];
 
-export default function ProjectTracker({ projects, tasks, onUpdate, onOpenProject }) {
+export default function ProjectTracker({ projects, allProjects, projectGroups, tasks, onUpdate, onOpenProject }) {
   const [sortKey, setSortKey] = useState('deadline');
   const [sortDir, setSortDir] = useState('asc');
   const [editing, setEditing] = useState(null); // { projectId, field }
+  const [grouped, setGrouped] = useState(false); // group rows by project group
 
   const rows = useMemo(() => projects.map((p) => buildRow(p, tasks)), [projects, tasks]);
 
-  const sortedRows = useMemo(() => {
+  // Attach each row's group colour (left stripe), reusing the Grid's logic.
+  const colorFor = (project) =>
+    projectColorWithGroups(project, allProjects || projects, projectGroups || []);
+
+  const sortRows = (arr) => {
     const col = COLUMNS.find((c) => c.key === sortKey) || COLUMNS[0];
-    const arr = [...rows].sort((a, b) => {
+    const sorted = [...arr].sort((a, b) => {
       const av = col.sortVal(a);
       const bv = col.sortVal(b);
       if (av < bv) return -1;
       if (av > bv) return 1;
       return 0;
     });
-    return sortDir === 'desc' ? arr.reverse() : arr;
-  }, [rows, sortKey, sortDir]);
+    return sortDir === 'desc' ? sorted.reverse() : sorted;
+  };
+
+  const sortedRows = useMemo(() => sortRows(rows), [rows, sortKey, sortDir]);
+
+  // Grouped view: bucket by project group, sort within each bucket.
+  const buckets = useMemo(() => {
+    if (!grouped) return null;
+    const projBuckets = groupProjects(projects, projectGroups || []);
+    return projBuckets.map((b) => ({
+      group: b.group,
+      rows: sortRows(b.projects.map((p) => rows.find((r) => r.project.id === p.id)).filter(Boolean)),
+    }));
+  }, [grouped, projects, projectGroups, rows, sortKey, sortDir]);
 
   const toggleSort = (key) => {
     if (sortKey === key) {
@@ -119,9 +137,18 @@ export default function ProjectTracker({ projects, tasks, onUpdate, onOpenProjec
           {projects.length} project{projects.length === 1 ? '' : 's'}
           {staleCount > 0 && <span style={styles.staleCount}> · {staleCount} need updating</span>}
         </span>
-        <span style={styles.toolbarHint}>
-          Click a Next steps / Blockers cell to edit · click a header to sort
-        </span>
+        <div style={styles.toolbarRight}>
+          <button
+            onClick={() => setGrouped((v) => !v)}
+            style={{ ...styles.groupToggle, ...(grouped ? styles.groupToggleOn : {}) }}
+            title="Group rows by project group"
+          >
+            {grouped ? '⊟ Grouped' : '⊞ Group'}
+          </button>
+          <span style={styles.toolbarHint}>
+            Click a cell to edit · header to sort
+          </span>
+        </div>
       </div>
 
       <div style={styles.scroll}>
@@ -144,26 +171,87 @@ export default function ProjectTracker({ projects, tasks, onUpdate, onOpenProjec
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((r) => (
-              <tr key={r.project.id} style={{ ...styles.tr, ...(r.stale ? styles.trStale : {}) }}>
-                {COLUMNS.map((col) => (
-                  <td key={col.key} style={{ ...styles.td, width: col.width, minWidth: col.width }}>
-                    <Cell
-                      col={col}
-                      row={r}
-                      editing={editing}
-                      setEditing={setEditing}
-                      onUpdate={onUpdate}
-                      onOpenProject={onOpenProject}
-                    />
-                  </td>
+            {grouped
+              ? buckets.map((bucket) => (
+                  <GroupBlock
+                    key={bucket.group.id}
+                    bucket={bucket}
+                    colorFor={colorFor}
+                    editing={editing}
+                    setEditing={setEditing}
+                    onUpdate={onUpdate}
+                    onOpenProject={onOpenProject}
+                  />
+                ))
+              : sortedRows.map((r) => (
+                  <TrackerRow
+                    key={r.project.id}
+                    row={r}
+                    stripe={colorFor(r.project)}
+                    editing={editing}
+                    setEditing={setEditing}
+                    onUpdate={onUpdate}
+                    onOpenProject={onOpenProject}
+                  />
                 ))}
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+// ── A single project row (with group colour stripe on the left) ──────────────
+function TrackerRow({ row, stripe, editing, setEditing, onUpdate, onOpenProject }) {
+  return (
+    <tr style={{ ...styles.tr, ...(row.stale ? styles.trStale : {}) }}>
+      {COLUMNS.map((col, i) => (
+        <td
+          key={col.key}
+          style={{
+            ...styles.td,
+            width: col.width,
+            minWidth: col.width,
+            ...(i === 0 ? { borderLeft: `3px solid ${stripe}` } : {}),
+          }}
+        >
+          <Cell
+            col={col}
+            row={row}
+            editing={editing}
+            setEditing={setEditing}
+            onUpdate={onUpdate}
+            onOpenProject={onOpenProject}
+          />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+// ── A group bucket: a header row + its project rows ──────────────────────────
+function GroupBlock({ bucket, colorFor, editing, setEditing, onUpdate, onOpenProject }) {
+  return (
+    <>
+      <tr>
+        <td colSpan={COLUMNS.length} style={styles.groupHeaderCell}>
+          <span style={{ ...styles.groupDot, background: bucket.group.color || '#888780' }} />
+          <span style={styles.groupHeaderName}>{bucket.group.name}</span>
+          <span style={styles.groupHeaderCount}>{bucket.rows.length}</span>
+        </td>
+      </tr>
+      {bucket.rows.map((r) => (
+        <TrackerRow
+          key={r.project.id}
+          row={r}
+          stripe={colorFor(r.project)}
+          editing={editing}
+          setEditing={setEditing}
+          onUpdate={onUpdate}
+          onOpenProject={onOpenProject}
+        />
+      ))}
+    </>
   );
 }
 
@@ -285,6 +373,53 @@ const styles = {
     borderBottom: '0.5px solid var(--color-border-tertiary)',
   },
   toolbarText: { fontSize: 12, fontWeight: 500, color: 'var(--color-text-primary)' },
+  toolbarRight: { display: 'flex', alignItems: 'center', gap: 12 },
+  groupToggle: {
+    fontSize: 11,
+    fontWeight: 500,
+    padding: '4px 10px',
+    borderRadius: 6,
+    border: '0.5px solid var(--color-border-secondary)',
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+  },
+  groupToggleOn: {
+    background: 'var(--accent-soft)',
+    borderColor: 'var(--accent)',
+    color: 'var(--accent)',
+  },
+  groupHeaderCell: {
+    padding: '8px 12px',
+    background: 'var(--color-background-secondary)',
+    borderBottom: '0.5px solid var(--color-border-primary)',
+    borderTop: '0.5px solid var(--color-border-tertiary)',
+    position: 'sticky',
+    left: 0,
+  },
+  groupDot: {
+    display: 'inline-block',
+    width: 9,
+    height: 9,
+    borderRadius: '50%',
+    marginRight: 8,
+    verticalAlign: 'middle',
+  },
+  groupHeaderName: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--color-text-primary)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  groupHeaderCount: {
+    fontSize: 11,
+    color: 'var(--color-text-tertiary)',
+    background: 'var(--bg-surface)',
+    borderRadius: 10,
+    padding: '1px 8px',
+    marginLeft: 8,
+  },
   staleCount: { color: '#b06a00', fontWeight: 500 },
   toolbarHint: { fontSize: 11, color: 'var(--color-text-tertiary)' },
   scroll: { flex: 1, overflow: 'auto' },

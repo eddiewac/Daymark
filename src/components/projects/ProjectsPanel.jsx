@@ -242,8 +242,35 @@ export default function ProjectsPanel({
           )}
         </div>
 
-        {/* Detail drawer */}
-        {active && (
+        {/* Detail drawer. In the tracker view the table is very wide, so a
+            squeeze-beside drawer gets pushed off-screen on narrow displays.
+            There, render it as a floating overlay instead so it's always
+            visible; other views keep the normal squeeze-beside behaviour. */}
+        {active && view === 'tracker' && (
+          <>
+            <div style={styles.overlayBackdrop} onClick={() => setActiveId(null)} />
+            <div style={styles.detailOverlay}>
+              <ProjectDetail
+                project={active}
+                allProjects={projects}
+                tasks={tasks}
+                congresses={congresses}
+                stationTemplates={stationTemplates}
+                projectGroups={projectGroups || []}
+                onUpdate={onUpdate}
+                onAddTask={onAddTask}
+                onDelete={onDelete}
+                onDeleteTask={onDeleteTask}
+                onTrack={() => {
+                  setTrackingId(active.id);
+                  setActiveId(null);
+                }}
+                onClose={() => setActiveId(null)}
+              />
+            </div>
+          </>
+        )}
+        {active && view !== 'tracker' && (
           <div style={styles.detail}>
             <ProjectDetail
               project={active}
@@ -373,6 +400,25 @@ const styles = {
     width: 480,
     flexShrink: 0,
     borderLeft: '0.5px solid var(--color-border-tertiary)',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  overlayBackdrop: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.28)',
+    zIndex: 1200,
+  },
+  detailOverlay: {
+    position: 'fixed',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 'min(480px, 92vw)',
+    background: 'var(--bg-surface)',
+    borderLeft: '0.5px solid var(--color-border-tertiary)',
+    boxShadow: '-8px 0 28px rgba(0,0,0,0.18)',
+    zIndex: 1201,
     display: 'flex',
     flexDirection: 'column',
   },

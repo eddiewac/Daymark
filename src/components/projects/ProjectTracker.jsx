@@ -19,6 +19,14 @@ function fmtShort(iso) {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
+// A very light tint of a hex colour, for row backgrounds. Appends a low-alpha
+// suffix to a 6-digit hex (#RRGGBB → #RRGGBBAA). Falls back to transparent for
+// non-hex input.
+function lightTint(hex, alpha = '14') {
+  if (typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return 'transparent';
+  return hex + alpha;
+}
+
 // Earliest upcoming deliverable due date (or latest if all past).
 function nextDeadline(project) {
   const dates = (project.deliverables || [])
@@ -203,8 +211,12 @@ export default function ProjectTracker({ projects, allProjects, projectGroups, t
 
 // ── A single project row (with group colour stripe on the left) ──────────────
 function TrackerRow({ row, stripe, editing, setEditing, onUpdate, onOpenProject }) {
+  // Row background is a very light version of the group colour, so groupings
+  // read at a glance. Stale rows are signalled by an amber inset on the left
+  // edge (colour-independent), so the group tint stays intact.
+  const rowBg = lightTint(stripe, '14');
   return (
-    <tr style={{ ...styles.tr, ...(row.stale ? styles.trStale : {}) }}>
+    <tr style={{ ...styles.tr, background: rowBg }}>
       {COLUMNS.map((col, i) => (
         <td
           key={col.key}
@@ -212,7 +224,12 @@ function TrackerRow({ row, stripe, editing, setEditing, onUpdate, onOpenProject 
             ...styles.td,
             width: col.width,
             minWidth: col.width,
-            ...(i === 0 ? { borderLeft: `3px solid ${stripe}` } : {}),
+            ...(i === 0
+              ? {
+                  borderLeft: `3px solid ${stripe}`,
+                  ...(row.stale ? { boxShadow: 'inset 3px 0 0 #ef9f27' } : {}),
+                }
+              : {}),
           }}
         >
           <Cell

@@ -4,6 +4,7 @@ import ProjectDetail from './ProjectDetail.jsx';
 import GanttView from './GanttView.jsx';
 import TrackView from './track/TrackView.jsx';
 import ProjectTracker from './ProjectTracker.jsx';
+import ForecastView from './ForecastView.jsx';
 import { groupProjects } from '../../lib/projectGroups.js';
 
 export default function ProjectsPanel({
@@ -29,9 +30,27 @@ export default function ProjectsPanel({
 }) {
   const [activeId, setActiveId] = useState(null);
   const [trackingId, setTrackingId] = useState(null); // when set, full-screen track mode
-  const [view, setView] = useState('grid'); // grid | gantt | track
+  const [view, setView] = useState('grid'); // grid | gantt | track | tracker | forecast
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+
+  // Forecast unit label (£, $, hours, …) — workspace-scoped, persisted locally.
+  const forecastLabelKey = `daymark-forecast-label:${workspaceId || 'personal'}`;
+  const [forecastLabel, setForecastLabel] = useState(() => {
+    try {
+      return localStorage.getItem(forecastLabelKey) || '£';
+    } catch {
+      return '£';
+    }
+  });
+  const updateForecastLabel = (label) => {
+    setForecastLabel(label);
+    try {
+      localStorage.setItem(forecastLabelKey, label);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const COMPLETE_STATUS = '✅ Complete';
 
@@ -110,6 +129,7 @@ export default function ProjectsPanel({
             { key: 'gantt', label: 'Gantt' },
             { key: 'track', label: '🚂 Track' },
             { key: 'tracker', label: '📋 Tracker' },
+            { key: 'forecast', label: '💷 Forecast' },
           ].map((v) => (
             <button
               key={v.key}
@@ -210,6 +230,16 @@ export default function ProjectsPanel({
               onUpdate={onUpdate}
               onOpenProject={(id) => setActiveId(id)}
             />
+          ) : view === 'forecast' ? (
+            <ForecastView
+              projects={visible}
+              tasks={tasks}
+              workspaceId={workspaceId}
+              forecastLabel={forecastLabel}
+              onUpdate={onUpdate}
+              onUpdateForecastLabel={updateForecastLabel}
+              onOpenProject={(id) => setActiveId(id)}
+            />
           ) : (
             // Track picker - choose a project to enter Track mode
             <div style={styles.gridScroll}>
@@ -246,7 +276,7 @@ export default function ProjectsPanel({
             squeeze-beside drawer gets pushed off-screen on narrow displays.
             There, render it as a floating overlay instead so it's always
             visible; other views keep the normal squeeze-beside behaviour. */}
-        {active && view === 'tracker' && (
+        {active && (view === 'tracker' || view === 'forecast') && (
           <>
             <div style={styles.overlayBackdrop} onClick={() => setActiveId(null)} />
             <div style={styles.detailOverlay}>
@@ -270,7 +300,7 @@ export default function ProjectsPanel({
             </div>
           </>
         )}
-        {active && view !== 'tracker' && (
+        {active && view !== 'tracker' && view !== 'forecast' && (
           <div style={styles.detail}>
             <ProjectDetail
               project={active}

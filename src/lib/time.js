@@ -48,6 +48,7 @@ function rowToBlock(row) {
     endedAt: row.ended_at,
     hours: parseFloat(row.hours) || 0,
     notes: row.data?.notes || '',
+    outOfScope: !!row.data?.outOfScope,
     createdAt: row.created_at,
   };
 }
@@ -77,7 +78,7 @@ export async function createTimeBlock(workspaceId, block) {
       started_at: block.startedAt || null,
       ended_at: block.endedAt || null,
       hours: computedHours,
-      data: { notes: block.notes || '' },
+      data: { notes: block.notes || '', outOfScope: !!block.outOfScope },
       updated_at: new Date().toISOString(),
     })
     .select()
@@ -96,7 +97,24 @@ export async function updateTimeBlock(blockId, patch) {
   if (patch.startedAt !== undefined) updateRow.started_at = patch.startedAt;
   if (patch.endedAt !== undefined) updateRow.ended_at = patch.endedAt;
   if (patch.date !== undefined) updateRow.date = patch.date;
-  if (patch.notes !== undefined) updateRow.data = { notes: patch.notes };
+
+  // The `data` jsonb blob holds notes + outOfScope. When either changes we must
+  // MERGE into the existing blob, not replace it — otherwise editing notes would
+  // wipe the OOS flag (and vice versa). Fetch current data first, then merge.
+  const touchesData = patch.notes !== undefined || patch.outOfScope !== undefined;
+  let currentData = null;
+  if (touchesData) {
+    const { data: cur } = await supabase
+      .from('time_entries')
+      .select('data')
+      .eq('id', blockId)
+      .maybeSingle();
+    currentData = cur?.data || {};
+    const merged = { ...currentData };
+    if (patch.notes !== undefined) merged.notes = patch.notes;
+    if (patch.outOfScope !== undefined) merged.outOfScope = !!patch.outOfScope;
+    updateRow.data = merged;
+  }
 
   if (patch.hours !== undefined) {
     updateRow.hours = patch.hours;

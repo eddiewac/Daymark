@@ -151,6 +151,10 @@ function BlockRow({ block, date, isOverlap, onUpdate, onRemove }) {
     onUpdate({ notes });
   };
 
+  const toggleOOS = () => {
+    onUpdate({ outOfScope: !block.outOfScope });
+  };
+
   const liveHours =
     startTime && endTime
       ? Math.max(
@@ -167,8 +171,12 @@ function BlockRow({ block, date, isOverlap, onUpdate, onRemove }) {
     <div
       style={{
         ...styles.blockRow,
-        borderColor: isOverlap ? '#ef9f27' : 'var(--color-border-tertiary)',
-        background: isOverlap ? '#ef9f2708' : 'var(--color-background-tertiary)',
+        borderColor: block.outOfScope ? '#BA7517' : isOverlap ? '#ef9f27' : 'var(--color-border-tertiary)',
+        background: block.outOfScope
+          ? '#BA751710'
+          : isOverlap
+          ? '#ef9f2708'
+          : 'var(--color-background-tertiary)',
       }}
     >
       <div style={styles.blockTopRow}>
@@ -234,13 +242,29 @@ function BlockRow({ block, date, isOverlap, onUpdate, onRemove }) {
           </>
         )}
       </div>
-      <input
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        onBlur={commitNotes}
-        placeholder="Notes (optional)"
-        style={styles.notesInput}
-      />
+      <div style={styles.blockBottomRow}>
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={commitNotes}
+          placeholder="Notes (optional)"
+          style={styles.notesInput}
+        />
+        <button
+          onClick={toggleOOS}
+          style={{
+            ...styles.oosToggle,
+            ...(block.outOfScope ? styles.oosToggleOn : {}),
+          }}
+          title={
+            block.outOfScope
+              ? 'This time is marked out of scope — click to unmark'
+              : 'Mark this time as out of scope'
+          }
+        >
+          {block.outOfScope ? '⚠ OOS' : 'OOS'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -404,6 +428,28 @@ const styles = {
     background: 'var(--bg-surface)',
     outline: 'none',
     width: '100%',
+  },
+  blockBottomRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  oosToggle: {
+    flexShrink: 0,
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: '0.03em',
+    padding: '4px 9px',
+    borderRadius: 6,
+    border: '0.5px solid var(--color-border-primary)',
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-tertiary)',
+    cursor: 'pointer',
+  },
+  oosToggleOn: {
+    background: '#BA751722',
+    borderColor: '#BA7517',
+    color: '#BA7517',
   },
   removeBtn: {
     width: 26,

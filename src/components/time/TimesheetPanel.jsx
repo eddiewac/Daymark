@@ -91,6 +91,16 @@ export default function TimesheetPanel({
   }, [visibleTasks, dayKeys, blocksByCell]);
 
   const weekTotal = dayTotals.reduce((a, b) => a + b, 0);
+  const weekOos = useMemo(() => {
+    let sum = 0;
+    for (const t of visibleTasks) {
+      for (const dk of dayKeys) {
+        const bks = blocksByCell[`${t.id}|${dk}`] || [];
+        sum += bks.reduce((s, b) => s + (b.outOfScope ? (b.hours || 0) : 0), 0);
+      }
+    }
+    return sum;
+  }, [visibleTasks, dayKeys, blocksByCell]);
 
   const goPrev = () => setWeekStart(addDays(weekStart, -7));
   const goNext = () => setWeekStart(addDays(weekStart, 7));
@@ -154,6 +164,7 @@ export default function TimesheetPanel({
                   );
                 })}
                 <th style={{ ...styles.th, ...styles.totalCol }}>Total</th>
+                <th style={{ ...styles.th, ...styles.oosCol }} title="Out-of-scope hours (from time blocks marked OOS)">OOS</th>
               </tr>
             </thead>
             <tbody>
@@ -162,11 +173,15 @@ export default function TimesheetPanel({
                   const bks = blocksByCell[`${t.id}|${dk}`] || [];
                   return sum + bks.reduce((s, b) => s + (b.hours || 0), 0);
                 }, 0);
+                const taskOos = dayKeys.reduce((sum, dk) => {
+                  const bks = blocksByCell[`${t.id}|${dk}`] || [];
+                  return sum + bks.reduce((s, b) => s + (b.outOfScope ? (b.hours || 0) : 0), 0);
+                }, 0);
                 const canTrack = canTrackTime(t, currentUserId, workspaceId);
                 const isRunning = runningTimer?.taskId === t.id;
                 const projColor = projectColor(t.project, projects);
                 return (
-                  <tr key={t.id} style={t.outOfScope ? styles.oosRowTint : undefined}>
+                  <tr key={t.id}>
                     <td style={{ ...styles.td, ...styles.taskCol, ...styles.taskCell }}>
                       {canTrack && (
                         <button
@@ -193,18 +208,6 @@ export default function TimesheetPanel({
                           }}
                         >
                           {t.title || '(untitled)'}
-                          {t.outOfScope && (
-                            <span
-                              style={styles.oosBadgeWhole}
-                              title={
-                                t.outOfScopeNotes
-                                  ? `Out of scope — ${t.outOfScopeNotes}`
-                                  : 'This whole task is out of scope'
-                              }
-                            >
-                              OOS
-                            </span>
-                          )}
                         </div>
                         {t.project && (
                           <div
@@ -277,6 +280,13 @@ export default function TimesheetPanel({
                     >
                       {taskTotal > 0 ? taskTotal.toFixed(2) : ''}
                     </td>
+                    <td style={{ ...styles.td, ...styles.oosCol, textAlign: 'center' }}>
+                      {taskOos > 0 && (
+                        <span style={styles.oosBadge} title="Out-of-scope hours logged against this task">
+                          {taskOos.toFixed(2)}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -309,6 +319,18 @@ export default function TimesheetPanel({
                   }}
                 >
                   {weekTotal > 0 ? weekTotal.toFixed(2) : ''}
+                </td>
+                <td
+                  style={{
+                    ...styles.td,
+                    ...styles.oosCol,
+                    fontWeight: 700,
+                    textAlign: 'center',
+                    fontFamily: 'monospace',
+                    color: '#BA7517',
+                  }}
+                >
+                  {weekOos > 0 ? weekOos.toFixed(2) : ''}
                 </td>
               </tr>
             </tbody>
@@ -401,20 +423,14 @@ const styles = {
   taskCol: { width: '38%', textAlign: 'left', paddingLeft: 14, paddingRight: 8 },
   dayCol: { width: '7%', minWidth: 78 },
   totalCol: { width: '8%', minWidth: 70, textAlign: 'center', fontFamily: 'monospace' },
-  oosBadgeWhole: {
-    display: 'inline-block',
-    fontSize: 9,
-    fontWeight: 700,
-    letterSpacing: '0.04em',
+  oosCol: { width: '7%', minWidth: 58, textAlign: 'center', fontFamily: 'monospace' },
+  oosBadge: {
+    fontSize: 11,
+    fontWeight: 600,
     color: '#BA7517',
-    background: '#BA751722',
-    borderRadius: 5,
-    padding: '1px 6px',
-    marginLeft: 6,
-    verticalAlign: 'middle',
-  },
-  oosRowTint: {
-    background: '#BA75170A',
+    background: '#BA751718',
+    borderRadius: 6,
+    padding: '2px 7px',
   },
   taskCell: {
     display: 'flex',

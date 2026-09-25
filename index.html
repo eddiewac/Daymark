@@ -13,7 +13,64 @@
     <title>Daymark — Project Management for Medical Communications</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      ── Crawlable landing content ──────────────────────────────────────────
+      This static HTML is what search engines (and users on very slow
+      connections) see immediately, before the React app loads. When React
+      loads, it replaces #root's contents with the full interactive app /
+      landing page, so real visitors see the styled version. Keep this text
+      in rough sync with src/components/LandingPage.jsx when the positioning
+      changes (it changes rarely). This block exists purely so Google can
+      read what Daymark is — the SPA otherwise ships an empty page.
+    -->
+    <div id="root">
+      <div id="prerender-seo" style="max-width: 760px; margin: 0 auto; padding: 40px 24px; font-family: 'Roboto Flex', -apple-system, BlinkMacSystemFont, sans-serif; color: #1a1a2e; line-height: 1.5;">
+        <p style="font-size: 13px; font-weight: 600; color: #534AB7; text-transform: uppercase; letter-spacing: 0.05em;">For medcomms agencies and freelance PMs</p>
+        <h1 style="font-size: 32px; font-weight: 600; margin: 8px 0 16px;">Project management that thinks like a medcomms PM</h1>
+        <p style="font-size: 17px; color: #444;">
+          Daymark tracks every deliverable, every comm, every approval — without forcing you to live inside another generic project tool that was built for software teams. Designed around how medical communications actually works.
+        </p>
+        <p><a href="/login" style="color: #534AB7; font-weight: 600;">Start free</a> — free during early access, no credit card.</p>
+
+        <h2 style="font-size: 22px; font-weight: 600; margin: 32px 0 12px;">What makes it different</h2>
+
+        <h3 style="font-size: 18px; font-weight: 600; margin: 20px 0 6px;">Visual delivery tracking</h3>
+        <p>
+          Each project gets a "train" of stations — Draft 1, Internal review, MLR, Client review, Final — and you see at a glance where each deliverable is stuck. Reorder, customise, or copy templates between projects. Built for the way medcomms work actually moves.
+        </p>
+
+        <h3 style="font-size: 18px; font-weight: 600; margin: 20px 0 6px;">Comms tracking that doesn't lie</h3>
+        <p>
+          Log every email, every chase, every approval request — and tag it with the date you expect a reply. The dashboard surfaces overdue replies so nothing falls through. No more "did we get sign-off on that?" Slack threads.
+        </p>
+
+        <h2 style="font-size: 22px; font-weight: 600; margin: 32px 0 12px;">Built for medcomms, not for software teams</h2>
+        <p>
+          Most project tools (Asana, Monday, Notion) were designed for engineering and marketing workflows. Medical communications is different. You have MLR rounds, regulatory sign-offs, advisory boards, congress submissions, and statements of work that mention specific deliverables. Daymark speaks that language from day one.
+        </p>
+        <p>Daymark is built for:</p>
+        <ul>
+          <li><strong>Account leads</strong> tracking 8–15 concurrent projects across multiple clients</li>
+          <li><strong>Project managers</strong> coordinating writers, designers, clients, and medical leads</li>
+          <li><strong>Freelance medcomms PMs</strong> juggling clients without a full agency infrastructure</li>
+          <li><strong>Small agencies</strong> wanting visibility across team workloads without enterprise pricing</li>
+        </ul>
+
+        <h2 style="font-size: 22px; font-weight: 600; margin: 32px 0 12px;">Built with your data in mind</h2>
+        <p>
+          Data stored in Ireland (eu-west-1). GDPR-compliant by default, so UK and EU clients can tick the box.
+          Read our <a href="/privacy" style="color: #534AB7;">Privacy Policy</a>, <a href="/security" style="color: #534AB7;">Security overview</a>, and <a href="/terms" style="color: #534AB7;">Terms</a>.
+        </p>
+
+        <h2 style="font-size: 22px; font-weight: 600; margin: 32px 0 12px;">Free during early access</h2>
+        <p>
+          Tired of forcing medcomms into tools built for someone else? Sign up takes about 30 seconds, and there's a demo workspace with realistic data to explore.
+          <a href="/login" style="color: #534AB7; font-weight: 600;">Sign up free</a>.
+        </p>
+
+        <p style="margin-top: 32px; font-size: 13px; color: #888;">Daymark — project management for medical communications agencies.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

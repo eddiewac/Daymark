@@ -720,6 +720,7 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
           textDecoration: task.done ? 'line-through' : 'none',
         }}
       >
+        {task.isFollowUp && <span title="Follow-up reminder">🔔 </span>}
         {task.title || '(untitled)'}
       </span>
       {showDate && task.dueDate && (

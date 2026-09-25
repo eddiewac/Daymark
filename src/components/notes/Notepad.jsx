@@ -17,11 +17,15 @@ export default function Notepad({
   // Selection / conversion state
   const [selection, setSelection] = useState('');
   const [selRange, setSelRange] = useState(null); // [start, end] in body
-  const [converting, setConverting] = useState(null); // 'task' | 'project' | 'note' | null
+  const [converting, setConverting] = useState(null); // 'task' | 'project' | 'note' | 'followup' | null
   const [taskForm, setTaskForm] = useState({
     title: '',
     project: '',
     priority: 'Medium',
+    dueDate: '',
+  });
+  const [followUpForm, setFollowUpForm] = useState({
+    title: '',
     dueDate: '',
   });
   const [projectForm, setProjectForm] = useState({
@@ -103,6 +107,19 @@ export default function Notepad({
         taskIds: [],
         removeAfter: false,
       });
+    } else if (type === 'followup') {
+      // Default to +2 business days — the "chase this later" horizon.
+      const d = new Date();
+      let added = 0;
+      while (added < 2) {
+        d.setDate(d.getDate() + 1);
+        const day = d.getDay();
+        if (day !== 0 && day !== 6) added++;
+      }
+      setFollowUpForm({
+        title: selection.length <= 120 ? selection : selection.slice(0, 120),
+        dueDate: d.toISOString().slice(0, 10),
+      });
     }
     setConverting(type);
   };
@@ -118,6 +135,20 @@ export default function Notepad({
         sourceNote: 'notepad',
       });
       setFeedback({ type: 'task', text: taskForm.title.trim() });
+    } else if (converting === 'followup') {
+      if (!followUpForm.title.trim()) return;
+      // A follow-up is a lightweight, project-less dated nudge. It's stored as a
+      // task (so it surfaces on Today automatically) but flagged isFollowUp so
+      // it can read as a reminder rather than project work.
+      await onAddTask({
+        title: followUpForm.title.trim(),
+        project: '',
+        priority: 'Medium',
+        dueDate: followUpForm.dueDate || '',
+        isFollowUp: true,
+        sourceNote: 'notepad',
+      });
+      setFeedback({ type: 'followup', text: followUpForm.title.trim() });
     } else if (converting === 'project') {
       if (!projectForm.name.trim()) return;
       await onAddProject({
@@ -166,7 +197,7 @@ export default function Notepad({
           <div style={styles.title}>📒 Notepad</div>
           <div style={styles.sub}>
             Quick personal scratchpad. Select text and convert to a task,
-            project, or note.
+            project, note, or follow-up.
           </div>
         </div>
         <div style={styles.savedNote}>
@@ -204,6 +235,17 @@ export default function Notepad({
             }}
           >
             → Save as note
+          </button>
+          <button
+            onClick={() => startConvert('followup')}
+            style={{
+              ...styles.convertBtn,
+              background: '#185FA511',
+              color: '#185FA5',
+              borderColor: '#185FA5',
+            }}
+          >
+            → Follow-up
           </button>
         </div>
       )}
@@ -255,6 +297,50 @@ export default function Notepad({
           <div style={styles.btnRow}>
             <button onClick={submitConvert} style={styles.primaryBtn}>
               Create task
+            </button>
+            <button onClick={() => setConverting(null)} style={styles.cancelBtn}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {converting === 'followup' && (
+        <div style={{ ...styles.convertForm, borderColor: '#185FA544' }}>
+          <div style={{ ...styles.convertHeader, color: '#185FA5' }}>
+            🔔 Follow-up reminder
+          </div>
+          <input
+            value={followUpForm.title}
+            onChange={(e) =>
+              setFollowUpForm((f) => ({ ...f, title: e.target.value }))
+            }
+            placeholder="What to follow up on…"
+            style={styles.input}
+            autoFocus
+          />
+          <div style={styles.formRow}>
+            <label style={styles.followupDateLabel}>Remind me on</label>
+            <input
+              type="date"
+              value={followUpForm.dueDate}
+              onChange={(e) =>
+                setFollowUpForm((f) => ({ ...f, dueDate: e.target.value }))
+              }
+              style={styles.select}
+              title="When this resurfaces on Today"
+            />
+          </div>
+          <div style={styles.followupHint}>
+            A lightweight nudge — no project needed. It'll appear on your Today
+            view on this date.
+          </div>
+          <div style={styles.btnRow}>
+            <button
+              onClick={submitConvert}
+              style={{ ...styles.primaryBtn, background: '#185FA5' }}
+            >
+              Set follow-up
             </button>
             <button onClick={() => setConverting(null)} style={styles.cancelBtn}>
               Cancel
@@ -376,22 +462,29 @@ export default function Notepad({
                 ? 'var(--accent-soft)'
                 : feedback.type === 'project'
                 ? '#0F6E5611'
+                : feedback.type === 'followup'
+                ? '#185FA511'
                 : '#BA751711',
             color:
               feedback.type === 'task'
                 ? 'var(--accent)'
                 : feedback.type === 'project'
                 ? '#0F6E56'
+                : feedback.type === 'followup'
+                ? '#185FA5'
                 : '#BA7517',
             borderColor:
               feedback.type === 'task'
                 ? 'var(--accent-soft-border)'
                 : feedback.type === 'project'
                 ? '#0F6E5644'
+                : feedback.type === 'followup'
+                ? '#185FA544'
                 : '#BA751744',
           }}
         >
-          ✓ Created {feedback.type}: <strong>{feedback.text}</strong>
+          ✓ {feedback.type === 'followup' ? 'Set follow-up' : `Created ${feedback.type}`}:{' '}
+          <strong>{feedback.text}</strong>
         </div>
       )}
 
@@ -505,7 +598,16 @@ const styles = {
     fontFamily: 'inherit',
     resize: 'vertical',
   },
-  formRow: { display: 'flex', gap: 6, flexWrap: 'wrap' },
+  formRow: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' },
+  followupDateLabel: {
+    fontSize: 12,
+    color: 'var(--color-text-secondary)',
+  },
+  followupHint: {
+    fontSize: 11,
+    color: 'var(--color-text-tertiary)',
+    lineHeight: 1.4,
+  },
   select: {
     flex: 1,
     minWidth: 110,

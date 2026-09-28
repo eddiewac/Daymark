@@ -76,6 +76,8 @@ export default function SettingsPanel({
               onChange={(projectGroups) => onUpdate({ projectGroups })}
             />
 
+            <NavDefaultsEditor workspaceId={workspaceId} />
+
             <section style={styles.section}>
               <div style={styles.sectionTitle}>Daily capacity hours</div>
               <div style={styles.sectionHint}>
@@ -1143,3 +1145,107 @@ const themeStyles = {
   },
 };
 
+
+// ── Navigation defaults ──────────────────────────────────────────────────────
+// Lets the user pin which sub-view the Work and Record group tabs open to.
+// "Last viewed" (default) = remember where you last were in that group.
+// A specific view = always open there. Stored in localStorage per workspace,
+// read by WorkspaceView when a group header is tapped.
+const NAV_GROUPS = [
+  {
+    id: 'work',
+    label: 'Work',
+    options: [
+      { key: 'projects', label: 'Projects' },
+      { key: 'tasks', label: 'Tasks' },
+      { key: 'plan', label: 'Plan' },
+      { key: 'track', label: 'Track' },
+      { key: 'resource', label: 'Resource' },
+      { key: 'status', label: 'Status' },
+    ],
+  },
+  {
+    id: 'record',
+    label: 'Record',
+    options: [
+      { key: 'time', label: 'Timesheet' },
+      { key: 'notes', label: 'Notes' },
+      { key: 'notepad', label: 'Notepad' },
+      { key: 'export', label: 'Export' },
+    ],
+  },
+];
+
+function NavDefaultsEditor({ workspaceId }) {
+  const pinKey = `daymark-group-pin:${workspaceId || 'personal'}`;
+  const [pins, setPins] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(pinKey) || '{}');
+      return stored && typeof stored === 'object' ? stored : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const setPin = (groupId, value) => {
+    setPins((prev) => {
+      const next = { ...prev };
+      if (!value) delete next[groupId]; // '' = Last viewed (no pin)
+      else next[groupId] = value;
+      try {
+        localStorage.setItem(pinKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  return (
+    <section style={styles.section}>
+      <div style={styles.sectionTitle}>Tab defaults</div>
+      <div style={styles.sectionHint}>
+        Choose which view the Work and Record tabs open to. “Last viewed”
+        returns you to wherever you were; or pin a specific view so it always
+        opens there. Applies to this workspace.
+      </div>
+      <div style={navStyles.rows}>
+        {NAV_GROUPS.map((g) => (
+          <div key={g.id} style={navStyles.row}>
+            <span style={navStyles.label}>{g.label} opens to</span>
+            <select
+              value={pins[g.id] || ''}
+              onChange={(e) => setPin(g.id, e.target.value)}
+              style={navStyles.select}
+            >
+              <option value="">Last viewed</option>
+              {g.options.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const navStyles = {
+  rows: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 },
+  row: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  label: {
+    fontSize: 13,
+    color: 'var(--color-text-primary)',
+    minWidth: 130,
+  },
+  select: {
+    padding: '6px 10px',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 8,
+    fontSize: 13,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+    outline: 'none',
+    minWidth: 160,
+  },
+};

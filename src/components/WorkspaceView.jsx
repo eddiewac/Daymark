@@ -141,9 +141,36 @@ export default function WorkspaceView({
       return next;
     });
   }, [tab, groupMemKey]);
-  // Resolve which tab a group header should open: the last-viewed tab in that
-  // group (if valid), else the group's first key.
+  // A pinned default (set in Settings → Tab defaults) overrides remember-last:
+  // if the user pinned a specific view for a group, tapping the header always
+  // goes there. No pin → fall back to last-viewed → group's first tab.
+  const groupPinKey = `daymark-group-pin:${workspaceId || 'personal'}`;
+  const [groupPins, setGroupPins] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(groupPinKey) || '{}');
+      return stored && typeof stored === 'object' ? stored : {};
+    } catch {
+      return {};
+    }
+  });
+  // Re-read pins when returning to the window, so a change made in Settings
+  // this session is picked up.
+  useEffect(() => {
+    const reread = () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem(groupPinKey) || '{}');
+        setGroupPins(stored && typeof stored === 'object' ? stored : {});
+      } catch {}
+    };
+    window.addEventListener('focus', reread);
+    return () => window.removeEventListener('focus', reread);
+  }, [groupPinKey]);
+
+  // Resolve which tab a group header should open: a pinned default (if valid)
+  // wins; else the last-viewed tab in that group; else the group's first key.
   const groupLandingTab = (node) => {
+    const pinned = groupPins[node.id];
+    if (pinned && node.keys.includes(pinned)) return pinned;
     const remembered = groupLastView[node.id];
     if (remembered && node.keys.includes(remembered)) return remembered;
     return node.keys[0];

@@ -114,6 +114,40 @@ export default function WorkspaceView({
       localStorage.setItem(tabStorageKey, tab);
     } catch {}
   }, [tab, tabStorageKey]);
+
+  // Remember the last tab visited within each group, so tapping a group header
+  // returns you to where you last worked in it (e.g. Work → Tracker if that's
+  // where you were), rather than always the group's first tab. Persisted per
+  // workspace. Falls back to the group's first key if nothing remembered.
+  const groupMemKey = `daymark-group-view:${workspaceId || 'personal'}`;
+  const [groupLastView, setGroupLastView] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(groupMemKey) || '{}');
+      return stored && typeof stored === 'object' ? stored : {};
+    } catch {
+      return {};
+    }
+  });
+  // Whenever the active tab belongs to a group, record it as that group's last view.
+  useEffect(() => {
+    const gid = KEY_TO_GROUP[tab];
+    if (!gid) return;
+    setGroupLastView((prev) => {
+      if (prev[gid] === tab) return prev;
+      const next = { ...prev, [gid]: tab };
+      try {
+        localStorage.setItem(groupMemKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, [tab, groupMemKey]);
+  // Resolve which tab a group header should open: the last-viewed tab in that
+  // group (if valid), else the group's first key.
+  const groupLandingTab = (node) => {
+    const remembered = groupLastView[node.id];
+    if (remembered && node.keys.includes(remembered)) return remembered;
+    return node.keys[0];
+  };
   const [members, setMembers] = useState([]);
 
   // Focus box visibility — auto-opens when timer starts, closes on stop or manual close
@@ -516,7 +550,7 @@ export default function WorkspaceView({
                   if (noHover && !isOpen) {
                     openFlyout(node.id, e.currentTarget);
                   } else {
-                    setTab(node.keys[0]);
+                    setTab(groupLandingTab(node));
                     setOpenGroup(null);
                   }
                 }}

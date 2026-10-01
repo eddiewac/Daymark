@@ -10,6 +10,7 @@ const blankForm = {
   priority: 'Medium',
   category: '',
   project: '',
+  deliverableId: '',
   status: 'To do',
   dueDate: '',
   estimate: '',
@@ -85,7 +86,7 @@ export default function TaskForm({
       <div style={styles.fieldRow}>
         <select
           value={form.project}
-          onChange={(e) => set({ project: e.target.value })}
+          onChange={(e) => set({ project: e.target.value, deliverableId: '' })}
           style={styles.select}
         >
           <option value="">No project</option>
@@ -127,6 +128,31 @@ export default function TaskForm({
           ))}
         </select>
       </div>
+
+      {/* Deliverable picker — appears when the selected project has
+          deliverables. Optional: lets you tag which deliverable the task is
+          for, so two same-named tasks (e.g. "SR") on one project are
+          distinguishable on Today and in task lists. */}
+      {(() => {
+        const proj = (projects || []).find((p) => p.name === form.project);
+        const delivs = proj?.deliverables || [];
+        if (delivs.length === 0) return null;
+        return (
+          <select
+            value={form.deliverableId || ''}
+            onChange={(e) => set({ deliverableId: e.target.value })}
+            style={{ ...styles.select, width: '100%' }}
+            title="Which deliverable is this task for? (optional)"
+          >
+            <option value="">No specific deliverable</option>
+            {delivs.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name || '(deliverable)'}
+              </option>
+            ))}
+          </select>
+        );
+      })()}
 
       <div style={styles.fieldRow}>
         <input

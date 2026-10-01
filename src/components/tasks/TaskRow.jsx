@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PRIORITY_COLORS, projectColor } from '../../lib/constants.js';
+import { taskDeliverable } from '../../lib/deliverableStatus.js';
 import { formatDue, daysUntil } from '../../lib/utils.js';
 import { canTrackTime } from '../../hooks/useTime.js';
 
@@ -189,6 +190,14 @@ export default function TaskRow({
               {task.project}
             </span>
           )}
+          {(() => {
+            const deliv = taskDeliverable(task, projects);
+            return deliv ? (
+              <span style={{ ...styles.pill, background: projColor + '14', color: projColor }} title={`Deliverable: ${deliv.name}`}>
+                ▸ {deliv.name}
+              </span>
+            ) : null;
+          })()}
           {task.category && (
             <span style={styles.pillNeutral}>{task.category}</span>
           )}

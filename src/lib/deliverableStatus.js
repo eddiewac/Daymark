@@ -88,3 +88,30 @@ export function collectDeliverableWaiting(projects, today) {
   }
   return { overdue, dueToday };
 }
+// Resolve the deliverable a task belongs to, for display on task cards/lists.
+// A task can be linked two ways:
+//   1. task.deliverableId — set when tagged to a deliverable (manual or via a
+//      station-created task). Preferred.
+//   2. task.stationId — if the task was made from a station, find the
+//      deliverable whose stations include that station.
+// Returns the deliverable object, or null if the task isn't deliverable-linked.
+// `project` is the project the task belongs to (match by task.project name).
+export function taskDeliverable(task, projects) {
+  if (!task) return null;
+  const proj = (projects || []).find((p) => p.name === task.project);
+  if (!proj) return null;
+  const delivs = proj.deliverables || [];
+  // 1. Direct deliverableId link
+  if (task.deliverableId) {
+    const d = delivs.find((x) => x.id === task.deliverableId);
+    if (d) return d;
+  }
+  // 2. Derive from stationId
+  if (task.stationId) {
+    const d = delivs.find((x) =>
+      (x.stations || []).some((s) => s.id === task.stationId)
+    );
+    if (d) return d;
+  }
+  return null;
+}

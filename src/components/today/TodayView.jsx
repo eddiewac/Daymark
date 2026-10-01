@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
-import { collectDeliverableWaiting } from '../../lib/deliverableStatus.js';
+import { collectDeliverableWaiting, taskDeliverable } from '../../lib/deliverableStatus.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
 import {
   stationLastActivityAt,
@@ -684,6 +684,14 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
           {task.project}
         </span>
       )}
+      {(() => {
+        const deliv = taskDeliverable(task, projects);
+        return deliv ? (
+          <span style={{ ...styles.miniChip, color: projColor, opacity: 0.8 }} title={`Deliverable: ${deliv.name}`}>
+            ▸ {deliv.name}
+          </span>
+        ) : null;
+      })()}
       {task.stationId && onJumpToTrack && (
         <button
           onClick={() => onJumpToTrack(task)}
@@ -733,6 +741,14 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
           {task.project}
         </span>
       )}
+      {(() => {
+        const deliv = taskDeliverable(task, projects);
+        return deliv ? (
+          <span style={{ ...styles.miniChip, color: projColor, opacity: 0.8 }} title={`Deliverable: ${deliv.name}`}>
+            ▸ {deliv.name}
+          </span>
+        ) : null;
+      })()}
       {task.stationId && onJumpToTrack && (
         <button
           onClick={() => onJumpToTrack(task)}

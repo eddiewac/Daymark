@@ -24,6 +24,7 @@ import SettingsPanel from './settings/SettingsPanel.jsx';
 import CongressesPanel from './congresses/CongressesPanel.jsx';
 import StatusRoundsPanel from './status/StatusRoundsPanel.jsx';
 import WaitingOnView from './waiting/WaitingOnView.jsx';
+import DeliverablesView from './deliverables/DeliverablesView.jsx';
 import PriorityBanner from './priority/PriorityBanner.jsx';
 import PriorityModal from './priority/PriorityModal.jsx';
 import QuickCapture from './QuickCapture.jsx';
@@ -46,6 +47,7 @@ const TAB_LABELS = {
   resource: '👥 Resource',
   status: 'Status',
   waiting: '⏳ Waiting on',
+  deliverables: '📦 Deliverables',
   notes: 'Notes',
   notepad: 'Notepad',
   time: 'Timesheet',
@@ -62,7 +64,7 @@ const NAV = [
     label: 'Work',
     color: '#185FA5',
     // First key is the default landing when the group header is clicked.
-    keys: ['projects', 'tasks', 'plan', 'track', 'resource', 'status', 'waiting'],
+    keys: ['projects', 'tasks', 'plan', 'track', 'resource', 'status', 'waiting', 'deliverables'],
   },
   {
     type: 'group',
@@ -83,7 +85,7 @@ NAV.forEach((n) => {
 
 // All valid tab keys, for persistence validation.
 const ALL_TAB_KEYS = [
-  'today', 'tasks', 'plan', 'projects', 'track', 'resource', 'status', 'waiting',
+  'today', 'tasks', 'plan', 'projects', 'track', 'resource', 'status', 'waiting', 'deliverables',
   'notes', 'notepad', 'time', 'export', 'congresses', 'settings',
 ];
 
@@ -811,6 +813,13 @@ export default function WorkspaceView({
           <WaitingOnView
             projects={projects}
             tasks={allTasks}
+            onOpenProject={() => setTab('projects')}
+          />
+        )}
+        {tab === 'deliverables' && (
+          <DeliverablesView
+            projects={projects}
+            onUpdateProject={updateProject}
             onOpenProject={() => setTab('projects')}
           />
         )}

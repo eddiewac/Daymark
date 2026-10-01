@@ -11,6 +11,7 @@ const blankForm = {
   category: '',
   project: '',
   deliverableId: '',
+  deliverableName: '',
   status: 'To do',
   dueDate: '',
   estimate: '',
@@ -59,9 +60,19 @@ export default function TaskForm({
       estRaw === '' || estRaw == null
         ? null
         : Number(estRaw);
+    // Store the deliverable's NAME alongside its id, so the label travels with
+    // the task into any workspace (a team task assigned to someone shows its
+    // deliverable in their personal views, where the team project isn't loaded).
+    let deliverableName = '';
+    if (form.deliverableId) {
+      const proj = (projects || []).find((p) => p.name === form.project);
+      const d = (proj?.deliverables || []).find((x) => x.id === form.deliverableId);
+      deliverableName = d?.name || '';
+    }
     onSave({
       ...form,
       title: form.title.trim(),
+      deliverableName,
       estimate: Number.isFinite(estNum) ? estNum : null,
       outOfScopeHours: Number.isFinite(hoursNum) ? hoursNum : null,
       outOfScopeNotes: (form.outOfScopeNotes || '').trim(),

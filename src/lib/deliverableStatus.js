@@ -115,3 +115,16 @@ export function taskDeliverable(task, projects) {
   }
   return null;
 }
+
+// Resolve just the deliverable NAME for display on a task, working in ANY
+// workspace. Prefers a stored task.deliverableName (set at tag time, so it
+// travels with the task even when the task's project isn't loaded — e.g. a
+// team task shown in a personal workspace). Falls back to deriving from the
+// loaded projects (via deliverableId or stationId) when no name is stored.
+// Returns a string, or '' if the task has no deliverable.
+export function taskDeliverableName(task, projects) {
+  if (!task) return '';
+  if (task.deliverableName) return task.deliverableName;
+  const d = taskDeliverable(task, projects);
+  return d ? d.name || '' : '';
+}

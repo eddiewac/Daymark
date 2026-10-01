@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
-import { collectDeliverableWaiting, taskDeliverable } from '../../lib/deliverableStatus.js';
+import { collectDeliverableWaiting, taskDeliverableName } from '../../lib/deliverableStatus.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
 import {
   stationLastActivityAt,
@@ -685,10 +685,10 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
         </span>
       )}
       {(() => {
-        const deliv = taskDeliverable(task, projects);
-        return deliv ? (
-          <span style={{ ...styles.miniChip, color: projColor, opacity: 0.8 }} title={`Deliverable: ${deliv.name}`}>
-            ▸ {deliv.name}
+        const delivName = taskDeliverableName(task, projects);
+        return delivName ? (
+          <span style={{ ...styles.miniChip, color: projColor, opacity: 0.8 }} title={`Deliverable: ${delivName}`}>
+            ▸ {delivName}
           </span>
         ) : null;
       })()}
@@ -742,10 +742,10 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
         </span>
       )}
       {(() => {
-        const deliv = taskDeliverable(task, projects);
-        return deliv ? (
-          <span style={{ ...styles.miniChip, color: projColor, opacity: 0.8 }} title={`Deliverable: ${deliv.name}`}>
-            ▸ {deliv.name}
+        const delivName = taskDeliverableName(task, projects);
+        return delivName ? (
+          <span style={{ ...styles.miniChip, color: projColor, opacity: 0.8 }} title={`Deliverable: ${delivName}`}>
+            ▸ {delivName}
           </span>
         ) : null;
       })()}

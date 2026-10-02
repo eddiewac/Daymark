@@ -819,6 +819,7 @@ export default function WorkspaceView({
         {tab === 'deliverables' && (
           <DeliverablesView
             projects={projects}
+            tasks={allTasks}
             onUpdateProject={updateProject}
             onOpenProject={() => setTab('projects')}
           />

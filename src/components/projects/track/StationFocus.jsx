@@ -56,6 +56,8 @@ export default function StationFocus({
       title: nextTaskDraft.trim(),
       project: project?.name || '',
       stationId: nextStation.id,
+      deliverableId: deliverable?.id || '',
+      deliverableName: deliverable?.name || '',
     });
     setNextTaskDraft('');
   };
@@ -68,6 +70,8 @@ export default function StationFocus({
       title: newTaskTitle.trim(),
       project: project.name,
       stationId: station.id,
+      deliverableId: deliverable?.id || '',
+      deliverableName: deliverable?.name || '',
       assignedToId: newTaskAssignee || '',
       assignedToEmail: newTaskAssignee
         ? members?.find((m) => m.id === newTaskAssignee)?.email || ''
@@ -90,6 +94,8 @@ export default function StationFocus({
       title: station.name || 'Station task',
       project: project?.name || '',
       stationId: station.id,
+      deliverableId: deliverable?.id || '',
+      deliverableName: deliverable?.name || '',
       dueDate: stationTaskDate || new Date().toISOString().slice(0, 10),
     });
     setStationTaskAdded(true);

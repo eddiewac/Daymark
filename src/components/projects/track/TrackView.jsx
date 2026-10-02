@@ -101,10 +101,17 @@ export default function TrackView({
   };
   const confirmStationTask = async (projectName, station) => {
     if (!onAddTask) return;
+    // Find the deliverable this station belongs to, so the task carries its
+    // deliverable id + name (name travels cross-workspace for display).
+    const owningDeliv = (project.deliverables || []).find((d) =>
+      (d.stations || []).some((s) => s.id === station.id)
+    );
     await onAddTask({
       title: station.name || 'Station task',
       project: projectName || '',
       stationId: station.id,
+      deliverableId: owningDeliv?.id || '',
+      deliverableName: owningDeliv?.name || '',
       dueDate: taskDate || todayISO(),
     });
     setTaskForStation(null);

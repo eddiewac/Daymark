@@ -100,6 +100,8 @@ export default function StationsEditor({ deliverable, onChange, stationTemplates
       title: station.name || 'Station task',
       project: projectName || '',
       stationId: station.id,
+      deliverableId: deliverable?.id || '',
+      deliverableName: deliverable?.name || '',
       dueDate: taskDate || todayISO(),
     });
     setTaskForStation(null);

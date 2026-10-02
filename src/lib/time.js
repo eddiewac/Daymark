@@ -38,6 +38,41 @@ export async function loadTimeEntries(workspaceId, fromDate, toDate) {
   return (data || []).map(rowToBlock);
 }
 
+// Sum the CURRENT USER's logged hours per task, across ALL workspaces.
+// Needed for budget-vs-actual: time logged on a team task from the personal
+// workspace is tagged workspace_id=null, so the team workspace's normal query
+// never sees it. This queries by task_id instead of workspace, so a team task's
+// actual hours include time logged anywhere. Still owner-scoped (user_id),
+// so it works within the owner-only RLS policy — it only ever sums YOUR time.
+// Returns a map { [taskId]: totalHours }.
+export async function loadTimeForTasks(taskIds) {
+  const user = await getCurrentUser();
+  if (!user || !taskIds || taskIds.length === 0) return {};
+
+  const chunks = [];
+  for (let i = 0; i < taskIds.length; i += 200) {
+    chunks.push(taskIds.slice(i, i + 200));
+  }
+
+  const totals = {};
+  for (const chunk of chunks) {
+    const { data, error } = await supabase
+      .from('time_entries')
+      .select('task_id, hours')
+      .eq('user_id', user.id)
+      .in('task_id', chunk);
+    if (error) {
+      console.error('loadTimeForTasks:', error);
+      continue;
+    }
+    for (const row of data || []) {
+      const h = parseFloat(row.hours) || 0;
+      totals[row.task_id] = (totals[row.task_id] || 0) + h;
+    }
+  }
+  return totals;
+}
+
 function rowToBlock(row) {
   return {
     id: row.id,

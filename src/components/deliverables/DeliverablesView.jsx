@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { projectColor } from '../../lib/constants.js';
+import { loadTimeForTasks } from '../../lib/time.js';
+import { taskDeliverable } from '../../lib/deliverableStatus.js';
 
 // Deliverable-level overview: one row per deliverable across all projects.
 // Shows the current station, its owner (assignee), and dates. Dates and
@@ -20,7 +22,48 @@ function currentStation(deliverable) {
   return stations.find((s) => !s.done) || null;
 }
 
-export default function DeliverablesView({ projects, onUpdateProject, onOpenProject }) {
+export default function DeliverablesView({ projects, tasks, onUpdateProject, onOpenProject }) {
+  // Map each deliverable id → its tasks (via deliverableId or stationId).
+  const tasksByDeliverable = useMemo(() => {
+    const map = {};
+    for (const t of tasks || []) {
+      const d = taskDeliverable(t, projects);
+      if (!d) continue;
+      (map[d.id] = map[d.id] || []).push(t);
+    }
+    return map;
+  }, [tasks, projects]);
+
+  // Budget per deliverable = sum of its tasks' estimates.
+  const budgetByDeliverable = useMemo(() => {
+    const map = {};
+    for (const [delivId, ts] of Object.entries(tasksByDeliverable)) {
+      map[delivId] = ts.reduce((s, t) => s + (Number(t.estimate) || 0), 0);
+    }
+    return map;
+  }, [tasksByDeliverable]);
+
+  // Actual hours per deliverable — summed from logged blocks for its tasks,
+  // across all workspaces. Loaded async (cross-workspace query by task id).
+  const [actualByDeliverable, setActualByDeliverable] = useState({});
+  useEffect(() => {
+    const allTaskIds = (tasks || []).map((t) => t.id);
+    if (allTaskIds.length === 0) {
+      setActualByDeliverable({});
+      return;
+    }
+    let cancelled = false;
+    loadTimeForTasks(allTaskIds).then((perTask) => {
+      if (cancelled) return;
+      const perDeliv = {};
+      for (const [delivId, ts] of Object.entries(tasksByDeliverable)) {
+        perDeliv[delivId] = ts.reduce((s, t) => s + (perTask[t.id] || 0), 0);
+      }
+      setActualByDeliverable(perDeliv);
+    });
+    return () => { cancelled = true; };
+  }, [tasks, tasksByDeliverable]);
+
   // Build rows: one per deliverable, carrying refs back to project for saving.
   const rows = useMemo(() => {
     const out = [];
@@ -36,11 +79,13 @@ export default function DeliverablesView({ projects, onUpdateProject, onOpenProj
           current: cur,
           doneCount,
           allDone: stations.length > 0 && doneCount === stations.length,
+          budget: budgetByDeliverable[d.id] || 0,
+          actual: actualByDeliverable[d.id] || 0,
         });
       }
     }
     return out;
-  }, [projects]);
+  }, [projects, budgetByDeliverable, actualByDeliverable]);
 
   // Group rows by project, preserving project order.
   const grouped = useMemo(() => {
@@ -105,6 +150,7 @@ export default function DeliverablesView({ projects, onUpdateProject, onOpenProj
               <th style={{ ...styles.th, ...styles.delivCol }}>Deliverable</th>
               <th style={{ ...styles.th, ...styles.stationCol }}>Current station</th>
               <th style={{ ...styles.th, ...styles.ownerCol }}>Assigned to</th>
+              <th style={{ ...styles.th, ...styles.budgetCol }} title="Budgeted hours (sum of task estimates) vs actual logged">Budget / Actual</th>
               <th style={{ ...styles.th, ...styles.dateCol }}>Start</th>
               <th style={{ ...styles.th, ...styles.dateCol }}>Due</th>
               <th style={{ ...styles.th, ...styles.actionCol }}></th>
@@ -136,7 +182,7 @@ function GroupRows({ bucket, pColor, onOpenProject, patchDeliverable, patchStati
   return (
     <>
       <tr>
-        <td colSpan={6} style={styles.groupRow}>
+        <td colSpan={7} style={styles.groupRow}>
           <button onClick={() => onOpenProject(bucket.project.id)} style={styles.groupBtn}>
             <span style={{ ...styles.groupDot, background: pColor }} />
             <span style={styles.groupName}>{bucket.project.name || '(untitled)'}</span>
@@ -159,8 +205,9 @@ function GroupRows({ bucket, pColor, onOpenProject, patchDeliverable, patchStati
 }
 
 function DeliverableRow({ row, pColor, patchDeliverable, patchStation, completeCurrentStation }) {
-  const { project, deliverable, stations, current, doneCount, allDone } = row;
+  const { project, deliverable, stations, current, doneCount, allDone, budget, actual } = row;
   const [owner, setOwner] = useState(current?.owner || '');
+  const over = budget > 0 && actual > budget;
 
   return (
     <tr style={{ ...styles.tr, borderLeft: `3px solid ${pColor}` }}>
@@ -198,6 +245,20 @@ function DeliverableRow({ row, pColor, patchDeliverable, patchStation, completeC
             style={styles.ownerInput}
             title="Owner of the current station"
           />
+        ) : (
+          <span style={styles.noStations}>—</span>
+        )}
+      </td>
+
+      <td style={{ ...styles.td, ...styles.budgetCol }}>
+        {budget > 0 || actual > 0 ? (
+          <span style={styles.budgetActual} title="Budgeted (task estimates) vs actual logged hours">
+            <span style={styles.budgetNum}>{budget > 0 ? `${budget.toFixed(1)}h` : '—'}</span>
+            <span style={styles.budgetSep}> / </span>
+            <span style={{ ...styles.actualNum, ...(over ? styles.actualOver : {}) }}>
+              {actual > 0 ? `${actual.toFixed(1)}h` : '0h'}
+            </span>
+          </span>
         ) : (
           <span style={styles.noStations}>—</span>
         )}
@@ -265,6 +326,7 @@ const styles = {
   delivCol: { minWidth: 220 },
   stationCol: { width: 180 },
   ownerCol: { width: 140 },
+  budgetCol: { width: 130 },
   dateCol: { width: 120 },
   actionCol: { width: 90, textAlign: 'right' },
   groupRow: { padding: 0, background: 'var(--bg-surface)' },
@@ -315,6 +377,11 @@ const styles = {
   },
   allDone: { fontSize: 11, color: '#1d9e75', fontWeight: 500 },
   noStations: { color: 'var(--color-text-tertiary)' },
+  budgetActual: { fontSize: 12, fontFamily: 'monospace', whiteSpace: 'nowrap' },
+  budgetNum: { color: 'var(--color-text-secondary)' },
+  budgetSep: { color: 'var(--color-text-tertiary)' },
+  actualNum: { color: 'var(--color-text-primary)', fontWeight: 600 },
+  actualOver: { color: '#e24b4a' },
   ownerInput: {
     width: '100%',
     padding: '4px 6px',

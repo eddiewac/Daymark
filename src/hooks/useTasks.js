@@ -128,6 +128,8 @@ export function useTasks(workspaceId, workspaceName) {
                       assignmentId: payload.new.id,
                       workspaceId: payload.new.workspace_id,
                       assignedFrom: payload.new.workspace_name,
+                      assignedBy: payload.new.assigned_by,
+                      assignedAt: payload.new.created_at,
                       isAssigned: true,
                       dismissed: false,
                     },

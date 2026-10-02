@@ -131,6 +131,8 @@ export async function loadAssignedTasks() {
       assignmentId: a.id,
       workspaceId: a.workspace_id,
       assignedFrom: a.workspace_name,
+      assignedBy: a.assigned_by,
+      assignedAt: a.created_at,
       isAssigned: true,
       dismissed: !!a.dismissed,
     };

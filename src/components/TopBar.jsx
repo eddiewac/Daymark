@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { DaymarkWordmark } from './Logo.jsx';
 import { createWorkspace, setStoredActiveWorkspaceId } from '../lib/workspaces.js';
+import NotificationBell from './NotificationBell.jsx';
 
 export default function TopBar({
   user,
@@ -13,6 +14,8 @@ export default function TopBar({
   onOpenGoals,
   onOpenDeleteAccount,
   timerIndicator,
+  assignedTasks,
+  currentUserId,
 }) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -107,6 +110,8 @@ export default function TopBar({
       <div style={{ flex: 1 }} />
 
       {timerIndicator}
+
+      <NotificationBell assignedTasks={assignedTasks} currentUserId={currentUserId} />
 
       <button
         onClick={() => window.dispatchEvent(new CustomEvent('daymark-quick-capture'))}

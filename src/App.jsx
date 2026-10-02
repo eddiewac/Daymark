@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
-import { supabase } from './lib/supabase.js';
+import { supabase, getCurrentUser } from './lib/supabase.js';
 import {
   loadWorkspaces,
   getStoredActiveWorkspaceId,
   setStoredActiveWorkspaceId,
 } from './lib/workspaces.js';
+import { loadAssignedTasks } from './lib/tasks.js';
 import { useTime } from './hooks/useTime.js';
 import { useGoals } from './hooks/useGoals.js';
 import Auth from './components/Auth.jsx';
@@ -43,6 +44,12 @@ export default function App() {
 
   const [mfaStatus, setMfaStatus] = useState('unknown');
   const lastCheckedSessionRef = useRef(null);
+
+  // Notification bell: assignments are user-level (across all workspaces), so
+  // they're loaded here at App level — independent of the active workspace —
+  // and passed to TopBar's bell.
+  const [notifAssignments, setNotifAssignments] = useState([]);
+  const [notifUserId, setNotifUserId] = useState(null);
 
   const time = useTime(activeWorkspace?.id || null);
   const goalsApi = useGoals();
@@ -128,6 +135,48 @@ export default function App() {
     };
   }, [session, mfaStatus]);
 
+  // Load assignments for the notification bell + subscribe for live updates.
+  // User-level (not tied to active workspace), so it lives here, not in
+  // WorkspaceView. Mirrors the assignment realtime the task hook uses.
+  useEffect(() => {
+    if (!session || mfaStatus !== 'ok') {
+      setNotifAssignments([]);
+      setNotifUserId(null);
+      return;
+    }
+    let mounted = true;
+    let channel;
+    (async () => {
+      const user = await getCurrentUser();
+      if (!user || !mounted) return;
+      setNotifUserId(user.id);
+      const asgn = await loadAssignedTasks();
+      if (mounted) setNotifAssignments(asgn);
+
+      channel = supabase
+        .channel(`notif-assignments-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'assignments',
+            filter: `assigned_to=eq.${user.id}`,
+          },
+          async () => {
+            // On any change, reload the list — simple and always correct.
+            const fresh = await loadAssignedTasks();
+            if (mounted) setNotifAssignments(fresh);
+          }
+        )
+        .subscribe();
+    })();
+    return () => {
+      mounted = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [session, mfaStatus]);
+
   const handleSwitch = (ws) => {
     setActiveWorkspace(ws);
     setStoredActiveWorkspaceId(ws ? ws.id : null);
@@ -210,6 +259,8 @@ export default function App() {
         onOpenGoals={() => setGoalsOpen(true)}
         onOpenDeleteAccount={() => setDeleteAccountOpen(true)}
         timerIndicator={indicator}
+        assignedTasks={notifAssignments}
+        currentUserId={notifUserId}
       />
       <WorkspaceView
         key={activeWorkspace?.id || 'personal'}

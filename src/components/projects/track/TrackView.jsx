@@ -3,6 +3,7 @@ import { projectColor } from '../../../lib/constants.js';
 import { uid } from '../../../lib/utils.js';
 import StationFocus from './StationFocus.jsx';
 import { stationLastActivityAt, relativeTime } from '../../../lib/stations.js';
+import { deadlineColor, fmtDeadline } from '../../../lib/deadline.js';
 import { useCurrentTheme } from '../../../hooks/useCurrentTheme.js';
 import BlockDagView from './BlockDagView.jsx';
 
@@ -101,17 +102,10 @@ export default function TrackView({
   };
   const confirmStationTask = async (projectName, station) => {
     if (!onAddTask) return;
-    // Find the deliverable this station belongs to, so the task carries its
-    // deliverable id + name (name travels cross-workspace for display).
-    const owningDeliv = (project.deliverables || []).find((d) =>
-      (d.stations || []).some((s) => s.id === station.id)
-    );
     await onAddTask({
       title: station.name || 'Station task',
       project: projectName || '',
       stationId: station.id,
-      deliverableId: owningDeliv?.id || '',
-      deliverableName: owningDeliv?.name || '',
       dueDate: taskDate || todayISO(),
     });
     setTaskForStation(null);
@@ -479,9 +473,23 @@ export default function TrackView({
                               >
                                 {s.name}
                               </div>
-                              {s.targetDate && (
-                                <div style={styles.trainDate}>{s.targetDate}</div>
-                              )}
+                              {s.targetDate && (() => {
+                                // Colour by deadline urgency, but only while the
+                                // station is still open — a done station's
+                                // deadline no longer matters.
+                                const dc = !isDone ? deadlineColor(s.targetDate) : null;
+                                return (
+                                  <div
+                                    style={{
+                                      ...styles.trainDate,
+                                      ...(dc ? { color: dc, fontWeight: 600 } : {}),
+                                    }}
+                                    title={!isDone ? `Deadline: ${s.targetDate}` : s.targetDate}
+                                  >
+                                    ⚑ {fmtDeadline(s.targetDate)}
+                                  </div>
+                                );
+                              })()}
                               {awaiting > 0 && (
                                 <div style={styles.trainAwaiting}>⟳ {awaiting}</div>
                               )}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PRIORITY_COLORS, projectColor } from '../../lib/constants.js';
-import { taskDeliverableName } from '../../lib/deliverableStatus.js';
 import { formatDue, daysUntil } from '../../lib/utils.js';
+import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import { canTrackTime } from '../../hooks/useTime.js';
 
 export default function TaskRow({
@@ -190,14 +190,6 @@ export default function TaskRow({
               {task.project}
             </span>
           )}
-          {(() => {
-            const delivName = taskDeliverableName(task, projects);
-            return delivName ? (
-              <span style={{ ...styles.pill, background: projColor + '14', color: projColor }} title={`Deliverable: ${delivName}`}>
-                ▸ {delivName}
-              </span>
-            ) : null;
-          })()}
           {task.category && (
             <span style={styles.pillNeutral}>{task.category}</span>
           )}
@@ -211,6 +203,17 @@ export default function TaskRow({
               {due}
             </span>
           )}
+          {task.deadline && (() => {
+            const dc = deadlineColor(task.deadline);
+            return (
+              <span
+                style={{ ...styles.pill, color: dc, background: dc + '18', fontWeight: 600 }}
+                title={`Deadline: ${task.deadline}`}
+              >
+                ⚑ {fmtDeadline(task.deadline)}
+              </span>
+            );
+          })()}
           {isAssigned && task.assignedFrom && (
             <span style={styles.wsBadge}>🏢 {task.assignedFrom}</span>
           )}

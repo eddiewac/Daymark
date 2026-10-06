@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
 import { collectDeliverableWaiting, taskDeliverableName } from '../../lib/deliverableStatus.js';
+import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
 import {
   stationLastActivityAt,
@@ -692,6 +693,17 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
           </span>
         ) : null;
       })()}
+      {task.deadline && (() => {
+        const dc = deadlineColor(task.deadline);
+        return (
+          <span
+            style={{ ...styles.miniChip, color: dc, fontWeight: 600 }}
+            title={`Deadline: ${task.deadline}`}
+          >
+            ⚑ {fmtDeadline(task.deadline)}
+          </span>
+        );
+      })()}
       {task.stationId && onJumpToTrack && (
         <button
           onClick={() => onJumpToTrack(task)}
@@ -748,6 +760,17 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
             ▸ {delivName}
           </span>
         ) : null;
+      })()}
+      {task.deadline && (() => {
+        const dc = deadlineColor(task.deadline);
+        return (
+          <span
+            style={{ ...styles.miniChip, color: dc, fontWeight: 600 }}
+            title={`Deadline: ${task.deadline}`}
+          >
+            ⚑ {fmtDeadline(task.deadline)}
+          </span>
+        );
       })()}
       {task.stationId && onJumpToTrack && (
         <button

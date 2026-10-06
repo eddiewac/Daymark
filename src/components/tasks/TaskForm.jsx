@@ -10,10 +10,9 @@ const blankForm = {
   priority: 'Medium',
   category: '',
   project: '',
-  deliverableId: '',
-  deliverableName: '',
   status: 'To do',
   dueDate: '',
+  deadline: '',
   estimate: '',
   tags: [],
   recurring: 'none',
@@ -60,19 +59,9 @@ export default function TaskForm({
       estRaw === '' || estRaw == null
         ? null
         : Number(estRaw);
-    // Store the deliverable's NAME alongside its id, so the label travels with
-    // the task into any workspace (a team task assigned to someone shows its
-    // deliverable in their personal views, where the team project isn't loaded).
-    let deliverableName = '';
-    if (form.deliverableId) {
-      const proj = (projects || []).find((p) => p.name === form.project);
-      const d = (proj?.deliverables || []).find((x) => x.id === form.deliverableId);
-      deliverableName = d?.name || '';
-    }
     onSave({
       ...form,
       title: form.title.trim(),
-      deliverableName,
       estimate: Number.isFinite(estNum) ? estNum : null,
       outOfScopeHours: Number.isFinite(hoursNum) ? hoursNum : null,
       outOfScopeNotes: (form.outOfScopeNotes || '').trim(),
@@ -97,7 +86,7 @@ export default function TaskForm({
       <div style={styles.fieldRow}>
         <select
           value={form.project}
-          onChange={(e) => set({ project: e.target.value, deliverableId: '' })}
+          onChange={(e) => set({ project: e.target.value })}
           style={styles.select}
         >
           <option value="">No project</option>
@@ -140,62 +129,57 @@ export default function TaskForm({
         </select>
       </div>
 
-      {/* Deliverable picker — appears when the selected project has
-          deliverables. Optional: lets you tag which deliverable the task is
-          for, so two same-named tasks (e.g. "SR") on one project are
-          distinguishable on Today and in task lists. */}
-      {(() => {
-        const proj = (projects || []).find((p) => p.name === form.project);
-        const delivs = proj?.deliverables || [];
-        if (delivs.length === 0) return null;
-        return (
+      <div style={styles.fieldRow}>
+        <div style={styles.fieldCol}>
+          <label style={styles.miniLabel}>Scheduled for</label>
+          <input
+            type="date"
+            value={form.dueDate || ''}
+            onChange={(e) => set({ dueDate: e.target.value })}
+            style={styles.select}
+            title="When you plan to work on this (drives Today & Plan)"
+          />
+        </div>
+
+        <div style={styles.fieldCol}>
+          <label style={styles.miniLabel}>⚑ Deadline</label>
+          <input
+            type="date"
+            value={form.deadline || ''}
+            onChange={(e) => set({ deadline: e.target.value })}
+            style={styles.select}
+            title="When this is actually due by (the hard deadline)"
+          />
+        </div>
+
+        <div style={styles.fieldCol}>
+          <label style={styles.miniLabel}>Estimate (h)</label>
+          <input
+            type="number"
+            step="0.25"
+            min="0"
+            value={form.estimate ?? ''}
+            onChange={(e) => set({ estimate: e.target.value })}
+            placeholder="h"
+            style={styles.select}
+            title="Estimated hours for this task"
+          />
+        </div>
+
+        <div style={styles.fieldCol}>
+          <label style={styles.miniLabel}>Repeat</label>
           <select
-            value={form.deliverableId || ''}
-            onChange={(e) => set({ deliverableId: e.target.value })}
-            style={{ ...styles.select, width: '100%' }}
-            title="Which deliverable is this task for? (optional)"
+            value={form.recurring}
+            onChange={(e) => set({ recurring: e.target.value })}
+            style={styles.select}
           >
-            <option value="">No specific deliverable</option>
-            {delivs.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name || '(deliverable)'}
+            {RECURRING_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {r === 'none' ? 'No recurrence' : `Repeats ${r}`}
               </option>
             ))}
           </select>
-        );
-      })()}
-
-      <div style={styles.fieldRow}>
-        <input
-          type="date"
-          value={form.dueDate || ''}
-          onChange={(e) => set({ dueDate: e.target.value })}
-          style={styles.select}
-          title="Due date"
-        />
-
-        <input
-          type="number"
-          step="0.25"
-          min="0"
-          value={form.estimate ?? ''}
-          onChange={(e) => set({ estimate: e.target.value })}
-          placeholder="Estimate (h)"
-          style={styles.select}
-          title="Estimated hours for this task"
-        />
-
-        <select
-          value={form.recurring}
-          onChange={(e) => set({ recurring: e.target.value })}
-          style={styles.select}
-        >
-          {RECURRING_OPTIONS.map((r) => (
-            <option key={r} value={r}>
-              {r === 'none' ? 'No recurrence' : `Repeats ${r}`}
-            </option>
-          ))}
-        </select>
+        </div>
       </div>
 
       {workspaceId && members && members.length > 0 && (
@@ -322,6 +306,8 @@ const styles = {
     outline: 'none',
   },
   fieldRow: { display: 'flex', gap: 6 },
+  fieldCol: { flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
+  miniLabel: { fontSize: 9, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.03em' },
   select: {
     flex: 1,
     padding: '5px 8px',

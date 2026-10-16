@@ -4,7 +4,6 @@ import { todayStr } from '../../lib/utils.js';
 import { taskDeliverableName } from '../../lib/deliverableStatus.js';
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
-import { projectHealth } from '../../lib/stations.js';
 
 // ── TodayView ───────────────────────────────────────────────────────────────
 // Action-first dashboard, restructured into two full-width columns:
@@ -75,7 +74,6 @@ export default function TodayView({
 }) {
   const today = todayStr();
 
-  const [projectStatusOpen, setProjectStatusOpen] = useState(false);
   const [closeDayOpen, setCloseDayOpen] = useState(false);
   // Which waiting item currently has its chase popover open (by key).
   const [chaseOpen, setChaseOpen] = useState(null);
@@ -178,18 +176,6 @@ export default function TodayView({
       .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
   }, [congresses]);
 
-  const attentionProjects = useMemo(() => {
-    const out = [];
-    for (const p of projects || []) {
-      if (p.archived) continue;
-      const tasksForProject = (tasks || []).filter((t) => t.project === p.name);
-      const { status, reasons } = projectHealth(p, tasksForProject);
-      if (status === 'red' || status === 'amber') out.push({ project: p, status, reasons });
-    }
-    out.sort((a, b) => (a.status === b.status ? 0 : a.status === 'red' ? -1 : 1));
-    return out;
-  }, [projects, tasks]);
-
   // ── Counts ──────────────────────────────────────────────────────────────────
   const doCount =
     (primaryTask ? 1 : 0) + stretchTasks.length + overdueTasks.length + dueTodayTasks.length;
@@ -230,6 +216,44 @@ export default function TodayView({
     }
     onUpdateProject(proj.id, { deliverables });
     setChaseOpen(null);
+  };
+
+  // ── Resolve handler — clears the waiting state at its source so it stops
+  //    showing here AND on the project card ─────────────────────────────────────
+  const handleResolve = (item) => {
+    if (!onUpdateProject) return;
+    const proj = (projects || []).find((p) => p.id === item.project.id);
+    if (!proj) return;
+    const stamp = new Date().toISOString();
+    let deliverables;
+    if (item.type === 'deliverable') {
+      // Clear the deliverable's "with [person], back [date]" marker. The project
+      // card reads this via deliverableStatus(), so the status line reverts to
+      // station progress (or awaiting reply) automatically.
+      deliverables = (proj.deliverables || []).map((d) =>
+        d.id === item.deliverable.id
+          ? { ...d, waitingOnName: '', waitingOnDate: '', waitingResolvedAt: stamp }
+          : d
+      );
+    } else {
+      // Mark the comm's reply as received — it drops out of every "awaiting
+      // reply" surface across the app.
+      deliverables = (proj.deliverables || []).map((d) => ({
+        ...d,
+        stations: (d.stations || []).map((s) =>
+          s.id === item.station.id
+            ? {
+                ...s,
+                comms: (s.comms || []).map((c) =>
+                  c.id === item.comm.id ? { ...c, replyReceived: true, replyAt: stamp } : c
+                ),
+              }
+            : s
+        ),
+      }));
+    }
+    onUpdateProject(proj.id, { deliverables });
+    setChaseOpen((k) => (k === item.key ? null : k));
   };
 
   const draftChaseEmail = (item) => {
@@ -400,6 +424,7 @@ export default function TodayView({
                     open={chaseOpen === item.key}
                     onToggleChase={() => setChaseOpen((k) => (k === item.key ? null : item.key))}
                     onChase={handleChase}
+                    onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
                     onOpen={() => onJumpToProject(item.project.id)}
                   />
@@ -415,6 +440,7 @@ export default function TodayView({
                     open={chaseOpen === item.key}
                     onToggleChase={() => setChaseOpen((k) => (k === item.key ? null : item.key))}
                     onChase={handleChase}
+                    onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
                     onOpen={() => onJumpToProject(item.project.id)}
                   />
@@ -430,6 +456,7 @@ export default function TodayView({
                     open={chaseOpen === item.key}
                     onToggleChase={() => setChaseOpen((k) => (k === item.key ? null : item.key))}
                     onChase={handleChase}
+                    onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
                     onOpen={() => onJumpToProject(item.project.id)}
                   />
@@ -441,41 +468,30 @@ export default function TodayView({
               </section>
             </div>
 
-            {/* Awareness strip — congresses + project health, below the fold
-                deliberately: not daily actions, just things not to forget. */}
-            {(upcomingCongresses.length > 0 || attentionProjects.length > 0) && (
+            {/* Awareness strip — upcoming congresses only. Below the fold
+                deliberately: not a daily action, just a date not to forget. */}
+            {upcomingCongresses.length > 0 && (
               <div style={styles.strip}>
-                {upcomingCongresses.length > 0 && (
-                  <div style={styles.stripBlock}>
-                    <div style={styles.stripHead}>
-                      <span>🏛 Congresses · next 14 days</span>
-                      <button style={styles.stripJump} onClick={() => onJumpToTab('congresses')}>
-                        Open →
-                      </button>
-                    </div>
-                    {upcomingCongresses.map((c) => {
-                      const days = Math.ceil((new Date(c.startDate) - Date.now()) / DAY_MS);
-                      return (
-                        <div key={c.id} style={styles.stripRow}>
-                          <span style={styles.stripRowTitle}>{c.name}</span>
-                          <span style={styles.stripRowMeta}>
-                            {c.location ? `${c.location} · ` : ''}
-                            {days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}
-                          </span>
-                        </div>
-                      );
-                    })}
+                <div style={styles.stripBlock}>
+                  <div style={styles.stripHead}>
+                    <span>🏛 Congresses · next 14 days</span>
+                    <button style={styles.stripJump} onClick={() => onJumpToTab('congresses')}>
+                      Open →
+                    </button>
                   </div>
-                )}
-
-                {attentionProjects.length > 0 && (
-                  <ProjectStatusBlock
-                    items={attentionProjects}
-                    open={projectStatusOpen}
-                    onToggle={() => setProjectStatusOpen((v) => !v)}
-                    onJumpToProject={onJumpToProject}
-                  />
-                )}
+                  {upcomingCongresses.map((c) => {
+                    const days = Math.ceil((new Date(c.startDate) - Date.now()) / DAY_MS);
+                    return (
+                      <div key={c.id} style={styles.stripRow}>
+                        <span style={styles.stripRowTitle}>{c.name}</span>
+                        <span style={styles.stripRowMeta}>
+                          {c.location ? `${c.location} · ` : ''}
+                          {days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </>
@@ -524,10 +540,11 @@ function SubHead({ label, tone, action, onAction }) {
 }
 
 // ── WaitingRow — one item out with someone, with an inline Chase action ──────
-function WaitingRow({ item, tone, today, open, onToggleChase, onChase, onDraftEmail, onOpen }) {
+function WaitingRow({ item, tone, today, open, onToggleChase, onChase, onResolve, onDraftEmail, onOpen }) {
   const projColor = projectColor(item.project.name, null);
   const whenColor = tone === 'over' ? '#e24b4a' : tone === 'due' ? '#ef9f27' : 'var(--color-text-secondary)';
   const rel = waitRelLabel(item.date, today);
+  const resolveTitle = item.type === 'comm' ? 'Mark reply received — no longer waiting' : 'No longer waiting on this';
   return (
     <div style={waitStyles.outer}>
       <div style={waitStyles.row}>
@@ -547,6 +564,9 @@ function WaitingRow({ item, tone, today, open, onToggleChase, onChase, onDraftEm
         <span style={{ ...waitStyles.when, color: whenColor, fontWeight: tone === 'later' ? 400 : 600 }}>
           {rel}
         </span>
+        <button style={waitStyles.resolveBtn} onClick={() => onResolve(item)} title={resolveTitle}>
+          ✓
+        </button>
         <button
           style={{ ...waitStyles.chaseBtn, ...(tone === 'over' ? {} : waitStyles.chaseGhost) }}
           onClick={onToggleChase}
@@ -707,37 +727,6 @@ function TimerButton({ task, runningTimer, onStartTimer, onStopTimer }) {
     >
       ▶ Track
     </button>
-  );
-}
-
-// ── Project status block (awareness strip) ───────────────────────────────────
-function ProjectStatusBlock({ items, open, onToggle, onJumpToProject }) {
-  const redCount = items.filter((it) => it.status === 'red').length;
-  const amberCount = items.length - redCount;
-  const parts = [];
-  if (redCount > 0) parts.push(`${redCount} at risk`);
-  if (amberCount > 0) parts.push(`${amberCount} need${amberCount === 1 ? 's' : ''} a look`);
-  return (
-    <div style={styles.stripBlock}>
-      <button onClick={onToggle} style={styles.stripHeadBtn}>
-        <span style={styles.stripCaret}>{open ? '▾' : '▸'}</span>
-        <span style={{ color: redCount > 0 ? '#e24b4a' : '#ef9f27' }}>Project status</span>
-        <span style={styles.stripSummary}>{parts.join(' · ')}</span>
-      </button>
-      {open &&
-        items.map(({ project, status, reasons }) => (
-          <div key={project.id} style={styles.stripRow}>
-            <span style={{ ...styles.statusDot, background: status === 'red' ? '#e24b4a' : '#ef9f27' }} />
-            <span style={styles.stripRowTitle}>{project.name}</span>
-            <span style={{ ...styles.stripRowMeta, color: status === 'red' ? '#e24b4a' : '#ef9f27' }}>
-              {reasons && reasons.length > 0 ? reasons.join(' · ') : status === 'red' ? 'Needs attention' : 'Worth a look'}
-            </span>
-            <button onClick={() => onJumpToProject(project.id)} style={styles.jumpInline}>
-              Open →
-            </button>
-          </div>
-        ))}
-    </div>
   );
 }
 
@@ -916,6 +905,20 @@ const waitStyles = {
     background: 'transparent',
     border: '0.5px solid var(--color-border-primary)',
     color: 'var(--accent)',
+  },
+  resolveBtn: {
+    width: 24,
+    height: 24,
+    flexShrink: 0,
+    padding: 0,
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: '#1d9e75',
+    borderRadius: 7,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 700,
+    lineHeight: 1,
   },
 };
 

@@ -682,6 +682,7 @@ export default function WorkspaceView({
             onJumpToTrack={jumpToTrack}
             onToggleDone={handleToggleDone}
             onUpdateTask={updateTask}
+            onUpdateProject={updateProject}
             runningTimer={time.runningTimer}
             onStartTimer={startTimer}
             onStopTimer={time.requestStop}

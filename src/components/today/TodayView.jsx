@@ -1,31 +1,59 @@
 import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { todayStr } from '../../lib/utils.js';
-import { collectDeliverableWaiting, taskDeliverableName } from '../../lib/deliverableStatus.js';
+import { taskDeliverableName } from '../../lib/deliverableStatus.js';
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
-import {
-  stationLastActivityAt,
-  relativeTime,
-  overdueComms,
-  projectHealth,
-} from '../../lib/stations.js';
+import { projectHealth } from '../../lib/stations.js';
 
 // ── TodayView ───────────────────────────────────────────────────────────────
-// A single dashboard surfacing everything that needs the user's attention.
+// Action-first dashboard, restructured into two full-width columns:
 //
-// Sections (only shown if non-empty):
-//   1. Today's priority (link to the modal in Tasks)
-//   2. Overdue tasks
-//   3. Tasks due today
-//   4. Comms with overdue replies (across all projects)
-//   5. Stale stations (>7 days no activity, incomplete)
-//   6. Upcoming congresses (next 14 days)
+//   LEFT  — "Do today"    : things you own and must act on
+//              • Priority (primary + stretch), pinned
+//              • Overdue tasks
+//              • Tasks due today
 //
-// Each section has a "Jump to" link that navigates the user to where they
-// can act on it.
+//   RIGHT — "Waiting on"  : things out with other people, one list, sorted by
+//            urgency (Overdue → Due back today → Expected later). Merges what
+//            used to be two separate "overdue replies" and "expected today"
+//            sections, and adds a per-item Chase action: log the chase + reset
+//            the expected-back date (so overdue items stop nagging), with an
+//            optional pre-filled email draft.
+//
+// Awareness items that aren't daily actions (upcoming congresses, project
+// health) sit in a slim strip below the two columns. Stale stations were
+// removed from Today — they didn't map to a clear action and belong on the
+// Tracker, a review surface.
 
 const DAY_MS = 86400000;
+
+// Default new expected-back date for a chase: +3 business days from today.
+function defaultChaseDate() {
+  const d = new Date();
+  let added = 0;
+  while (added < 3) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+// Short relative label for a waiting item's date vs today.
+function waitRelLabel(dateIso, today) {
+  if (!dateIso) return '';
+  if (dateIso === today) return 'today';
+  const a = new Date(dateIso + 'T00:00:00');
+  const b = new Date(today + 'T00:00:00');
+  const diff = Math.round((a - b) / DAY_MS);
+  if (diff < 0) {
+    const n = Math.abs(diff);
+    return n === 1 ? '1d late' : `${n}d late`;
+  }
+  // Future: show weekday + day number ("Tue 21")
+  return a.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+}
 
 export default function TodayView({
   tasks,
@@ -38,6 +66,7 @@ export default function TodayView({
   onJumpToTrack,
   onToggleDone,
   onUpdateTask,
+  onUpdateProject,
   runningTimer,
   onStartTimer,
   onStopTimer,
@@ -46,72 +75,97 @@ export default function TodayView({
 }) {
   const today = todayStr();
 
-  // Project status digest is collapsed by default so it never dominates the
-  // Today tab — the header still shows the count, one click expands the list.
   const [projectStatusOpen, setProjectStatusOpen] = useState(false);
   const [closeDayOpen, setCloseDayOpen] = useState(false);
+  // Which waiting item currently has its chase popover open (by key).
+  const [chaseOpen, setChaseOpen] = useState(null);
 
-  // ── Compute the data ────────────────────────────────────────────────────
+  // ── Priority ids (pinned in the Do column; excluded from the lists below so
+  //    they aren't shown twice) ───────────────────────────────────────────────
+  const priorityIds = useMemo(() => {
+    const s = new Set();
+    if (todayPriority?.primary) s.add(todayPriority.primary);
+    (todayPriority?.stretch || []).forEach((id) => s.add(id));
+    return s;
+  }, [todayPriority]);
+
+  const primaryTask = useMemo(
+    () => (todayPriority?.primary ? (tasks || []).find((t) => t.id === todayPriority.primary) : null),
+    [tasks, todayPriority]
+  );
+  const stretchTasks = useMemo(
+    () =>
+      (todayPriority?.stretch || [])
+        .map((id) => (tasks || []).find((t) => t.id === id))
+        .filter(Boolean),
+    [tasks, todayPriority]
+  );
+
+  // ── Do column: overdue + due-today tasks (priority pinned separately) ───────
   const overdueTasks = useMemo(
     () =>
       (tasks || [])
-        .filter((t) => !t.done && t.dueDate && t.dueDate < today)
+        .filter((t) => !t.done && t.dueDate && t.dueDate < today && !priorityIds.has(t.id))
         .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')),
-    [tasks, today]
+    [tasks, today, priorityIds]
   );
 
   const dueTodayTasks = useMemo(
-    () => (tasks || []).filter((t) => !t.done && t.dueDate === today),
-    [tasks, today]
+    () => (tasks || []).filter((t) => !t.done && t.dueDate === today && !priorityIds.has(t.id)),
+    [tasks, today, priorityIds]
   );
 
-  // Walk all projects' deliverables → stations to find overdue comms + stale stations
-const { overdueCommsList, dueTodayCommsList, staleStationsList } = useMemo(() => {
-    const overdue = [];
-    const dueToday = [];
-    const stale = [];
+  // ── Waiting column: one unified, dated list of things out with people ───────
+  // Each item: { key, type:'deliverable'|'comm', project, deliverable, station?,
+  //              comm?, who, date, label, sub }
+  const waitingItems = useMemo(() => {
+    const items = [];
     for (const p of projects || []) {
       for (const d of p.deliverables || []) {
+        // Deliverable-level "with [person], back [date]" marker
+        const wName = (d.waitingOnName || '').trim();
+        const wDate = d.waitingOnDate || '';
+        if (wName && wDate) {
+          items.push({
+            key: `dw-${d.id}`,
+            type: 'deliverable',
+            project: p,
+            deliverable: d,
+            who: wName,
+            date: wDate,
+            label: d.name || '(deliverable)',
+            sub: `with ${wName}`,
+          });
+        }
+        // Station comms awaiting a reply, with an expected-back date
         for (const s of d.stations || []) {
-          // Walk comms once to bucket them
           for (const c of s.comms || []) {
-            if (c.replyReceived || !c.needsReply) continue;
-            if (!c.expectReplyBy) continue;
-            const entry = { project: p, deliverable: d, station: s, comm: c };
-            if (c.expectReplyBy < today) {
-              overdue.push(entry);
-            } else if (c.expectReplyBy === today) {
-              dueToday.push(entry);
-            }
-          }
-          // Stale stations (incomplete + last activity > 7 days)
-          if (!s.done) {
-            const lastAct = stationLastActivityAt(s);
-            if (lastAct) {
-              const daysSince = (Date.now() - lastAct) / DAY_MS;
-              if (daysSince > 7) {
-                stale.push({
-                  project: p,
-                  deliverable: d,
-                  station: s,
-                  daysSince: Math.floor(daysSince),
-                  rel: relativeTime(lastAct),
-                });
-              }
-            }
+            if (c.replyReceived || !c.needsReply || !c.expectReplyBy) continue;
+            items.push({
+              key: `cm-${s.id}-${c.id}`,
+              type: 'comm',
+              project: p,
+              deliverable: d,
+              station: s,
+              comm: c,
+              who: null,
+              date: c.expectReplyBy,
+              label: `${d.name || '(deliverable)'} — ${s.name || 'station'}`,
+              sub: `awaiting ${c.type || 'reply'}`,
+            });
           }
         }
       }
     }
-    return { overdueCommsList: overdue, dueTodayCommsList: dueToday, staleStationsList: stale };
-  }, [projects, today]);
+    return items;
+  }, [projects]);
 
-  // Deliverable-level "waiting on [person]" markers, surfaced like comms.
-  const { overdueDelivWaiting, dueTodayDelivWaiting } = useMemo(() => {
-    const { overdue, dueToday } = collectDeliverableWaiting(projects, today);
-    return { overdueDelivWaiting: overdue, dueTodayDelivWaiting: dueToday };
-  }, [projects, today]);
+  const byDate = (a, b) => (a.date || '').localeCompare(b.date || '');
+  const wOverdue = useMemo(() => waitingItems.filter((i) => i.date < today).sort(byDate), [waitingItems, today]);
+  const wDueToday = useMemo(() => waitingItems.filter((i) => i.date === today).sort(byDate), [waitingItems, today]);
+  const wLater = useMemo(() => waitingItems.filter((i) => i.date > today).sort(byDate), [waitingItems, today]);
 
+  // ── Awareness strip ─────────────────────────────────────────────────────────
   const upcomingCongresses = useMemo(() => {
     const now = new Date();
     const cutoff = new Date(now.getTime() + 14 * DAY_MS);
@@ -124,45 +178,75 @@ const { overdueCommsList, dueTodayCommsList, staleStationsList } = useMemo(() =>
       .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
   }, [congresses]);
 
-  // Project status digest — runs projectHealth() on every active project and
-  // keeps only those needing attention (amber/red). Green/on-track projects
-  // are deliberately omitted: like every other Today section, this only
-  // surfaces what needs the user. Sorted red first, then amber.
   const attentionProjects = useMemo(() => {
     const out = [];
     for (const p of projects || []) {
       if (p.archived) continue;
-      const tasksForProject = (tasks || []).filter(
-        (t) => t.project === p.name
-      );
+      const tasksForProject = (tasks || []).filter((t) => t.project === p.name);
       const { status, reasons } = projectHealth(p, tasksForProject);
-      if (status === 'red' || status === 'amber') {
-        out.push({ project: p, status, reasons });
-      }
+      if (status === 'red' || status === 'amber') out.push({ project: p, status, reasons });
     }
-    // Red before amber
-    out.sort((a, b) => {
-      if (a.status === b.status) return 0;
-      return a.status === 'red' ? -1 : 1;
-    });
+    out.sort((a, b) => (a.status === b.status ? 0 : a.status === 'red' ? -1 : 1));
     return out;
   }, [projects, tasks]);
 
-  // Total count for the "all clear" check
-const totalItems =
-    overdueTasks.length +
-    dueTodayTasks.length +
-    overdueCommsList.length +
-    dueTodayCommsList.length +
-    overdueDelivWaiting.length +
-    dueTodayDelivWaiting.length +
-    staleStationsList.length +
-    upcomingCongresses.length;
+  // ── Counts ──────────────────────────────────────────────────────────────────
+  const doCount =
+    (primaryTask ? 1 : 0) + stretchTasks.length + overdueTasks.length + dueTodayTasks.length;
+  const waitCount = waitingItems.length;
+  const hasNothing = doCount === 0 && waitCount === 0 && upcomingCongresses.length === 0;
 
-  // ── Render ──────────────────────────────────────────────────────────────
+  // ── Chase handler — writes the new expected-back date to the right place ────
+  const handleChase = (item, newDate) => {
+    if (!onUpdateProject || !newDate) {
+      setChaseOpen(null);
+      return;
+    }
+    const proj = (projects || []).find((p) => p.id === item.project.id);
+    if (!proj) {
+      setChaseOpen(null);
+      return;
+    }
+    const stamp = new Date().toISOString();
+    let deliverables;
+    if (item.type === 'deliverable') {
+      deliverables = (proj.deliverables || []).map((d) =>
+        d.id === item.deliverable.id ? { ...d, waitingOnDate: newDate, lastChasedAt: stamp } : d
+      );
+    } else {
+      deliverables = (proj.deliverables || []).map((d) => ({
+        ...d,
+        stations: (d.stations || []).map((s) =>
+          s.id === item.station.id
+            ? {
+                ...s,
+                comms: (s.comms || []).map((c) =>
+                  c.id === item.comm.id ? { ...c, expectReplyBy: newDate, lastChasedAt: stamp } : c
+                ),
+              }
+            : s
+        ),
+      }));
+    }
+    onUpdateProject(proj.id, { deliverables });
+    setChaseOpen(null);
+  };
+
+  const draftChaseEmail = (item) => {
+    const what = item.type === 'deliverable' ? item.deliverable.name : item.label;
+    const who = item.who ? ` ${item.who}` : '';
+    const subject = `Chasing: ${what}`;
+    const body = `Hi${who},\n\nJust following up on ${what} — do you have an update for me?\n\nThanks`;
+    try {
+      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    } catch {}
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={styles.scroll}>
       <div style={styles.wrap}>
+        {/* Header */}
         <div style={styles.greeting}>
           <div>
             <div style={styles.greetingTitle}>Today</div>
@@ -172,6 +256,12 @@ const totalItems =
                 day: 'numeric',
                 month: 'long',
               })}
+              {(doCount > 0 || waitCount > 0) && (
+                <span style={styles.countLine}>
+                  {' · '}
+                  {doCount} to do · {waitCount} waiting
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -183,363 +273,213 @@ const totalItems =
           </button>
         </div>
 
-        {/* Priority */}
-        <Section
-          title="🎯 Today's priority"
-          jumpLabel={todayPriority?.primary ? 'Edit' : undefined}
-          onJump={todayPriority?.primary ? onOpenPriorityModal : undefined}
-          jumpArrow=""
-          empty={
-            !todayPriority?.primary && (
-              <div style={styles.emptyRow}>
-                <span>No priority set for today.</span>
-                <button onClick={onOpenPriorityModal} style={styles.smallAction}>
-                  Set priority
-                </button>
-              </div>
-            )
-          }
-        >
-          {todayPriority?.primary && (() => {
-            const primary = (tasks || []).find(
-              (t) => t.id === todayPriority.primary
-            );
-            const stretchTasks = (todayPriority.stretch || [])
-              .map((id) => (tasks || []).find((t) => t.id === id))
-              .filter(Boolean);
-            if (!primary) return null;
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <PriorityRow
-                  task={primary}
-                  projects={projects}
-                  onToggleDone={onToggleDone}
-                  runningTimer={runningTimer}
-                  onStartTimer={onStartTimer}
-                  onStopTimer={onStopTimer}
-                  onJumpToTrack={onJumpToTrack}
-                  isPrimary
-                />
-                {stretchTasks.map((t) => (
-                  <PriorityRow
-                    key={t.id}
-                    task={t}
-                    projects={projects}
-                    onToggleDone={onToggleDone}
-                    runningTimer={runningTimer}
-                    onStartTimer={onStartTimer}
-                    onStopTimer={onStopTimer}
-                    onJumpToTrack={onJumpToTrack}
+        {/* Welcome (no projects yet) */}
+        {(projects || []).length === 0 ? (
+          <WelcomeBlock
+            onJumpToTab={onJumpToTab}
+            onOpenPriorityModal={onOpenPriorityModal}
+            onSeedDemo={onSeedDemo}
+            seedingDemo={seedingDemo}
+          />
+        ) : hasNothing && !primaryTask ? (
+          <div style={styles.allClear}>
+            <div style={styles.allClearTitle}>👌 All clear</div>
+            <div style={styles.allClearText}>
+              Nothing to do, nothing outstanding, no priority set. A good moment to pick the one
+              thing that matters most today.
+            </div>
+            <button onClick={onOpenPriorityModal} style={styles.allClearBtn}>
+              Set today's priority
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Two full-width columns */}
+            <div style={styles.cols}>
+              {/* ── DO ─────────────────────────────────────────────────── */}
+              <section style={styles.bucket}>
+                <div style={styles.bucketHead}>
+                  <span style={styles.bucketIcon}>✅</span>
+                  <h2 style={styles.bucketTitle}>Do today</h2>
+                  <span style={styles.bucketCount}>{doCount}</span>
+                </div>
+
+                {/* Priority (pinned) */}
+                {primaryTask ? (
+                  <>
+                    <SubHead tone="accent" label="🎯 Priority" action="Edit" onAction={onOpenPriorityModal} />
+                    <PriorityRow
+                      task={primaryTask}
+                      projects={projects}
+                      onToggleDone={onToggleDone}
+                      runningTimer={runningTimer}
+                      onStartTimer={onStartTimer}
+                      onStopTimer={onStopTimer}
+                      onJumpToTrack={onJumpToTrack}
+                      isPrimary
+                    />
+                    {stretchTasks.map((t) => (
+                      <PriorityRow
+                        key={t.id}
+                        task={t}
+                        projects={projects}
+                        onToggleDone={onToggleDone}
+                        runningTimer={runningTimer}
+                        onStartTimer={onStartTimer}
+                        onStopTimer={onStopTimer}
+                        onJumpToTrack={onJumpToTrack}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <SubHead tone="muted" label="🎯 Priority" action="Set" onAction={onOpenPriorityModal} />
+                )}
+
+                {/* Overdue tasks */}
+                {overdueTasks.length > 0 && (
+                  <>
+                    <SubHead tone="red" label="Overdue" />
+                    {overdueTasks.slice(0, 12).map((t) => (
+                      <TaskRowMini
+                        key={t.id}
+                        task={t}
+                        projects={projects}
+                        onToggleDone={onToggleDone}
+                        runningTimer={runningTimer}
+                        onStartTimer={onStartTimer}
+                        onStopTimer={onStopTimer}
+                        onJumpToTrack={onJumpToTrack}
+                        showDate
+                      />
+                    ))}
+                    {overdueTasks.length > 12 && (
+                      <div style={styles.moreLine}>+ {overdueTasks.length - 12} more</div>
+                    )}
+                  </>
+                )}
+
+                {/* Due today */}
+                {dueTodayTasks.length > 0 && (
+                  <>
+                    <SubHead tone="amber" label="Today" />
+                    {dueTodayTasks.map((t) => (
+                      <TaskRowMini
+                        key={t.id}
+                        task={t}
+                        projects={projects}
+                        onToggleDone={onToggleDone}
+                        runningTimer={runningTimer}
+                        onStartTimer={onStartTimer}
+                        onStopTimer={onStopTimer}
+                        onJumpToTrack={onJumpToTrack}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {!primaryTask && overdueTasks.length === 0 && dueTodayTasks.length === 0 && (
+                  <div style={styles.colEmpty}>Nothing scheduled for today 🎉</div>
+                )}
+              </section>
+
+              {/* ── WAITING ────────────────────────────────────────────── */}
+              <section style={styles.bucket}>
+                <div style={styles.bucketHead}>
+                  <span style={styles.bucketIcon}>⏳</span>
+                  <h2 style={styles.bucketTitle}>Waiting on</h2>
+                  <span style={styles.bucketCount}>{waitCount}</span>
+                </div>
+
+                {wOverdue.length > 0 && <SubHead tone="red" label="Overdue" />}
+                {wOverdue.map((item) => (
+                  <WaitingRow
+                    key={item.key}
+                    item={item}
+                    tone="over"
+                    today={today}
+                    open={chaseOpen === item.key}
+                    onToggleChase={() => setChaseOpen((k) => (k === item.key ? null : item.key))}
+                    onChase={handleChase}
+                    onDraftEmail={draftChaseEmail}
+                    onOpen={() => onJumpToProject(item.project.id)}
                   />
                 ))}
-              </div>
-            );
-          })()}
-        </Section>
 
-        {/* Overdue tasks */}
-        {overdueTasks.length > 0 && (
-          <Section
-            title={`⚠ ${overdueTasks.length} overdue task${overdueTasks.length === 1 ? '' : 's'}`}
-            tone="red"
-            jumpLabel="Open Tasks"
-            onJump={() => onJumpToTab('tasks')}
-          >
-            {overdueTasks.slice(0, 8).map((t) => (
-              <TaskRowMini
-                key={t.id}
-                task={t}
-                projects={projects}
-                onToggleDone={onToggleDone}
-                runningTimer={runningTimer}
-                onStartTimer={onStartTimer}
-                onStopTimer={onStopTimer}
-                onJumpToTrack={onJumpToTrack}
-                showDate
-              />
-            ))}
-            {overdueTasks.length > 8 && (
-              <div style={styles.moreLine}>
-                + {overdueTasks.length - 8} more
-              </div>
-            )}
-          </Section>
-        )}
+                {wDueToday.length > 0 && <SubHead tone="amber" label="Due back today" />}
+                {wDueToday.map((item) => (
+                  <WaitingRow
+                    key={item.key}
+                    item={item}
+                    tone="due"
+                    today={today}
+                    open={chaseOpen === item.key}
+                    onToggleChase={() => setChaseOpen((k) => (k === item.key ? null : item.key))}
+                    onChase={handleChase}
+                    onDraftEmail={draftChaseEmail}
+                    onOpen={() => onJumpToProject(item.project.id)}
+                  />
+                ))}
 
-        {/* Due today */}
-        {dueTodayTasks.length > 0 && (
-          <Section
-            title={`📅 ${dueTodayTasks.length} task${dueTodayTasks.length === 1 ? '' : 's'} due today`}
-            tone="purple"
-            jumpLabel="Open Plan"
-            onJump={() => onJumpToTab('plan')}
-          >
-            {dueTodayTasks.map((t) => (
-              <TaskRowMini
-                key={t.id}
-                task={t}
-                projects={projects}
-                onToggleDone={onToggleDone}
-                runningTimer={runningTimer}
-                onStartTimer={onStartTimer}
-                onStopTimer={onStopTimer}
-                onJumpToTrack={onJumpToTrack}
-              />
-            ))}
-          </Section>
-        )}
+                {wLater.length > 0 && <SubHead tone="muted" label="Expected later" />}
+                {wLater.map((item) => (
+                  <WaitingRow
+                    key={item.key}
+                    item={item}
+                    tone="later"
+                    today={today}
+                    open={chaseOpen === item.key}
+                    onToggleChase={() => setChaseOpen((k) => (k === item.key ? null : item.key))}
+                    onChase={handleChase}
+                    onDraftEmail={draftChaseEmail}
+                    onOpen={() => onJumpToProject(item.project.id)}
+                  />
+                ))}
 
-        {/* Overdue comms */}
-        {overdueCommsList.length > 0 && (
-          <Section
-            title={`✉ ${overdueCommsList.length} overdue repl${overdueCommsList.length === 1 ? 'y' : 'ies'}`}
-            tone="red"
-          >
-            {overdueCommsList.slice(0, 8).map((item, i) => (
-              <CommRow
-                key={`${item.station.id}-${item.comm.id}-${i}`}
-                item={item}
-                onJump={() => onJumpToProject(item.project.id)}
-              />
-            ))}
-            {overdueCommsList.length > 8 && (
-              <div style={styles.moreLine}>
-                + {overdueCommsList.length - 8} more
-              </div>
-            )}
-          </Section>
-        )}
-        
-{/* Replies expected today */}
-{dueTodayCommsList.length > 0 && (
-  <Section
-    title={`✉ ${dueTodayCommsList.length} repl${dueTodayCommsList.length === 1 ? 'y' : 'ies'} expected today`}
-    tone="purple"
-  >
-    {dueTodayCommsList.slice(0, 8).map((item, i) => (
-      <CommRow
-        key={`${item.station.id}-${item.comm.id}-${i}`}
-        item={item}
-        onJump={() => onJumpToProject(item.project.id)}
-      />
-    ))}
-    {dueTodayCommsList.length > 8 && (
-      <div style={styles.moreLine}>
-        + {dueTodayCommsList.length - 8} more
-      </div>
-    )}
-  </Section>
-)}
-
-{/* Deliverables overdue back from someone */}
-{overdueDelivWaiting.length > 0 && (
-  <Section
-    title={`⏳ ${overdueDelivWaiting.length} deliverable${overdueDelivWaiting.length === 1 ? '' : 's'} overdue back`}
-    tone="red"
-  >
-    {overdueDelivWaiting.slice(0, 8).map((item, i) => (
-      <button
-        key={`${item.deliverable.id}-${i}`}
-        style={styles.delivWaitRow}
-        onClick={() => onJumpToProject(item.project.id)}
-        title="Go to project"
-      >
-        <span style={styles.delivWaitName}>
-          {item.deliverable.name} <span style={styles.delivWaitProj}>· {item.project.name}</span>
-        </span>
-        <span style={styles.delivWaitMeta}>with {item.name} · due {item.date}</span>
-      </button>
-    ))}
-    {overdueDelivWaiting.length > 8 && (
-      <div style={styles.moreLine}>+ {overdueDelivWaiting.length - 8} more</div>
-    )}
-  </Section>
-)}
-
-{/* Deliverables expected back today */}
-{dueTodayDelivWaiting.length > 0 && (
-  <Section
-    title={`⏳ ${dueTodayDelivWaiting.length} deliverable${dueTodayDelivWaiting.length === 1 ? '' : 's'} expected back today`}
-    tone="purple"
-  >
-    {dueTodayDelivWaiting.slice(0, 8).map((item, i) => (
-      <button
-        key={`${item.deliverable.id}-${i}`}
-        style={styles.delivWaitRow}
-        onClick={() => onJumpToProject(item.project.id)}
-        title="Go to project"
-      >
-        <span style={styles.delivWaitName}>
-          {item.deliverable.name} <span style={styles.delivWaitProj}>· {item.project.name}</span>
-        </span>
-        <span style={styles.delivWaitMeta}>with {item.name}</span>
-      </button>
-    ))}
-    {dueTodayDelivWaiting.length > 8 && (
-      <div style={styles.moreLine}>+ {dueTodayDelivWaiting.length - 8} more</div>
-    )}
-  </Section>
-)}
-
-{/* Stale stations */}
-        {staleStationsList.length > 0 && (
-          <Section
-            title={`🕸 ${staleStationsList.length} stale station${staleStationsList.length === 1 ? '' : 's'}`}
-            tone="amber"
-            hint="No activity in over a week"
-          >
-            {staleStationsList.slice(0, 8).map((item, i) => (
-              <StationRow
-                key={`${item.station.id}-${i}`}
-                item={item}
-                projects={projects}
-                onJump={() => onJumpToProject(item.project.id)}
-              />
-            ))}
-            {staleStationsList.length > 8 && (
-              <div style={styles.moreLine}>
-                + {staleStationsList.length - 8} more
-              </div>
-            )}
-          </Section>
-        )}
-
-        {/* Upcoming congresses */}
-        {upcomingCongresses.length > 0 && (
-          <Section
-            title={`🏛 ${upcomingCongresses.length} congress${upcomingCongresses.length === 1 ? '' : 'es'} in the next 14 days`}
-            tone="purple"
-            jumpLabel="Open Congresses"
-            onJump={() => onJumpToTab('congresses')}
-          >
-            {upcomingCongresses.map((c) => {
-              const days = Math.ceil(
-                (new Date(c.startDate) - Date.now()) / DAY_MS
-              );
-              return (
-                <div key={c.id} style={styles.miniRow}>
-                  <span style={styles.miniTitle}>{c.name}</span>
-                  <span style={styles.miniMeta}>
-                    {c.location ? `${c.location} · ` : ''}
-                    {days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}
-                  </span>
-                </div>
-              );
-            })}
-          </Section>
-        )}
-
-        {/* Project status — collapsed digest of projects needing attention.
-            Only amber/red projects appear; if everything is on track the
-            whole section is omitted, consistent with the other sections. */}
-        {attentionProjects.length > 0 && (
-          <ProjectStatusSection
-            items={attentionProjects}
-            open={projectStatusOpen}
-            onToggle={() => setProjectStatusOpen((v) => !v)}
-            onJumpToProject={onJumpToProject}
-          />
-        )}
-
-        {/* First-time welcome — appears when the user hasn't created any
-            projects yet. We deliberately don't check tasks because, for the
-            personal workspace, allTasks includes tasks assigned to the user
-            from team workspaces, which would falsely make a fresh user look
-            "established". Projects don't have that cross-workspace bleed. */}
-        {(projects || []).length === 0 && (
-          <div style={styles.welcome}>
-            <div style={styles.welcomeTitle}>👋 Welcome to Daymark</div>
-            <div style={styles.welcomeText}>
-              Let's get you set up. Three things to try, in order:
-            </div>
-            <div style={styles.welcomeSteps}>
-              <button
-                onClick={() => onJumpToTab('projects')}
-                style={styles.welcomeStep}
-              >
-                <div style={styles.welcomeStepNum}>1</div>
-                <div style={styles.welcomeStepBody}>
-                  <div style={styles.welcomeStepTitle}>Create your first project</div>
-                  <div style={styles.welcomeStepDesc}>
-                    Projects hold deliverables, stations, comms, and tasks. The core unit of work.
-                  </div>
-                </div>
-                <div style={styles.welcomeStepArrow}>→</div>
-              </button>
-
-              <button
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent('daymark-quick-capture'))
-                }
-                style={styles.welcomeStep}
-              >
-                <div style={styles.welcomeStepNum}>2</div>
-                <div style={styles.welcomeStepBody}>
-                  <div style={styles.welcomeStepTitle}>Add a task</div>
-                  <div style={styles.welcomeStepDesc}>
-                    Press <kbd style={styles.kbd}>Cmd</kbd>+<kbd style={styles.kbd}>K</kbd> from anywhere to add tasks fast.
-                  </div>
-                </div>
-                <div style={styles.welcomeStepArrow}>→</div>
-              </button>
-
-              <button onClick={onOpenPriorityModal} style={styles.welcomeStep}>
-                <div style={styles.welcomeStepNum}>3</div>
-                <div style={styles.welcomeStepBody}>
-                  <div style={styles.welcomeStepTitle}>Set today's priority</div>
-                  <div style={styles.welcomeStepDesc}>
-                    Pick the one thing that most matters today. Pinned to the top of your day.
-                  </div>
-                </div>
-                <div style={styles.welcomeStepArrow}>→</div>
-              </button>
+                {waitCount === 0 && (
+                  <div style={styles.colEmpty}>Nothing out with anyone right now.</div>
+                )}
+              </section>
             </div>
 
-            {/* Demo workspace callout — separated visually from the three numbered steps */}
-            {onSeedDemo && (
-              <button
-                onClick={onSeedDemo}
-                disabled={seedingDemo}
-                style={{
-                  ...styles.demoCallout,
-                  opacity: seedingDemo ? 0.6 : 1,
-                  cursor: seedingDemo ? 'wait' : 'pointer',
-                }}
-              >
-                <div style={styles.demoIcon}>📚</div>
-                <div style={styles.demoBody}>
-                  <div style={styles.demoTitle}>
-                    {seedingDemo ? 'Setting up demo workspace…' : 'Or — see Daymark with realistic example data'}
+            {/* Awareness strip — congresses + project health, below the fold
+                deliberately: not daily actions, just things not to forget. */}
+            {(upcomingCongresses.length > 0 || attentionProjects.length > 0) && (
+              <div style={styles.strip}>
+                {upcomingCongresses.length > 0 && (
+                  <div style={styles.stripBlock}>
+                    <div style={styles.stripHead}>
+                      <span>🏛 Congresses · next 14 days</span>
+                      <button style={styles.stripJump} onClick={() => onJumpToTab('congresses')}>
+                        Open →
+                      </button>
+                    </div>
+                    {upcomingCongresses.map((c) => {
+                      const days = Math.ceil((new Date(c.startDate) - Date.now()) / DAY_MS);
+                      return (
+                        <div key={c.id} style={styles.stripRow}>
+                          <span style={styles.stripRowTitle}>{c.name}</span>
+                          <span style={styles.stripRowMeta}>
+                            {c.location ? `${c.location} · ` : ''}
+                            {days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div style={styles.demoDesc}>
-                    Creates a separate "Daymark demo" workspace with three example medcomms projects, comms logs, and tasks at different stages. Switch to it any time. Delete when you're done.
-                  </div>
-                </div>
-                <div style={styles.welcomeStepArrow}>→</div>
-              </button>
-            )}
+                )}
 
-            <div style={styles.welcomeFooter}>
-              Need a deeper tour? Click the <strong>?</strong> in the top bar any time.
-            </div>
-          </div>
-        )}
-
-        {/* All clear — for users who have started building (have at least one project)
-            but nothing pressing right now */}
-        {totalItems === 0 &&
-          !todayPriority?.primary &&
-          (projects || []).length > 0 && (
-            <div style={styles.allClear}>
-              <div style={styles.allClearTitle}>👌 All clear</div>
-              <div style={styles.allClearText}>
-                Nothing overdue, nothing stale, no upcoming congresses, no priority set yet.
+                {attentionProjects.length > 0 && (
+                  <ProjectStatusBlock
+                    items={attentionProjects}
+                    open={projectStatusOpen}
+                    onToggle={() => setProjectStatusOpen((v) => !v)}
+                    onJumpToProject={onJumpToProject}
+                  />
+                )}
               </div>
-              <button onClick={onOpenPriorityModal} style={styles.allClearBtn}>
-                Set today's priority
-              </button>
-            </div>
-          )}
+            )}
+          </>
+        )}
       </div>
 
       {closeDayOpen && (
@@ -560,106 +500,95 @@ const totalItems =
   );
 }
 
-// ── Section wrapper ────────────────────────────────────────────────────────
-function Section({ title, children, empty, tone, hint, jumpLabel, onJump, jumpArrow = ' →' }) {
-  // Hide the section if empty content provided AND children is null/empty
-  const hasContent = Array.isArray(children) ? children.length > 0 : !!children;
-  if (!hasContent && !empty) return null;
-
-  const toneColor =
+// ── SubHead — small urgency/section label inside a column ────────────────────
+function SubHead({ label, tone, action, onAction }) {
+  const color =
     tone === 'red'
       ? '#e24b4a'
       : tone === 'amber'
       ? '#ef9f27'
-      : tone === 'purple'
+      : tone === 'accent'
       ? 'var(--accent)'
-      : 'var(--color-text-primary)';
-
+      : 'var(--color-text-tertiary)';
   return (
-    <div style={sectionStyles.wrap}>
-      <div style={sectionStyles.header}>
-        <span style={{ ...sectionStyles.title, color: toneColor }}>{title}</span>
-        {hint && <span style={sectionStyles.hint}>{hint}</span>}
-        <div style={{ flex: 1 }} />
-        {jumpLabel && onJump && (
-          <button onClick={onJump} style={sectionStyles.jumpBtn}>
-            {jumpLabel}{jumpArrow}
-          </button>
-        )}
-      </div>
-      {hasContent ? children : empty}
-    </div>
-  );
-}
-
-// ── ProjectStatusSection ────────────────────────────────────────────────────
-// Collapsible digest of projects that need attention. Collapsed by default:
-// the header carries the summary (how many red / amber) so the signal is
-// visible without expanding. Click the header to reveal the per-project list.
-function ProjectStatusSection({ items, open, onToggle, onJumpToProject }) {
-  const redCount = items.filter((it) => it.status === 'red').length;
-  const amberCount = items.length - redCount;
-
-  // Header summary: lead with the more urgent count.
-  const parts = [];
-  if (redCount > 0) parts.push(`${redCount} at risk`);
-  if (amberCount > 0) parts.push(`${amberCount} need${amberCount === 1 ? 's' : ''} a look`);
-  const summary = parts.join(' · ');
-
-  return (
-    <div style={sectionStyles.wrap}>
-      <button
-        onClick={onToggle}
-        style={projectStatusStyles.headerBtn}
-        title={open ? 'Collapse' : 'Expand'}
-      >
-        <span style={projectStatusStyles.caret}>{open ? '▾' : '▸'}</span>
-        <span style={{ ...sectionStyles.title, color: redCount > 0 ? '#e24b4a' : '#ef9f27' }}>
-          Project status
-        </span>
-        <span style={projectStatusStyles.summary}>{summary}</span>
-      </button>
-
-      {open && (
-        <div style={projectStatusStyles.list}>
-          {items.map(({ project, status, reasons }) => (
-            <div key={project.id} style={styles.miniRow}>
-              <span
-                style={{
-                  ...projectStatusStyles.dot,
-                  background: status === 'red' ? '#e24b4a' : '#ef9f27',
-                }}
-              />
-              <span style={styles.miniTitle}>
-                <strong>{project.name}</strong>
-              </span>
-              <span
-                style={{
-                  ...styles.miniMeta,
-                  color: status === 'red' ? '#e24b4a' : '#ef9f27',
-                }}
-              >
-                {reasons && reasons.length > 0
-                  ? reasons.join(' · ')
-                  : status === 'red'
-                  ? 'Needs attention'
-                  : 'Worth a look'}
-              </span>
-              <button
-                onClick={() => onJumpToProject(project.id)}
-                style={styles.jumpInline}
-              >
-                Open →
-              </button>
-            </div>
-          ))}
-        </div>
+    <div style={subHeadStyles.wrap}>
+      <span style={{ ...subHeadStyles.label, color }}>{label}</span>
+      <div style={{ flex: 1 }} />
+      {action && onAction && (
+        <button style={subHeadStyles.action} onClick={onAction}>
+          {action}
+        </button>
       )}
     </div>
   );
 }
 
-// ── Mini row components ─────────────────────────────────────────────────────
+// ── WaitingRow — one item out with someone, with an inline Chase action ──────
+function WaitingRow({ item, tone, today, open, onToggleChase, onChase, onDraftEmail, onOpen }) {
+  const projColor = projectColor(item.project.name, null);
+  const whenColor = tone === 'over' ? '#e24b4a' : tone === 'due' ? '#ef9f27' : 'var(--color-text-secondary)';
+  const rel = waitRelLabel(item.date, today);
+  return (
+    <div style={waitStyles.outer}>
+      <div style={waitStyles.row}>
+        <button style={waitStyles.main} onClick={onOpen} title="Open project">
+          <span style={waitStyles.title}>{item.label}</span>
+          <span style={waitStyles.meta}>
+            {item.who ? (
+              <span>
+                with <strong>{item.who}</strong>
+              </span>
+            ) : (
+              <span>{item.sub}</span>
+            )}
+            <span style={{ ...waitStyles.chip, color: projColor }}>{item.project.name}</span>
+          </span>
+        </button>
+        <span style={{ ...waitStyles.when, color: whenColor, fontWeight: tone === 'later' ? 400 : 600 }}>
+          {rel}
+        </span>
+        <button
+          style={{ ...waitStyles.chaseBtn, ...(tone === 'over' ? {} : waitStyles.chaseGhost) }}
+          onClick={onToggleChase}
+        >
+          Chase {open ? '▾' : '→'}
+        </button>
+      </div>
+      {open && <ChasePopover item={item} onChase={onChase} onDraftEmail={onDraftEmail} />}
+    </div>
+  );
+}
+
+// ── ChasePopover — pick a new expected-back date, log the chase, draft email ─
+function ChasePopover({ item, onChase, onDraftEmail }) {
+  const [date, setDate] = useState(defaultChaseDate);
+  return (
+    <div style={chaseStyles.wrap}>
+      <div style={chaseStyles.row}>
+        <span style={chaseStyles.text}>
+          Chased{item.who ? <strong> {item.who}</strong> : ''} — now expect back
+        </span>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          style={chaseStyles.date}
+        />
+        <button style={chaseStyles.go} onClick={() => onChase(item, date)}>
+          Log chase
+        </button>
+        <button style={chaseStyles.email} onClick={() => onDraftEmail(item)}>
+          ✉ Draft email
+        </button>
+      </div>
+      <div style={chaseStyles.hint}>
+        Logs the chase and resets the expected date, so it drops off “overdue”.
+      </div>
+    </div>
+  );
+}
+
+// ── Priority / task mini rows ────────────────────────────────────────────────
 function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, onStartTimer, onStopTimer, onJumpToTrack }) {
   const projColor = projectColor(task.project, projects);
   return (
@@ -678,13 +607,10 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
           opacity: task.done ? 0.55 : 1,
         }}
       >
+        {task.isFollowUp && <span title="Follow-up reminder">🔔 </span>}
         {task.title || '(untitled)'}
       </span>
-      {task.project && (
-        <span style={{ ...styles.miniChip, color: projColor }}>
-          {task.project}
-        </span>
-      )}
+      {task.project && <span style={{ ...styles.miniChip, color: projColor }}>{task.project}</span>}
       {(() => {
         const delivName = taskDeliverableName(task, projects);
         return delivName ? (
@@ -696,29 +622,17 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
       {task.deadline && (() => {
         const dc = deadlineColor(task.deadline);
         return (
-          <span
-            style={{ ...styles.miniChip, color: dc, fontWeight: 600 }}
-            title={`Deadline: ${task.deadline}`}
-          >
+          <span style={{ ...styles.miniChip, color: dc, fontWeight: 600 }} title={`Deadline: ${task.deadline}`}>
             ⚑ {fmtDeadline(task.deadline)}
           </span>
         );
       })()}
       {task.stationId && onJumpToTrack && (
-        <button
-          onClick={() => onJumpToTrack(task)}
-          style={styles.trackJumpBtn}
-          title="Open in Track"
-        >
+        <button onClick={() => onJumpToTrack(task)} style={styles.trackJumpBtn} title="Open in Track">
           🚂
         </button>
       )}
-      <TimerButton
-        task={task}
-        runningTimer={runningTimer}
-        onStartTimer={onStartTimer}
-        onStopTimer={onStopTimer}
-      />
+      <TimerButton task={task} runningTimer={runningTimer} onStartTimer={onStartTimer} onStopTimer={onStopTimer} />
     </div>
   );
 }
@@ -744,15 +658,9 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
         {task.title || '(untitled)'}
       </span>
       {showDate && task.dueDate && (
-        <span style={{ ...styles.miniMeta, color: '#e24b4a', fontWeight: 600 }}>
-          {task.dueDate}
-        </span>
+        <span style={{ ...styles.miniMeta, color: '#e24b4a', fontWeight: 600 }}>{task.dueDate}</span>
       )}
-      {task.project && (
-        <span style={{ ...styles.miniChip, color: projColor }}>
-          {task.project}
-        </span>
-      )}
+      {task.project && <span style={{ ...styles.miniChip, color: projColor }}>{task.project}</span>}
       {(() => {
         const delivName = taskDeliverableName(task, projects);
         return delivName ? (
@@ -764,37 +672,21 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
       {task.deadline && (() => {
         const dc = deadlineColor(task.deadline);
         return (
-          <span
-            style={{ ...styles.miniChip, color: dc, fontWeight: 600 }}
-            title={`Deadline: ${task.deadline}`}
-          >
+          <span style={{ ...styles.miniChip, color: dc, fontWeight: 600 }} title={`Deadline: ${task.deadline}`}>
             ⚑ {fmtDeadline(task.deadline)}
           </span>
         );
       })()}
       {task.stationId && onJumpToTrack && (
-        <button
-          onClick={() => onJumpToTrack(task)}
-          style={styles.trackJumpBtn}
-          title="Open in Track"
-        >
+        <button onClick={() => onJumpToTrack(task)} style={styles.trackJumpBtn} title="Open in Track">
           🚂
         </button>
       )}
-      <TimerButton
-        task={task}
-        runningTimer={runningTimer}
-        onStartTimer={onStartTimer}
-        onStopTimer={onStopTimer}
-      />
+      <TimerButton task={task} runningTimer={runningTimer} onStartTimer={onStartTimer} onStopTimer={onStopTimer} />
     </div>
   );
 }
 
-// ── TimerButton ─────────────────────────────────────────────────────────────
-// Small Track / Stop button used in the Today rows. Mirrors the behaviour from
-// the Plan list view: only one timer can run; if a different task is running,
-// this button is disabled with a tooltip; if the task is done, no button.
 function TimerButton({ task, runningTimer, onStartTimer, onStopTimer }) {
   if (task.done || !onStartTimer) return null;
   const isTracking = runningTimer?.taskId === task.id;
@@ -810,15 +702,106 @@ function TimerButton({ task, runningTimer, onStartTimer, onStopTimer }) {
     <button
       onClick={() => onStartTimer(task)}
       disabled={blocked}
-      style={{
-        ...timerStyles.track,
-        opacity: blocked ? 0.4 : 1,
-        cursor: blocked ? 'not-allowed' : 'pointer',
-      }}
+      style={{ ...timerStyles.track, opacity: blocked ? 0.4 : 1, cursor: blocked ? 'not-allowed' : 'pointer' }}
       title={blocked ? 'Stop the running timer first' : 'Start tracking'}
     >
       ▶ Track
     </button>
+  );
+}
+
+// ── Project status block (awareness strip) ───────────────────────────────────
+function ProjectStatusBlock({ items, open, onToggle, onJumpToProject }) {
+  const redCount = items.filter((it) => it.status === 'red').length;
+  const amberCount = items.length - redCount;
+  const parts = [];
+  if (redCount > 0) parts.push(`${redCount} at risk`);
+  if (amberCount > 0) parts.push(`${amberCount} need${amberCount === 1 ? 's' : ''} a look`);
+  return (
+    <div style={styles.stripBlock}>
+      <button onClick={onToggle} style={styles.stripHeadBtn}>
+        <span style={styles.stripCaret}>{open ? '▾' : '▸'}</span>
+        <span style={{ color: redCount > 0 ? '#e24b4a' : '#ef9f27' }}>Project status</span>
+        <span style={styles.stripSummary}>{parts.join(' · ')}</span>
+      </button>
+      {open &&
+        items.map(({ project, status, reasons }) => (
+          <div key={project.id} style={styles.stripRow}>
+            <span style={{ ...styles.statusDot, background: status === 'red' ? '#e24b4a' : '#ef9f27' }} />
+            <span style={styles.stripRowTitle}>{project.name}</span>
+            <span style={{ ...styles.stripRowMeta, color: status === 'red' ? '#e24b4a' : '#ef9f27' }}>
+              {reasons && reasons.length > 0 ? reasons.join(' · ') : status === 'red' ? 'Needs attention' : 'Worth a look'}
+            </span>
+            <button onClick={() => onJumpToProject(project.id)} style={styles.jumpInline}>
+              Open →
+            </button>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+// ── Welcome (no projects) ────────────────────────────────────────────────────
+function WelcomeBlock({ onJumpToTab, onOpenPriorityModal, onSeedDemo, seedingDemo }) {
+  return (
+    <div style={styles.welcome}>
+      <div style={styles.welcomeTitle}>👋 Welcome to Daymark</div>
+      <div style={styles.welcomeText}>Let's get you set up. Three things to try, in order:</div>
+      <div style={styles.welcomeSteps}>
+        <button onClick={() => onJumpToTab('projects')} style={styles.welcomeStep}>
+          <div style={styles.welcomeStepNum}>1</div>
+          <div style={styles.welcomeStepBody}>
+            <div style={styles.welcomeStepTitle}>Create your first project</div>
+            <div style={styles.welcomeStepDesc}>
+              Projects hold deliverables, stations, comms, and tasks. The core unit of work.
+            </div>
+          </div>
+          <div style={styles.welcomeStepArrow}>→</div>
+        </button>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('daymark-quick-capture'))} style={styles.welcomeStep}>
+          <div style={styles.welcomeStepNum}>2</div>
+          <div style={styles.welcomeStepBody}>
+            <div style={styles.welcomeStepTitle}>Add a task</div>
+            <div style={styles.welcomeStepDesc}>
+              Press <kbd style={styles.kbd}>Cmd</kbd>+<kbd style={styles.kbd}>K</kbd> from anywhere to add tasks fast.
+            </div>
+          </div>
+          <div style={styles.welcomeStepArrow}>→</div>
+        </button>
+        <button onClick={onOpenPriorityModal} style={styles.welcomeStep}>
+          <div style={styles.welcomeStepNum}>3</div>
+          <div style={styles.welcomeStepBody}>
+            <div style={styles.welcomeStepTitle}>Set today's priority</div>
+            <div style={styles.welcomeStepDesc}>
+              Pick the one thing that most matters today. Pinned to the top of your day.
+            </div>
+          </div>
+          <div style={styles.welcomeStepArrow}>→</div>
+        </button>
+      </div>
+      {onSeedDemo && (
+        <button
+          onClick={onSeedDemo}
+          disabled={seedingDemo}
+          style={{ ...styles.demoCallout, opacity: seedingDemo ? 0.6 : 1, cursor: seedingDemo ? 'wait' : 'pointer' }}
+        >
+          <div style={styles.demoIcon}>📚</div>
+          <div style={styles.demoBody}>
+            <div style={styles.demoTitle}>
+              {seedingDemo ? 'Setting up demo workspace…' : 'Or — see Daymark with realistic example data'}
+            </div>
+            <div style={styles.demoDesc}>
+              Creates a separate "Daymark demo" workspace with three example medcomms projects, comms logs, and tasks
+              at different stages. Switch to it any time. Delete when you're done.
+            </div>
+          </div>
+          <div style={styles.welcomeStepArrow}>→</div>
+        </button>
+      )}
+      <div style={styles.welcomeFooter}>
+        Need a deeper tour? Click the <strong>?</strong> in the top bar any time.
+      </div>
+    </div>
   );
 }
 
@@ -846,62 +829,167 @@ const timerStyles = {
   },
 };
 
-function CommRow({ item, onJump }) {
-  return (
-    <div style={styles.miniRow}>
-      <span style={styles.miniTitle}>
-        <strong>{item.project.name}</strong>
-        <span style={styles.miniSep}> · </span>
-        {item.station.name}
-      </span>
-      <span style={{ ...styles.miniMeta, color: '#e24b4a' }}>
-        {item.comm.type} (expected {item.comm.expectReplyBy})
-      </span>
-      <button onClick={onJump} style={styles.jumpInline}>
-        Open →
-      </button>
-    </div>
-  );
-}
-
-function StationRow({ item, onJump }) {
-  return (
-    <div style={styles.miniRow}>
-      <span style={styles.miniTitle}>
-        <strong>{item.project.name}</strong>
-        <span style={styles.miniSep}> · </span>
-        {item.station.name}
-      </span>
-      <span style={{ ...styles.miniMeta, color: '#ef9f27' }}>
-        {item.rel}
-      </span>
-      <button onClick={onJump} style={styles.jumpInline}>
-        Open →
-      </button>
-    </div>
-  );
-}
-
-const styles = {
-  scroll: {
-    flex: 1,
-    overflowY: 'auto',
-  },
+const subHeadStyles = {
   wrap: {
-    maxWidth: 760,
-    margin: '0 auto',
-    padding: '20px 18px 60px',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '10px 14px 3px',
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  action: {
+    fontSize: 10,
+    padding: '2px 8px',
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--color-text-secondary)',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+};
+
+const waitStyles = {
+  outer: {
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+  },
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 14px',
+  },
+  main: {
+    flex: 1,
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
-    gap: 18,
+    gap: 2,
+    alignItems: 'flex-start',
+    textAlign: 'left',
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
+  },
+  title: {
+    fontSize: 12.5,
+    color: 'var(--color-text-primary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+  },
+  meta: {
+    fontSize: 10.5,
+    color: 'var(--color-text-secondary)',
+    display: 'flex',
+    gap: 6,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  chip: {
+    fontSize: 10,
+    fontWeight: 500,
+  },
+  when: {
+    fontSize: 10.5,
+    fontFamily: 'ui-monospace, monospace',
+    flexShrink: 0,
+  },
+  chaseBtn: {
+    fontSize: 11,
+    fontWeight: 500,
+    padding: '3px 10px',
+    borderRadius: 12,
+    border: 'none',
+    background: 'var(--accent)',
+    color: '#fff',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  chaseGhost: {
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--accent)',
+  },
+};
+
+const chaseStyles = {
+  wrap: {
+    margin: '0 14px 10px',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid #534AB733',
+    borderRadius: 10,
+    padding: '9px 11px',
+  },
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  text: {
+    fontSize: 11.5,
+    color: 'var(--color-text-primary)',
+  },
+  date: {
+    fontSize: 11.5,
+    padding: '3px 6px',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+  },
+  go: {
+    fontSize: 11.5,
+    background: 'var(--accent)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    padding: '4px 10px',
+    cursor: 'pointer',
+    fontWeight: 500,
+  },
+  email: {
+    fontSize: 11.5,
+    background: 'transparent',
+    border: '0.5px solid var(--accent)',
+    color: 'var(--accent)',
+    borderRadius: 6,
+    padding: '4px 10px',
+    cursor: 'pointer',
+  },
+  hint: {
+    fontSize: 10.5,
+    color: 'var(--color-text-tertiary)',
+    marginTop: 6,
+  },
+};
+
+const styles = {
+  scroll: { flex: 1, overflowY: 'auto' },
+  wrap: {
+    maxWidth: 1100,
+    margin: '0 auto',
+    padding: '20px 24px 60px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
   },
   greeting: {
-    paddingBottom: 6,
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
   },
+  greetingTitle: { fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)' },
+  greetingDate: { fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 },
+  countLine: { color: 'var(--color-text-tertiary)' },
   closeDayBtn: {
     flexShrink: 0,
     fontSize: 12,
@@ -913,25 +1001,52 @@ const styles = {
     color: 'var(--color-text-secondary)',
     cursor: 'pointer',
   },
-  greetingTitle: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: 'var(--color-text-primary)',
+
+  // two columns, side by side on wide, stacked on narrow
+  cols: {
+    display: 'flex',
+    gap: 18,
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
   },
-  greetingDate: {
+  bucket: {
+    flex: '1 1 340px',
+    minWidth: 300,
+    background: 'var(--bg-surface)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  bucketHead: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '12px 14px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+  },
+  bucketIcon: { fontSize: 15 },
+  bucketTitle: { fontSize: 14, fontWeight: 600, flex: 1, color: 'var(--color-text-primary)' },
+  bucketCount: {
+    fontSize: 11,
+    color: 'var(--color-text-tertiary)',
+    background: 'var(--color-background-secondary)',
+    borderRadius: 10,
+    padding: '1px 8px',
+  },
+  colEmpty: {
     fontSize: 12,
-    color: 'var(--color-text-secondary)',
-    marginTop: 2,
+    color: 'var(--color-text-tertiary)',
+    fontStyle: 'italic',
+    padding: '14px',
   },
+
   miniRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    padding: '6px 10px',
-    background: 'var(--bg-surface)',
-    border: '0.5px solid var(--color-border-tertiary)',
-    borderRadius: 6,
+    padding: '7px 14px',
     fontSize: 12,
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
   },
   miniTitle: {
     flex: 1,
@@ -940,17 +1055,8 @@ const styles = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  miniSep: { color: 'var(--color-text-tertiary)' },
-  miniMeta: {
-    fontSize: 10,
-    color: 'var(--color-text-secondary)',
-    flexShrink: 0,
-  },
-  miniChip: {
-    fontSize: 10,
-    fontWeight: 500,
-    flexShrink: 0,
-  },
+  miniMeta: { fontSize: 10, color: 'var(--color-text-secondary)', flexShrink: 0 },
+  miniChip: { fontSize: 10, fontWeight: 500, flexShrink: 0 },
   trackJumpBtn: {
     flexShrink: 0,
     width: 22,
@@ -972,56 +1078,71 @@ const styles = {
     cursor: 'pointer',
     flexShrink: 0,
   },
-  emptyRow: {
+  moreLine: { fontSize: 10, color: 'var(--color-text-tertiary)', padding: '4px 14px' },
+
+  // awareness strip
+  strip: {
     display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    fontSize: 12,
-    color: 'var(--color-text-secondary)',
-    fontStyle: 'italic',
-    padding: '8px 4px',
+    gap: 18,
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
   },
-  smallAction: {
-    padding: '3px 10px',
-    fontSize: 11,
-    background: 'var(--accent)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  moreLine: {
-    fontSize: 10,
-    color: 'var(--color-text-tertiary)',
-    paddingLeft: 10,
-    paddingTop: 3,
-  },
-  delivWaitRow: {
+  stripBlock: {
+    flex: '1 1 340px',
+    minWidth: 300,
+    background: 'var(--color-background-secondary)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 10,
+    padding: '10px 12px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 2,
+    gap: 4,
+  },
+  stripHead: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--color-text-secondary)',
+    marginBottom: 2,
+  },
+  stripHeadBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
     width: '100%',
-    textAlign: 'left',
     background: 'transparent',
     border: 'none',
-    padding: '6px 10px',
+    padding: 0,
+    cursor: 'pointer',
+    fontSize: 11,
+    fontWeight: 600,
+    textAlign: 'left',
+  },
+  stripCaret: { fontSize: 10, color: 'var(--color-text-tertiary)', width: 10, flexShrink: 0 },
+  stripSummary: { fontSize: 11, color: 'var(--color-text-secondary)', marginLeft: 'auto' },
+  stripJump: {
+    marginLeft: 'auto',
+    padding: '2px 8px',
+    fontSize: 10,
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-primary)',
+    color: 'var(--color-text-secondary)',
     borderRadius: 6,
     cursor: 'pointer',
   },
-  delivWaitName: {
-    fontSize: 12,
-    fontWeight: 500,
-    color: 'var(--color-text-primary)',
+  stripRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 11.5,
+    padding: '4px 0',
   },
-  delivWaitProj: {
-    fontWeight: 400,
-    color: 'var(--color-text-tertiary)',
-  },
-  delivWaitMeta: {
-    fontSize: 10,
-    color: 'var(--color-text-secondary)',
-  },
+  stripRowTitle: { flex: 1, color: 'var(--color-text-primary)', fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  stripRowMeta: { fontSize: 10.5, color: 'var(--color-text-secondary)', flexShrink: 0 },
+  statusDot: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
+
   allClear: {
     background: '#1d9e7511',
     border: '0.5px solid #1d9e7544',
@@ -1034,7 +1155,7 @@ const styles = {
     alignItems: 'center',
   },
   allClearTitle: { fontSize: 16, fontWeight: 600, color: '#1d9e75' },
-  allClearText: { fontSize: 12, color: 'var(--color-text-secondary)' },
+  allClearText: { fontSize: 12, color: 'var(--color-text-secondary)', maxWidth: 420 },
   allClearBtn: {
     padding: '6px 16px',
     background: 'var(--accent)',
@@ -1045,6 +1166,7 @@ const styles = {
     fontWeight: 500,
     cursor: 'pointer',
   },
+
   welcome: {
     background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
@@ -1054,21 +1176,9 @@ const styles = {
     flexDirection: 'column',
     gap: 12,
   },
-  welcomeTitle: {
-    fontSize: 18,
-    fontWeight: 600,
-    color: 'var(--color-text-primary)',
-  },
-  welcomeText: {
-    fontSize: 12,
-    color: 'var(--color-text-secondary)',
-  },
-  welcomeSteps: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    marginTop: 4,
-  },
+  welcomeTitle: { fontSize: 18, fontWeight: 600, color: 'var(--color-text-primary)' },
+  welcomeText: { fontSize: 12, color: 'var(--color-text-secondary)' },
+  welcomeSteps: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 },
   welcomeStep: {
     display: 'flex',
     alignItems: 'center',
@@ -1095,27 +1205,10 @@ const styles = {
     flexShrink: 0,
   },
   welcomeStepBody: { flex: 1, minWidth: 0 },
-  welcomeStepTitle: {
-    fontSize: 13,
-    fontWeight: 600,
-    color: 'var(--color-text-primary)',
-  },
-  welcomeStepDesc: {
-    fontSize: 11,
-    color: 'var(--color-text-secondary)',
-    marginTop: 2,
-  },
-  welcomeStepArrow: {
-    fontSize: 16,
-    color: 'var(--accent)',
-    flexShrink: 0,
-  },
-  welcomeFooter: {
-    fontSize: 11,
-    color: 'var(--color-text-tertiary)',
-    fontStyle: 'italic',
-    paddingTop: 4,
-  },
+  welcomeStepTitle: { fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' },
+  welcomeStepDesc: { fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 },
+  welcomeStepArrow: { fontSize: 16, color: 'var(--accent)', flexShrink: 0 },
+  welcomeFooter: { fontSize: 11, color: 'var(--color-text-tertiary)', fontStyle: 'italic', paddingTop: 4 },
   demoCallout: {
     display: 'flex',
     alignItems: 'center',
@@ -1128,22 +1221,10 @@ const styles = {
     transition: 'all 0.15s',
     marginTop: 8,
   },
-  demoIcon: {
-    fontSize: 20,
-    flexShrink: 0,
-  },
+  demoIcon: { fontSize: 20, flexShrink: 0 },
   demoBody: { flex: 1, minWidth: 0 },
-  demoTitle: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: 'var(--accent)',
-  },
-  demoDesc: {
-    fontSize: 11,
-    color: 'var(--color-text-secondary)',
-    marginTop: 2,
-    lineHeight: 1.4,
-  },
+  demoTitle: { fontSize: 12, fontWeight: 600, color: 'var(--accent)' },
+  demoDesc: { fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2, lineHeight: 1.4 },
   kbd: {
     fontFamily: 'monospace',
     fontSize: 10,
@@ -1151,78 +1232,5 @@ const styles = {
     background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 3,
-  },
-};
-
-const sectionStyles = {
-  wrap: {
-    background: 'var(--color-background-secondary)',
-    border: '0.5px solid var(--color-border-tertiary)',
-    borderRadius: 10,
-    padding: 12,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 12,
-    fontWeight: 600,
-  },
-  hint: {
-    fontSize: 10,
-    color: 'var(--color-text-tertiary)',
-    fontStyle: 'italic',
-  },
-  jumpBtn: {
-    padding: '3px 10px',
-    fontSize: 10,
-    background: 'transparent',
-    border: '0.5px solid var(--color-border-primary)',
-    color: 'var(--color-text-secondary)',
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-};
-
-const projectStatusStyles = {
-  headerBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-    background: 'transparent',
-    border: 'none',
-    padding: 0,
-    cursor: 'pointer',
-    textAlign: 'left',
-  },
-  caret: {
-    fontSize: 10,
-    color: 'var(--color-text-tertiary)',
-    width: 12,
-    flexShrink: 0,
-  },
-  summary: {
-    fontSize: 11,
-    color: 'var(--color-text-secondary)',
-    marginLeft: 'auto',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    marginTop: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
   },
 };

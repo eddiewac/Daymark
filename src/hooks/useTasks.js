@@ -143,10 +143,21 @@ export function useTasks(workspaceId, workspaceName) {
                 // ignore malformed snapshot
               }
             } else if (payload.eventType === 'UPDATE') {
+              let projectName = '';
+              try {
+                const snap = JSON.parse(payload.new.task_snapshot || '{}');
+                projectName = typeof snap.projectName === 'string' ? snap.projectName.trim() : '';
+              } catch {
+                projectName = '';
+              }
               setAssignedTasks((prev) =>
                 prev.map((t) =>
                   t.assignmentId === payload.new.id
-                    ? { ...t, dismissed: !!payload.new.dismissed }
+                    ? {
+                        ...t,
+                        dismissed: !!payload.new.dismissed,
+                        ...(projectName ? { projectName } : {}),
+                      }
                     : t
                 )
               );

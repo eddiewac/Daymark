@@ -133,41 +133,169 @@ export async function loadAssignedTasks() {
     };
   });
 
-  return data.map((a) => {
+  const drafts = data.map((a) => {
     let snapshot = {};
+    let parsedOk = false;
     try {
-      snapshot = JSON.parse(a.task_snapshot || '{}');
+      const parsed = JSON.parse(a.task_snapshot || '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        snapshot = parsed;
+        parsedOk = true;
+      }
     } catch {
       snapshot = {};
     }
     // Prefer fresh task data, fall back to snapshot if the task was deleted
-    const fresh = freshById[a.task_id] || snapshot;
+    // or RLS hides it (assignee is not a member of the team workspace).
+    const fresh = freshById[a.task_id] || null;
+    const base = fresh || snapshot;
+    const projectId = cleanLabel(base.projectId) || cleanLabel(snapshot.projectId);
+    return { a, snapshot, parsedOk, fresh, base, projectId };
+  });
+
+  const needsLookup = drafts
+    .filter((d) => !explicitProjectName(d.fresh) && !explicitProjectName(d.snapshot) && d.projectId)
+    .map((d) => d.projectId);
+  const nameById = await projectNamesById(needsLookup);
+
+  const stamps = [];
+  const rows = drafts.map((d) => {
+    // projectName, else id→name when that project is readable, else the
+    // legacy name on `project`. Never a workspace name or a placeholder.
+    let projectName = explicitProjectName(d.fresh) || explicitProjectName(d.snapshot);
+    if (!projectName && d.projectId) projectName = nameById[d.projectId] || '';
+    if (!projectName) projectName = legacyProjectName(d.fresh) || legacyProjectName(d.snapshot);
+    if (projectName && d.parsedOk && explicitProjectName(d.snapshot) !== projectName) {
+      stamps.push(
+        supabase
+          .from('assignments')
+          .update({
+            task_snapshot: JSON.stringify({ ...d.snapshot, projectName }),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', d.a.id)
+          .then(({ error: stampError }) => {
+            if (stampError) console.error('stamp projectName:', stampError);
+          })
+      );
+    }
     return {
-      ...fresh,
-      id: a.task_id,
-      assignmentId: a.id,
-      workspaceId: a.workspace_id,
-      assignedFrom: a.workspace_name,
-      assignedBy: a.assigned_by,
-      assignedAt: a.created_at,
+      ...d.base,
+      ...(projectName ? { projectName } : {}),
+      id: d.a.task_id,
+      assignmentId: d.a.id,
+      workspaceId: d.a.workspace_id,
+      assignedFrom: d.a.workspace_name,
+      assignedBy: d.a.assigned_by,
+      assignedAt: d.a.created_at,
       isAssigned: true,
-      dismissed: !!a.dismissed,
+      dismissed: !!d.a.dismissed,
     };
   });
+
+  if (stamps.length > 0) Promise.allSettled(stamps);
+
+  return rows;
+}
+
+function cleanLabel(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function explicitProjectName(task) {
+  return cleanLabel(task?.projectName);
+}
+
+function legacyProjectName(task) {
+  return cleanLabel(task?.project);
+}
+
+// Names for project ids the current user can read. Missing rows stay absent
+// so callers do not substitute a made-up label.
+async function projectNamesById(ids) {
+  const unique = [...new Set((ids || []).map((id) => cleanLabel(id)).filter(Boolean))];
+  if (unique.length === 0) return {};
+  const { data, error } = await supabase.from('projects').select('id, data').in('id', unique);
+  if (error || !data) return {};
+  const map = {};
+  for (const row of data) {
+    const name = cleanLabel(row.data?.name);
+    if (name) map[row.id] = name;
+  }
+  return map;
+}
+
+async function resolveProjectName(task) {
+  const explicit = explicitProjectName(task);
+  if (explicit) return explicit;
+  const id = cleanLabel(task?.projectId);
+  if (id) {
+    const map = await projectNamesById([id]);
+    if (map[id]) return map[id];
+  }
+  return legacyProjectName(task);
+}
+
+async function stampTaskProjectName(taskId, projectName) {
+  if (!taskId || !projectName) return;
+  const { data: existing, error: readError } = await supabase
+    .from('tasks')
+    .select('data')
+    .eq('id', taskId)
+    .maybeSingle();
+  if (readError || !existing) return;
+  if (explicitProjectName(existing.data) === projectName) return;
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      data: { ...(existing.data || {}), projectName },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId);
+  if (error) console.error('stampTaskProjectName:', error);
 }
 
 export async function assignTask(task, assigneeId, workspaceId, workspaceName) {
   const user = await getCurrentUser();
   if (!user) return;
 
-  // Avoid duplicate assignments
+  const projectName = await resolveProjectName(task);
+  const snapshotTask = projectName ? { ...task, projectName } : { ...task };
+
   const { data: existing } = await supabase
     .from('assignments')
-    .select('id')
+    .select('id, task_snapshot')
     .eq('task_id', task.id)
     .eq('assigned_to', assigneeId)
     .maybeSingle();
-  if (existing) return;
+
+  if (existing) {
+    if (projectName) {
+      let prev = {};
+      let parsedOk = false;
+      try {
+        const parsed = JSON.parse(existing.task_snapshot || '{}');
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          prev = parsed;
+          parsedOk = true;
+        }
+      } catch {
+        parsedOk = false;
+      }
+      if (parsedOk && explicitProjectName(prev) !== projectName) {
+        const { error: healError } = await supabase
+          .from('assignments')
+          .update({
+            task_snapshot: JSON.stringify({ ...prev, projectName }),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+        if (healError) console.error('assignTask projectName:', healError);
+      }
+      await stampTaskProjectName(task.id, projectName);
+    }
+    return;
+  }
 
   const { error } = await supabase.from('assignments').insert({
     task_id: task.id,
@@ -175,10 +303,11 @@ export async function assignTask(task, assigneeId, workspaceId, workspaceName) {
     workspace_name: workspaceName,
     assigned_to: assigneeId,
     assigned_by: user.id,
-    task_snapshot: JSON.stringify(task),
+    task_snapshot: JSON.stringify(snapshotTask),
   });
 
   if (error) console.error('assignTask:', error);
+  else if (projectName) await stampTaskProjectName(task.id, projectName);
 }
 
 export async function unassignTask(taskId, assigneeId) {

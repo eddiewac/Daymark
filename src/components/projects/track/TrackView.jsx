@@ -93,6 +93,7 @@ export default function TrackView({
   runningTimer,
   onStartTimer,
   onStopTimer,
+  onOpenProject,
 }) {
   const [focusKey, setFocusKey] = useState(initialFocusKey);
   useEffect(() => {
@@ -587,6 +588,16 @@ export default function TrackView({
           onToggleTask={onToggleTask}
           onDeleteTask={onDeleteTask}
           onAssignTask={onAssignTask}
+          onOpenProject={onOpenProject}
+          onAddStation={(created) => {
+            if (!created || !focused?.deliverable) return;
+            const newDeliverables = deliverables.map((d) => {
+              if (d.id !== focused.deliverable.id) return d;
+              return { ...d, stations: [...(d.stations || []), created] };
+            });
+            onUpdateProject(project.id, { deliverables: newDeliverables });
+            setFocusKey(`${focused.deliverable.id}:${created.id}`);
+          }}
           onClose={() => setFocusKey(null)}
         />
       )}

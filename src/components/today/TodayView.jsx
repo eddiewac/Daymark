@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { localDateStr, todayStr } from '../../lib/utils.js';
 import { useSaveStatus } from '../save/SaveStatus.jsx';
-import { taskDeliverableName } from '../../lib/deliverableStatus.js';
+import { taskDeliverableName, taskProjectName } from '../../lib/deliverableStatus.js';
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import { stationLastActivityAt } from '../../lib/stations.js';
-import { loadTimeForTasks } from '../../lib/time.js';
 import { pulseSave } from '../../lib/savePulse.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
 
@@ -53,21 +52,46 @@ function stationLoadedIn(task, projects) {
   return false;
 }
 
+// Project / deliverable / station a task belongs to, when that project is loaded.
+function contextForTask(task, projects) {
+  if (!task) return null;
+  let named = null;
+  for (const p of projects || []) {
+    const idMatch = task.projectId && p.id === task.projectId;
+    const nameMatch = task.project && p.name === task.project;
+    if (!named && (idMatch || nameMatch)) named = p;
+    for (const d of p.deliverables || []) {
+      const stations = d.stations || [];
+      if (task.stationId) {
+        const idx = stations.findIndex((s) => s.id === task.stationId);
+        if (idx >= 0) {
+          return {
+            project: p,
+            deliverable: d,
+            station: stations[idx],
+            next: stations[idx + 1] || null,
+          };
+        }
+      }
+      if (task.deliverableId && d.id === task.deliverableId) {
+        const idx = stations.findIndex((s) => !s.done);
+        const station = idx >= 0 ? stations[idx] : null;
+        return {
+          project: p,
+          deliverable: d,
+          station,
+          next: station ? stations[idx + 1] || null : null,
+        };
+      }
+    }
+  }
+  if (named) return { project: named, deliverable: null, station: null, next: null };
+  return null;
+}
+
 // Short relative label for a waiting item's date vs today.
 function currentStationOf(deliverable) {
   return (deliverable?.stations || []).find((s) => !s.done) || null;
-}
-
-function deliverableTaskList(tasks, deliverable) {
-  const stationIds = new Set((deliverable?.stations || []).map((s) => s.id));
-  return (tasks || []).filter(
-    (t) => t.deliverableId === deliverable?.id || (t.stationId && stationIds.has(t.stationId))
-  );
-}
-
-function fmtHours(n) {
-  const x = Math.round((Number(n) || 0) * 10) / 10;
-  return Number.isInteger(x) ? `${x}.0` : x.toFixed(1);
 }
 
 function waitRelLabel(dateIso, today) {
@@ -114,7 +138,6 @@ export default function TodayView({
   const [closeDayOpen, setCloseDayOpen] = useState(false);
   const [dismissedBlock, setDismissedBlock] = useState(() => new Set());
   const [advanceAsk, setAdvanceAsk] = useState(null);
-  const [hoursByTask, setHoursByTask] = useState({});
 
   // ── Priority ids (pinned in the Do column; excluded from the lists below so
   //    they aren't shown twice) ───────────────────────────────────────────────
@@ -200,13 +223,14 @@ export default function TodayView({
     // Follow-ups created by Capture triage (expect-back lives on dueDate).
     for (const t of tasks || []) {
       if (!t.isFollowUp || t.done || !t.dueDate) continue;
+      const named = taskProjectName(t, projects);
       const project =
-        (projects || []).find((p) => p.id === t.projectId || (t.project && p.name === t.project)) ||
+        (projects || []).find((p) => p.id === t.projectId || (named && p.name === named)) ||
         null;
       items.push({
         key: `fu-${t.id}`,
         type: 'followup',
-        project: project || { id: t.projectId || '', name: t.project || '' },
+        project: project || { id: t.projectId || '', name: named },
         taskId: t.id,
         task: t,
         who: null,
@@ -295,23 +319,6 @@ export default function TodayView({
   }, [projects, today]);
   const blockingCount = blockingTasks.length + wOverdue.length + lateStations.length;
 
-  const taskIdsKey = (tasks || []).map((t) => t.id).join(',');
-  const blockStamp = (blocks || []).length;
-  useEffect(() => {
-    const ids = taskIdsKey ? taskIdsKey.split(',').filter(Boolean) : [];
-    if (ids.length === 0) {
-      setHoursByTask({});
-      return undefined;
-    }
-    let cancel = false;
-    loadTimeForTasks(ids).then((map) => {
-      if (!cancel) setHoursByTask(map || {});
-    });
-    return () => {
-      cancel = true;
-    };
-  }, [taskIdsKey, blockStamp]);
-
   useEffect(() => {
     if (prepSignal) setCloseDayOpen(true);
   }, [prepSignal]);
@@ -321,36 +328,49 @@ export default function TodayView({
     [projects]
   );
 
-  // Do is the next undone station on each deliverable — station tasks, not a
-  // generic overdue/due-today list.
+  // Do is tasks to be done today: overdue, due today, and today's pinned
+  // priority. Not a card for every open station.
   const doRows = useMemo(() => {
-    const rows = [];
-    for (const p of projects || []) {
-      for (const d of p.deliverables || []) {
-        const stations = d.stations || [];
-        const idx = stations.findIndex((s) => !s.done);
-        if (idx < 0) continue;
-        const station = stations[idx];
-        const next = stations[idx + 1] || null;
-        const linked = deliverableTaskList(tasks, d);
-        const budget = linked.reduce((s, t) => s + (Number(t.estimate) || 0), 0);
-        const logged = linked.reduce((s, t) => s + (Number(hoursByTask[t.id]) || 0), 0);
-        const openTasks = (tasks || []).filter(
-          (t) => t.stationId === station.id && !t.done && !t.isFollowUp
-        );
-        const incomplete = (tasks || []).filter((t) => t.stationId === station.id && !t.done).length;
-        const base = { project: p, deliverable: d, station, next, budget, logged, incomplete };
-        if (openTasks.length === 0) {
-          rows.push({ ...base, key: `st-${station.id}`, task: null, title: station.name || d.name || 'Station' });
-        } else {
-          openTasks.forEach((t) => {
-            rows.push({ ...base, key: `tk-${t.id}`, task: t, title: t.title || '(untitled)' });
-          });
-        }
-      }
-    }
-    return rows;
-  }, [projects, tasks, hoursByTask]);
+    const rank = (t) => {
+      if (todayPriority?.primary && t.id === todayPriority.primary) return 0;
+      if ((todayPriority?.stretch || []).includes(t.id)) return 1;
+      if (t.dueDate && t.dueDate < today) return 2;
+      if (t.dueDate === today) return 3;
+      return 4;
+    };
+    const list = (tasks || []).filter((t) => {
+      if (!t || t.done || t.isFollowUp) return false;
+      if (priorityIds.has(t.id)) return true;
+      return !!(t.dueDate && t.dueDate <= today);
+    });
+    list.sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        (a.dueDate || '').localeCompare(b.dueDate || '') ||
+        (a.title || '').localeCompare(b.title || '')
+    );
+    return list.map((task) => {
+      const ctx = contextForTask(task, projects);
+      const station = ctx?.station || null;
+      const incomplete = station
+        ? (tasks || []).filter((t) => t.stationId === station.id && !t.done).length
+        : 0;
+      const projectName = taskProjectName(task, projects) || (ctx?.project?.name || '').trim();
+      return {
+        key: task.id,
+        task,
+        title: task.title || '(untitled)',
+        project: ctx?.project || null,
+        projectId: ctx?.project?.id || task.projectId || '',
+        projectName,
+        deliverable: ctx?.deliverable || null,
+        deliverableName: taskDeliverableName(task, projects),
+        station,
+        next: ctx?.next || null,
+        incomplete,
+      };
+    });
+  }, [projects, tasks, today, priorityIds, todayPriority]);
 
   // Assigned tasks whose station is not loaded in this workspace. The Do spine
   // only walks local stations, so team assignments on Personal would otherwise
@@ -371,11 +391,14 @@ export default function TodayView({
   const exceptions = useMemo(() => {
     const out = [];
     for (const item of wOverdue) {
+      const projectName = (item.project?.name || '').trim();
       out.push({
         key: `over-${item.key}`,
         kind: 'Overdue',
         title: item.label,
-        sub: [item.sub, item.project?.name, item.station?.name].filter(Boolean).join(' · '),
+        projectName,
+        projectId: item.project?.id || '',
+        detail: [item.sub, item.station?.name].filter(Boolean).join(' · '),
         action: 'Chase',
         item,
       });
@@ -392,11 +415,15 @@ export default function TodayView({
         const title = idleLate
           ? `${cur.name || 'Station'} idle ${Math.max(1, Math.floor(idle))}d · no timer / no advance`
           : `${cur.name || 'Station'} · target passed`;
+        const who = (cur.owner || d.owner || '').trim();
+        const what = (d.name || '').trim();
         out.push({
           key: `stall-${cur.id}`,
           kind: 'Stalled',
           title,
-          sub: `${d.name || 'Deliverable'} · station stalled`,
+          projectName: (p.name || '').trim(),
+          projectId: p.id || '',
+          detail: [who, what].filter(Boolean).join(' · '),
           action: 'Open station',
           open: { projectId: p.id, deliverableId: d.id, stationId: cur.id },
         });
@@ -581,6 +608,14 @@ export default function TodayView({
     if (item.project?.id) onJumpToProject(item.project.id);
   };
 
+  const openProjectById = (projectId, task) => {
+    if (projectId && (projects || []).some((p) => p.id === projectId)) {
+      onJumpToProject && onJumpToProject(projectId);
+      return;
+    }
+    if (onOpenItem) onOpenItem({ kind: 'project', task: task || null, projectId: projectId || null });
+  };
+
   const draftChaseEmail = (item) => {
     const what = item.type === 'deliverable' ? item.deliverable.name : item.label;
     const who = item.who ? ` ${item.who}` : '';
@@ -618,7 +653,7 @@ export default function TodayView({
           </button>
         </div>
 
-        {deliverableCount === 0 && assignedToMe.length === 0 ? (
+        {deliverableCount === 0 && assignedToMe.length === 0 && doRows.length === 0 && waitingItems.length === 0 ? (
           <EmptyDesk
             workspaceName={workspaceName}
             onSeedDemo={onSeedDemo}
@@ -654,7 +689,16 @@ export default function TodayView({
                     <span style={desk.kind}>{ex.kind}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={desk.blockRowTitle}>{ex.title}</div>
-                      {ex.sub && <div style={desk.blockSub}>{ex.sub}</div>}
+                      {(ex.projectName || ex.detail) && (
+                        <div style={desk.meta}>
+                          <ProjectChip
+                            name={ex.projectName}
+                            projectId={ex.projectId}
+                            onOpen={(id) => openProjectById(id)}
+                          />
+                          {ex.detail ? <span>{ex.detail}</span> : null}
+                        </div>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -679,71 +723,78 @@ export default function TodayView({
                   <span style={styles.bucketCount}>{doRows.length + assignedToMe.length}</span>
                 </div>
                 {doRows.length === 0 && (
-                  <div style={styles.colEmpty}>No open station on your deliverables.</div>
+                  <div style={styles.colEmpty}>Nothing to do today.</div>
                 )}
                 {doRows.map((row) => {
-                  const running = row.task && runningTimer?.taskId === row.task.id;
+                  const running = runningTimer?.taskId === row.task.id;
                   return (
                     <div key={row.key} style={desk.doRow}>
-                      {row.task && (
-                        <button
-                          type="button"
-                          style={desk.play}
-                          title={running ? 'Stop timer' : 'Start timer'}
-                          onClick={() =>
-                            running ? onStopTimer && onStopTimer() : onStartTimer && onStartTimer(row.task)
-                          }
-                        >
-                          {running ? '■' : '▶'}
-                        </button>
-                      )}
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        aria-label={`Complete ${row.title}`}
+                        onChange={() => onToggleDone && onToggleDone(row.task.id)}
+                        style={desk.check}
+                      />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={desk.rowTitle}>{row.title}</div>
                         <div style={desk.meta}>
-                          <span style={desk.chip}>{row.station.name || 'Station'}</span>
-                          <span>{row.deliverable.name}</span>
-                          {row.budget > 0 && (
-                            <span style={desk.budgetChip} title="Your logged hours / estimate">
-                              {fmtHours(row.logged)}h / {fmtHours(row.budget)}h
-                            </span>
-                          )}
+                          <ProjectChip
+                            name={row.projectName}
+                            projectId={row.projectId}
+                            onOpen={(id) => openProjectById(id, row.task)}
+                          />
+                          {row.deliverableName ? <span>{row.deliverableName}</span> : null}
                         </div>
                         <div style={desk.rowActions}>
-                          {row.task && (
+                          {onStartTimer && (
                             <button
                               type="button"
                               style={desk.primary}
                               onClick={() =>
-                                running ? onStopTimer && onStopTimer() : onStartTimer && onStartTimer(row.task)
+                                running ? onStopTimer && onStopTimer() : onStartTimer(row.task)
                               }
                             >
                               {running ? '■ Stop' : '▶ Start timer'}
                             </button>
                           )}
-                          <button
-                            type="button"
-                            style={desk.btn}
-                            onClick={() =>
-                              onOpenItem &&
-                              onOpenItem({
-                                kind: 'station',
-                                projectId: row.project.id,
-                                deliverableId: row.deliverable.id,
-                                stationId: row.station.id,
-                              })
-                            }
-                          >
-                            Open station
-                          </button>
-                          <button type="button" style={desk.ok} onClick={() => requestAdvance(row)}>
-                            Advance station
-                          </button>
+                          {row.station && row.deliverable && row.projectId && (
+                            <button
+                              type="button"
+                              style={desk.btn}
+                              onClick={() =>
+                                onOpenItem &&
+                                onOpenItem({
+                                  kind: 'station',
+                                  projectId: row.projectId,
+                                  deliverableId: row.deliverable.id,
+                                  stationId: row.station.id,
+                                })
+                              }
+                            >
+                              Open station
+                            </button>
+                          )}
+                          {row.station && row.project && (
+                            <button type="button" style={desk.ok} onClick={() => requestAdvance(row)}>
+                              Advance
+                            </button>
+                          )}
+                          {row.projectId && (
+                            <button
+                              type="button"
+                              style={desk.btn}
+                              onClick={() => openProjectById(row.projectId, row.task)}
+                            >
+                              Open project
+                            </button>
+                          )}
                         </div>
                         {advanceAsk === row.key && (
                           <div style={desk.confirm}>
                             <span>
                               {row.incomplete} station task{row.incomplete === 1 ? '' : 's'} still incomplete.
-                              Advance {row.station.name || 'station'}
+                              Advance {row.station?.name || 'station'}
                               {row.next ? ` → ${row.next.name}` : ''} anyway?
                             </span>
                             <button type="button" style={desk.ok} onClick={() => commitAdvance(row)}>
@@ -762,13 +813,23 @@ export default function TodayView({
                   <div style={desk.assigned}>
                     <div style={desk.assignedHd}>Assigned to me</div>
                     <div style={desk.assignedCap}>No station loaded in this workspace.</div>
-                    {assignedToMe.map((t) => (
+                    {assignedToMe.map((t) => {
+                      const projectName = taskProjectName(t, projects);
+                      const deliverableName = taskDeliverableName(t, projects);
+                      const projectId = t.projectId || '';
+                      return (
                       <div key={t.id} style={desk.assignedRow}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={desk.rowTitle}>{t.title || '(untitled)'}</div>
-                          {(t.project || t.assignedFrom) && (
-                            <div style={desk.blockSub}>
-                              {[t.project, t.assignedFrom].filter(Boolean).join(' · ')}
+                          {(projectName || deliverableName || t.assignedFrom) && (
+                            <div style={desk.meta}>
+                              <ProjectChip
+                                name={projectName}
+                                projectId={projectId}
+                                onOpen={(id) => openProjectById(id, t)}
+                              />
+                              {deliverableName ? <span>{deliverableName}</span> : null}
+                              {t.assignedFrom ? <span>{t.assignedFrom}</span> : null}
                             </div>
                           )}
                         </div>
@@ -785,7 +846,8 @@ export default function TodayView({
                           Open
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </section>
@@ -807,6 +869,7 @@ export default function TodayView({
                     onResolve={() => resolveNow(item)}
                     onDraft={() => draftChaseEmail(item)}
                     onOpen={() => openWaiting(item)}
+                    onOpenProject={(id) => openProjectById(id)}
                   />
                 ))}
               </section>
@@ -882,10 +945,24 @@ function SubHead({ label, tone, action, onAction }) {
 }
 
 // ── WaitingRow — one item out with someone, with an inline Chase action ──────
-function WaitingRow({ item, today, onChase, onResolve, onDraft, onOpen }) {
+function ProjectChip({ name, projectId, onOpen }) {
+  const label = (name || '').trim();
+  if (!label) return null;
+  if (projectId && onOpen) {
+    return (
+      <button type="button" style={desk.chipBtn} title="Open project" onClick={() => onOpen(projectId)}>
+        {label}
+      </button>
+    );
+  }
+  return <span style={desk.chip} title="Project">{label}</span>;
+}
+
+function WaitingRow({ item, today, onChase, onResolve, onDraft, onOpen, onOpenProject }) {
   const late = item.date && item.date < today;
   const rel = waitRelLabel(item.date, today);
-  const where = [item.project?.name, item.station?.name].filter(Boolean).join(' · ');
+  const projectName = (item.project?.name || '').trim();
+  const stationName = (item.station?.name || '').trim();
   return (
     <div style={desk.waitRow}>
       <div style={desk.rowTitle}>{item.label}</div>
@@ -893,8 +970,9 @@ function WaitingRow({ item, today, onChase, onResolve, onDraft, onOpen }) {
         {rel && (
           <span style={late ? desk.lateChip : desk.chip}>{late ? rel : `due ${rel}`}</span>
         )}
+        <ProjectChip name={projectName} projectId={item.project?.id} onOpen={onOpenProject} />
         {item.sub && <span>{item.sub}</span>}
-        {where && <span>{where}</span>}
+        {stationName ? <span>{stationName}</span> : null}
       </div>
       <div style={desk.rowActions}>
         <button type="button" style={desk.primary} onClick={onChase}>
@@ -1737,6 +1815,26 @@ const desk = {
     padding: '1px 8px',
     fontSize: 11,
     fontWeight: 650,
+  },
+  chipBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    border: '0.5px solid var(--accent)',
+    borderRadius: 999,
+    padding: '1px 8px',
+    fontSize: 11,
+    fontWeight: 650,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  check: {
+    width: 16,
+    height: 16,
+    marginTop: 2,
+    flexShrink: 0,
+    cursor: 'pointer',
   },
   budgetChip: {
     display: 'inline-flex',

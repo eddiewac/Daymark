@@ -128,3 +128,24 @@ export function taskDeliverableName(task, projects) {
   const d = taskDeliverable(task, projects);
   return d ? d.name || '' : '';
 }
+
+function cleanLabel(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+// Project label for a task, including one assigned from a workspace whose
+// project list is not loaded. Prefers denormalized projectName (same idea as
+// deliverableName), then a loaded project matched by id, then the legacy
+// `project` string. Returns '' when none of those is a real name.
+export function taskProjectName(task, projects) {
+  if (!task) return '';
+  const stored = cleanLabel(task.projectName);
+  if (stored) return stored;
+  const id = cleanLabel(task.projectId);
+  if (id) {
+    const hit = (projects || []).find((p) => p.id === id);
+    const named = cleanLabel(hit?.name);
+    if (named) return named;
+  }
+  return cleanLabel(task.project);
+}

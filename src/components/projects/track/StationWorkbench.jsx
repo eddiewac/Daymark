@@ -40,6 +40,8 @@ export default function StationWorkbench({
   onClose,
   onAddTask,
   onToggleTask,
+  onOpenProject,
+  onAddStation,
 }) {
   const stations = deliverable?.stations || [];
   const stationIdx = stations.findIndex((s) => s.id === station?.id);
@@ -149,12 +151,31 @@ export default function StationWorkbench({
       title,
       project: project?.name || '',
       projectId: project?.id || '',
+      projectName: (project?.name || '').trim(),
       stationId: station.id,
       deliverableId: deliverable?.id || '',
       deliverableName: deliverable?.name || '',
     });
     setDraft('');
     setAdding(false);
+    pulseSave();
+  };
+
+  const addStation = () => {
+    if (!onAddStation) return;
+    onAddStation({
+      id: uid(),
+      name: 'New station',
+      startDate: '',
+      targetDate: '',
+      owner: '',
+      estHours: 0,
+      actualHours: null,
+      done: false,
+      completedAt: null,
+      notes: '',
+      comms: [],
+    });
     pulseSave();
   };
 
@@ -170,14 +191,26 @@ export default function StationWorkbench({
         role="dialog"
         aria-label="Work this station"
       >
-        <style>{'@media (max-width: 840px) { .dm-workbench { grid-template-columns: 1fr !important; } }'}</style>
+        <style>{'@media (max-width: 980px) { .dm-workbench { grid-template-columns: 1fr !important; } }'}</style>
         <div className="dm-workbench" style={styles.layout}>
           <main style={styles.card}>
             <div style={styles.cardHd}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h1 style={styles.h1}>Work this station</h1>
+                {(project.name || '').trim() ? (
+                  <div style={styles.projectTitle}>{project.name.trim()}</div>
+                ) : (
+                  <h1 style={styles.h1}>Work this station</h1>
+                )}
+                <div style={styles.titleLine}>
+                  <h1 style={styles.h1}>{deliverable.name || 'Deliverable'}</h1>
+                  {project.id && onOpenProject ? (
+                    <button type="button" style={styles.linkBtn} onClick={() => onOpenProject(project.id)}>
+                      Open project
+                    </button>
+                  ) : null}
+                </div>
                 <p style={styles.sub}>
-                  {deliverable.name || 'Deliverable'} · owner {owner} · due {fmtDue(due)}
+                  Work this station · owner {owner} · due {fmtDue(due)}
                 </p>
               </div>
               <div style={styles.badge}>
@@ -213,6 +246,13 @@ export default function StationWorkbench({
                 );
               })}
             </div>
+            {onAddStation && (
+              <div style={styles.addStationRow}>
+                <button type="button" style={styles.addQuiet} onClick={addStation}>
+                  + Add station
+                </button>
+              </div>
+            )}
             <div style={styles.bd}>
               <p style={styles.label}>Tasks for this station</p>
               {stationTasks.length === 0 && (
@@ -399,14 +439,14 @@ export default function StationWorkbench({
             <div style={styles.sideCard}>
               <h3 style={styles.sideH}>Station context</h3>
               <dl style={styles.kv}>
-                <dt>Project</dt>
-                <dd>{project.name || '—'}</dd>
-                <dt>Deliverable</dt>
-                <dd>{deliverable.name || '—'}</dd>
-                <dt>Owner</dt>
-                <dd>{owner}</dd>
-                <dt>Due</dt>
-                <dd>{fmtDue(due)}</dd>
+                <dt style={styles.dt}>Project</dt>
+                <dd style={styles.ddProject}>{(project.name || '').trim() || '—'}</dd>
+                <dt style={styles.dt}>Deliverable</dt>
+                <dd style={styles.dd}>{deliverable.name || '—'}</dd>
+                <dt style={styles.dt}>Owner</dt>
+                <dd style={styles.dd}>{owner}</dd>
+                <dt style={styles.dt}>Due</dt>
+                <dd style={styles.dd}>{fmtDue(due)}</dd>
               </dl>
             </div>
           </aside>
@@ -428,10 +468,10 @@ const styles = {
     padding: '28px 16px',
     overflow: 'auto',
   },
-  panel: { width: 'min(1040px, 100%)' },
+  panel: { width: 'min(1180px, 100%)' },
   layout: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 260px',
+    gridTemplateColumns: 'minmax(0, 1fr) 390px',
     gap: 14,
   },
   card: {
@@ -448,8 +488,42 @@ const styles = {
     padding: '14px 16px',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
   },
+  projectTitle: {
+    margin: '0 0 2px',
+    fontSize: 20,
+    fontWeight: 700,
+    lineHeight: 1.25,
+    letterSpacing: '-0.015em',
+    color: 'var(--color-text-primary)',
+  },
+  titleLine: { display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' },
   h1: { margin: 0, fontSize: 16, fontWeight: 650 },
-  sub: { margin: '3px 0 0', fontSize: 12.5, color: 'var(--color-text-secondary)' },
+  linkBtn: {
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    color: 'var(--accent)',
+    fontWeight: 650,
+    fontSize: 13,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  sub: { margin: '3px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' },
+  addStationRow: {
+    padding: '4px 14px 8px',
+    background: 'var(--color-background-secondary)',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+  },
+  addQuiet: {
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--color-text-secondary)',
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: '2px 0',
+    fontFamily: 'inherit',
+  },
   badge: {
     flexShrink: 0,
     background: 'var(--accent-soft)',
@@ -675,26 +749,30 @@ const styles = {
     background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-tertiary)',
     borderRadius: 12,
-    padding: '12px 14px',
+    padding: '16px 18px',
     boxShadow: '0 1px 2px rgba(0,0,0,.06)',
   },
-  sideH: { margin: '0 0 8px', fontSize: 13, fontWeight: 650 },
-  budget: { display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 },
-  budgetV: { fontWeight: 700, color: '#d97706', fontVariantNumeric: 'tabular-nums' },
+  sideH: { margin: '0 0 10px', fontSize: 16, fontWeight: 650 },
+  budget: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, fontSize: 16 },
+  budgetV: { fontWeight: 700, fontSize: 20, color: '#d97706', fontVariantNumeric: 'tabular-nums' },
   bar: {
-    height: 6,
+    height: 8,
     background: 'var(--color-background-secondary)',
     borderRadius: 999,
     border: '0.5px solid var(--color-border-tertiary)',
     overflow: 'hidden',
   },
   barFill: { display: 'block', height: '100%', background: '#d97706' },
-  sideNote: { margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' },
+  sideNote: { margin: '10px 0 0', fontSize: 14, lineHeight: 1.4, color: 'var(--color-text-secondary)' },
   kv: {
     display: 'grid',
     gridTemplateColumns: 'auto 1fr',
-    gap: '4px 10px',
-    fontSize: 12.5,
+    gap: '8px 14px',
+    alignItems: 'baseline',
+    fontSize: 15,
     margin: 0,
   },
+  dt: { color: 'var(--color-text-secondary)', fontWeight: 600 },
+  dd: { margin: 0 },
+  ddProject: { margin: 0, fontSize: 18, fontWeight: 700, lineHeight: 1.3 },
 };

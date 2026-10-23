@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 
-// Confirm discard, or the sub-1-minute round-or-discard choice.
-// Esc and the scrim keep the timer running (they do not discard).
-export default function TimerFlowDialog({ title, body, actions, onClose }) {
+// Confirm discard (blocking), or the sub-1-minute round-or-discard choice.
+// The short prompt is non-blocking: the desk stays usable, the confirm stays
+// until the user picks an action. Esc keeps the timer running (it does not discard).
+export default function TimerFlowDialog({ title, body, actions, onClose, blocking = true }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
@@ -14,33 +15,54 @@ export default function TimerFlowDialog({ title, body, actions, onClose }) {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
+  const card = (
+    <div style={styles.dialog} onClick={blocking ? (e) => e.stopPropagation() : undefined}>
+      <h2 style={styles.title}>{title}</h2>
+      <p style={styles.body}>{body}</p>
+      <div style={styles.actions}>
+        {(actions || []).map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            onClick={a.onClick}
+            style={{
+              ...styles.btn,
+              ...(a.primary ? styles.primary : {}),
+              ...(a.danger ? styles.danger : {}),
+            }}
+          >
+            {a.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (!blocking) {
+    return (
+      <div style={styles.dock} role="dialog" aria-modal="false" aria-label={title}>
+        {card}
+      </div>
+    );
+  }
+
   return (
     <div style={styles.backdrop} onClick={onClose} role="dialog" aria-modal="true">
-      <div style={styles.dialog} onClick={(e) => e.stopPropagation()}>
-        <h2 style={styles.title}>{title}</h2>
-        <p style={styles.body}>{body}</p>
-        <div style={styles.actions}>
-          {(actions || []).map((a) => (
-            <button
-              key={a.label}
-              type="button"
-              onClick={a.onClick}
-              style={{
-                ...styles.btn,
-                ...(a.primary ? styles.primary : {}),
-                ...(a.danger ? styles.danger : {}),
-              }}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {card}
     </div>
   );
 }
 
 const styles = {
+  dock: {
+    position: 'fixed',
+    top: 76,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: 'min(440px, calc(100vw - 24px))',
+    zIndex: 1100,
+    pointerEvents: 'none',
+  },
   backdrop: {
     position: 'fixed',
     inset: 0,
@@ -52,12 +74,14 @@ const styles = {
     padding: 16,
   },
   dialog: {
+    pointerEvents: 'auto',
     background: 'var(--bg-surface)',
     borderRadius: 12,
-    maxWidth: 400,
+    maxWidth: 440,
     width: '100%',
     padding: 20,
     boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+    border: '0.5px solid var(--color-border-secondary)',
   },
   title: { margin: '0 0 8px', fontSize: 16, fontWeight: 600 },
   body: { margin: '0 0 16px', fontSize: 14, color: 'var(--color-text-secondary)', lineHeight: 1.45 },

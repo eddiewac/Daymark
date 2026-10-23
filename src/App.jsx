@@ -292,10 +292,12 @@ export default function App() {
       )}
       {time.pendingPrompt?.type === 'short' && (
         <TimerFlowDialog
+          blocking={false}
           title="Under 1 minute"
-          body={`You timed less than a minute on “${time.runningTimer?.taskTitle || runningTaskTitle || 'this task'}”. Round up to save, or discard.`}
+          body={`You timed less than a minute on “${time.runningTimer?.taskTitle || runningTaskTitle || 'this task'}”. Round up to save, or discard. You can keep working — this stays until you choose.`}
           onClose={time.cancelPrompt}
           actions={[
+            { label: 'Keep running', onClick: time.cancelPrompt },
             {
               label: 'Discard',
               onClick: async () => {

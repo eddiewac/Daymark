@@ -79,3 +79,55 @@ export function debounce(fn, ms = 300) {
     timer = setTimeout(() => fn(...args), ms);
   };
 }
+
+// Close-out day is dismissed for one local calendar day. The stored value is
+// todayStr() / localDateStr() — never a UTC ISO slice, which in Brisbane is
+// still "yesterday" until 10:00.
+export const CLOSE_OUT_DISMISS_KEY = 'daymark-close-out-dismissed';
+export const CLOSE_OUT_PREP_SEEN_KEY = 'daymark-close-out-prep';
+
+function storageOr(storage) {
+  if (storage) return storage;
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function readCloseOutDismissedDay(storage) {
+  try {
+    return storageOr(storage)?.getItem(CLOSE_OUT_DISMISS_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function markCloseOutDismissed(day, storage) {
+  if (!day) return;
+  try {
+    storageOr(storage)?.setItem(CLOSE_OUT_DISMISS_KEY, day);
+  } catch {
+    /* private mode */
+  }
+}
+
+export function clearCloseOutDismissed(storage) {
+  try {
+    storageOr(storage)?.removeItem(CLOSE_OUT_DISMISS_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
+// A new Prep signal opens the panel unless this local day was already
+// dismissed. The signal is consumed either way so a later remount (leave
+// Today and come back) does not replay the same prompt.
+export function closeOutPrepDecision({ prepSignal, seenSignal, dismissedDay, today }) {
+  const signal = Number(prepSignal) || 0;
+  const seen = Number(seenSignal) || 0;
+  if (!signal || signal === seen) return { open: false, seen };
+  const dismissedToday = !!(today && dismissedDay && dismissedDay === today);
+  return { open: !dismissedToday, seen: signal };
+}

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Notepad from './Notepad.jsx';
 import { addBusinessDays } from '../../lib/utils.js';
 import { pulseSave } from '../../lib/savePulse.js';
@@ -7,6 +7,36 @@ import {
   projectMatch,
   removeDumpLines,
 } from '../../lib/captureTriage.js';
+
+const HEIGHT_KEY = 'daymark-notepad-h';
+const MIN_NOTEPAD_H = 160;
+// The float used to be content-sized: header, notepad chrome, a 2-row
+// textarea, and the footer — about 190px. The default is ~1.5× that.
+const LEGACY_NOTEPAD_H = 190;
+const DEFAULT_NOTEPAD_H = Math.round(LEGACY_NOTEPAD_H * 1.5);
+
+function notepadMaxHeight() {
+  if (typeof window === 'undefined') return 480;
+  return Math.round(window.innerHeight * 0.5);
+}
+
+function clampNotepadHeight(n) {
+  const max = Math.max(1, notepadMaxHeight());
+  const min = Math.min(MIN_NOTEPAD_H, max);
+  const value = Number.isFinite(n) ? n : DEFAULT_NOTEPAD_H;
+  return Math.round(Math.min(max, Math.max(min, value)));
+}
+
+function readNotepadHeight() {
+  try {
+    const raw = localStorage.getItem(HEIGHT_KEY);
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n) && n > 0) return clampNotepadHeight(n);
+  } catch {
+    /* private mode */
+  }
+  return clampNotepadHeight(DEFAULT_NOTEPAD_H);
+}
 
 // ── FloatingNotepad ─────────────────────────────────────────────────────────
 // Fixed overlay (not a docked column). It used to default closed and live
@@ -28,6 +58,11 @@ export default function FloatingNotepad({
   onClose,
 }) {
   const notepadRef = useRef(null);
+  const panelRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const gestureInsideRef = useRef(false);
+  const [panelHeight, setPanelHeight] = useState(readNotepadHeight);
   const [mode, setMode] = useState('capture'); // capture | triage
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -143,8 +178,82 @@ export default function FloatingNotepad({
 
   const openCount = rows.filter((r) => !r.done).length;
 
+  // Esc and click-outside close the float. The draft stays in notepad storage;
+  // this only hides the panel. Overlays stacked above the float keep Esc.
+  // A gesture that starts inside (resize drag, text selection) does not close
+  // when the pointer is released outside.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (fullscreenOverlayAbove(panelRef.current)) return;
+      e.preventDefault();
+      onCloseRef.current?.();
+    };
+    const onPointerDown = (e) => {
+      const panel = panelRef.current;
+      gestureInsideRef.current = !!(panel && panel.contains(e.target));
+    };
+    const onClick = (e) => {
+      if (gestureInsideRef.current) return;
+      const panel = panelRef.current;
+      if (!panel || panel.contains(e.target)) return;
+      if (eventHitsOverlayAbove(e.target, panel)) return;
+      onCloseRef.current?.();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    const timer = window.setTimeout(() => document.addEventListener('click', onClick), 0);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('click', onClick);
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setPanelHeight(readNotepadHeight());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const onResizePointerDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    gestureInsideRef.current = true;
+    const startY = e.clientY;
+    const startH = panelHeight;
+    const move = (ev) => {
+      // Pinned to the bottom-right corner, so the only room to grow is up.
+      const next = clampNotepadHeight(startH + (startY - ev.clientY));
+      setPanelHeight(next);
+      try {
+        localStorage.setItem(HEIGHT_KEY, String(next));
+      } catch {
+        /* private mode */
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
   return (
-    <aside style={styles.panel} aria-label="Floating notepad with Capture Triage toggle">
+    <aside
+      ref={panelRef}
+      style={{
+        ...styles.panel,
+        height: panelHeight,
+        minHeight: `min(${MIN_NOTEPAD_H}px, 50vh)`,
+        maxHeight: '50vh',
+      }}
+      aria-label="Floating notepad with Capture Triage toggle"
+    >
       <div style={styles.header}>
         <span style={styles.dot} aria-hidden="true" />
         <span style={styles.title}>Floating notepad</span>
@@ -288,8 +397,47 @@ export default function FloatingNotepad({
           {toast.sub && <div style={styles.toastSub}>{toast.sub}</div>}
         </div>
       )}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize notepad"
+        title="Drag up to grow"
+        style={styles.resize}
+        onPointerDown={onResizePointerDown}
+      />
     </aside>
   );
+}
+
+const FLOAT_Z = 860;
+
+// Full-screen layers above the float (focus, capture dialog, help) own Esc
+// and outside clicks. The float itself is not full-screen.
+function isFullscreenAbove(el, panel) {
+  if (!el || (panel && panel.contains(el))) return false;
+  const cs = window.getComputedStyle(el);
+  if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return false;
+  const z = parseInt(cs.zIndex, 10);
+  if (!Number.isFinite(z) || z <= FLOAT_Z) return false;
+  const r = el.getBoundingClientRect();
+  return r.width >= window.innerWidth * 0.85 && r.height >= window.innerHeight * 0.85;
+}
+
+function fullscreenOverlayAbove(panel) {
+  const nodes = document.body.querySelectorAll('*');
+  for (const el of nodes) {
+    if (isFullscreenAbove(el, panel)) return true;
+  }
+  return false;
+}
+
+function eventHitsOverlayAbove(target, panel) {
+  let el = target;
+  while (el && el !== document.documentElement) {
+    if (isFullscreenAbove(el, panel)) return true;
+    el = el.parentElement;
+  }
+  return false;
 }
 
 const styles = {
@@ -299,7 +447,7 @@ const styles = {
     bottom: 20,
     width: 420,
     maxWidth: 'calc(100vw - 32px)',
-    maxHeight: 'min(580px, calc(100vh - 72px))',
+    maxHeight: '50vh',
     display: 'flex',
     flexDirection: 'column',
     background: 'var(--bg-surface)',
@@ -466,12 +614,24 @@ const styles = {
     color: 'var(--color-text-primary)',
   },
   footer: {
-    padding: '10px 12px',
+    padding: '10px 22px 16px 12px',
     borderTop: '0.5px solid var(--color-border-tertiary)',
     display: 'flex',
     alignItems: 'center',
     gap: 8,
     flexShrink: 0,
+  },
+  resize: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 18,
+    height: 18,
+    cursor: 'ns-resize',
+    touchAction: 'none',
+    zIndex: 3,
+    background:
+      'linear-gradient(135deg, transparent 0 46%, var(--color-text-tertiary) 46% 54%, transparent 54% 62%, var(--color-text-tertiary) 62% 70%, transparent 70%)',
   },
   count: {
     fontSize: 11.5,

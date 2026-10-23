@@ -45,7 +45,9 @@ const Notepad = forwardRef(function Notepad({
   const textareaRef = useRef(null);
   const saveTimer = useRef(null);
   const bodyRef = useRef(body);
+  const loadedRef = useRef(false);
   bodyRef.current = body;
+  loadedRef.current = loaded;
 
   useImperativeHandle(ref, () => ({
     getBody: () => bodyRef.current,
@@ -70,6 +72,16 @@ const Notepad = forwardRef(function Notepad({
     }, 800);
     return () => clearTimeout(saveTimer.current);
   }, [body, loaded]);
+
+  // Closing the float unmounts this editor. Flush the draft into storage
+  // instead of dropping keystrokes still inside the debounce. Never clears it.
+  useEffect(() => {
+    return () => {
+      if (!loadedRef.current) return;
+      clearTimeout(saveTimer.current);
+      saveNotepad(bodyRef.current);
+    };
+  }, []);
 
   const handleSelect = () => {
     const ta = textareaRef.current;
@@ -688,6 +700,7 @@ const styles = {
   },
   area: {
     flex: 1,
+    minHeight: 0,
     border: 'none',
     outline: 'none',
     padding: '14px 18px',

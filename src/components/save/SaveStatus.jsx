@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { uid } from '../../lib/utils.js';
 
-// Shared Saving… / Saved / Couldn’t save strip, plus Undo toasts.
+// Shared Saving… / Saved / Couldn’t save state, plus Undo toasts.
+// The pill itself renders in the top bar (TopBar reads `status`). Toasts stay
+// centered so they don't sit under the floating notepad.
 // Optimistic callers update local state themselves, then run the write through
 // runSave. On failure, runSave shows Retry and the caller rolls the row back.
 
@@ -72,7 +74,6 @@ export function SaveStatusProvider({ children }) {
   return (
     <SaveStatusContext.Provider value={{ runSave, showToast, retry, status }}>
       {children}
-      <SaveStatusStrip status={status} onRetry={retry} />
       <div style={styles.toastWrap} aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} style={styles.toast}>
@@ -96,65 +97,7 @@ export function SaveStatusProvider({ children }) {
   );
 }
 
-function SaveStatusStrip({ status, onRetry }) {
-  if (!status || status.kind === 'idle') return null;
-  return (
-    <div
-      style={{ ...styles.strip, ...styles[status.kind] }}
-      role="status"
-      aria-live="polite"
-    >
-      <span style={{ ...styles.dot, ...styles[`${status.kind}Dot`] }} aria-hidden="true" />
-      <span style={styles.label}>{status.label}</span>
-      {status.kind === 'failed' && (
-        <button type="button" style={styles.retry} onClick={onRetry}>
-          Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
 const styles = {
-  strip: {
-    position: 'fixed',
-    left: 16,
-    bottom: 16,
-    zIndex: 1400,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 36,
-    padding: '6px 12px',
-    background: 'var(--bg-surface)',
-    border: '0.5px solid var(--color-border-secondary)',
-    borderRadius: 10,
-    boxShadow: 'var(--shadow-md)',
-  },
-  saving: {},
-  saved: {},
-  failed: {},
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-    background: '#d1d5db',
-  },
-  savingDot: { background: 'var(--accent)', animation: 'pulse 1s ease-in-out infinite' },
-  savedDot: { background: 'var(--success)' },
-  failedDot: { background: 'var(--danger)' },
-  label: { fontSize: 13, fontWeight: 500 },
-  retry: {
-    fontSize: 12,
-    fontWeight: 600,
-    padding: '3px 10px',
-    borderRadius: 8,
-    border: '0.5px solid var(--danger-soft-border)',
-    background: 'var(--danger-soft)',
-    color: 'var(--danger)',
-    cursor: 'pointer',
-  },
   toastWrap: {
     position: 'fixed',
     bottom: 24,

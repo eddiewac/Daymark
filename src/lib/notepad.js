@@ -19,7 +19,17 @@ export async function loadNotepad() {
   }
 }
 
-export async function saveNotepad(body) {
+// Writes are queued so a close-flush can't be overwritten by an older
+// in-flight debounce of a shorter draft.
+let saveQueue = Promise.resolve();
+
+export function saveNotepad(body) {
+  const job = saveQueue.then(() => persistNotepad(body));
+  saveQueue = job.catch(() => {});
+  return job;
+}
+
+async function persistNotepad(body) {
   const user = await getCurrentUser();
   if (!user) return;
   await supabase.from('app_storage').upsert(

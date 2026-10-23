@@ -11,7 +11,7 @@ export default function BlocksEditor({
   taskId,
   onAddBlock,
   onUpdateBlock,
-  onRemoveBlock,
+  onVoidBlock,
   onClose,
 }) {
   // Detect overlapping blocks (within this cell)
@@ -81,7 +81,7 @@ export default function BlocksEditor({
                   date={date}
                   isOverlap={overlaps.includes(b.id)}
                   onUpdate={(patch) => onUpdateBlock(b.id, patch)}
-                  onRemove={() => onRemoveBlock(b.id)}
+                  onVoid={() => onVoidBlock(b.id)}
                 />
               ))}
           </div>
@@ -105,7 +105,7 @@ export default function BlocksEditor({
 }
 
 // ── Single editable block row ────────────────────────────────────────────────
-function BlockRow({ block, date, isOverlap, onUpdate, onRemove }) {
+function BlockRow({ block, date, isOverlap, onUpdate, onVoid }) {
   const hasTimes = !!block.startedAt && !!block.endedAt;
 
   const [startTime, setStartTime] = useState(
@@ -118,7 +118,6 @@ function BlockRow({ block, date, isOverlap, onUpdate, onRemove }) {
     !hasTimes ? (block.hours || 0).toFixed(2) : ''
   );
   const [notes, setNotes] = useState(block.notes || '');
-  const [confirmRemove, setConfirmRemove] = useState(false);
 
   // Reset draft state when block changes from outside
   useEffect(() => {
@@ -216,31 +215,14 @@ function BlockRow({ block, date, isOverlap, onUpdate, onRemove }) {
           </>
         )}
         <div style={{ flex: 1 }} />
-        {!confirmRemove ? (
-          <button
-            onClick={() => setConfirmRemove(true)}
-            style={styles.removeBtn}
-            title="Remove block"
-          >
-            🗑
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={onRemove}
-              style={styles.confirmRemove}
-              title="Confirm delete"
-            >
-              Delete
-            </button>
-            <button
-              onClick={() => setConfirmRemove(false)}
-              style={styles.cancelBtnSmall}
-            >
-              ×
-            </button>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={onVoid}
+          style={styles.removeBtn}
+          title="Void block"
+        >
+          🗑
+        </button>
       </div>
       <div style={styles.blockBottomRow}>
         <input
@@ -460,25 +442,6 @@ const styles = {
     fontSize: 14,
     cursor: 'pointer',
     borderRadius: 4,
-  },
-  confirmRemove: {
-    padding: '3px 10px',
-    background: '#e24b4a',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 6,
-    fontSize: 11,
-    fontWeight: 500,
-    cursor: 'pointer',
-  },
-  cancelBtnSmall: {
-    width: 22,
-    height: 22,
-    background: 'transparent',
-    border: 'none',
-    color: 'var(--color-text-tertiary)',
-    fontSize: 14,
-    cursor: 'pointer',
   },
   footer: {
     display: 'flex',

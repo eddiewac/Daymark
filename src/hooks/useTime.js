@@ -1,10 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { getCurrentUser } from '../lib/supabase.js';
 import {
   loadTimeEntries,
   createTimeBlock as createBlockDb,
   updateTimeBlock as updateBlockDb,
-  deleteTimeBlock as deleteBlockDb,
   loadRunningTimer,
   startRunningTimer,
   clearRunningTimer,
@@ -26,6 +25,10 @@ export function useTime(workspaceId) {
   const [runningTimer, setRunningTimer] = useState(null);
   const [tickNow, setTickNow] = useState(Date.now());
   const [currentUserId, setCurrentUserId] = useState(null);
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
+  // Pre-void copies so Undo can put hours back without a time_entries delete.
+  const voidedSnapshots = useRef(new Map());
 
   // Pending stop dialog state — when set, the indicator/UI shows the popup.
   // Only used for stops of at least one minute (editable start/end).
@@ -241,21 +244,49 @@ export function useTime(workspaceId) {
   }, []);
 
   // Undo a logged block without deleting the row: mark it voided and zero
-  // the hours so budget and the timesheet stop counting it.
+  // the hours so budget and the timesheet stop counting it. The snapshot is
+  // kept so a later Undo can restore the same row.
   const voidBlock = useCallback(async (blockId) => {
     if (!blockId) return { ok: false, error: 'Nothing to undo' };
-    let snapshot = null;
-    setBlocks((prev) => {
-      snapshot = prev.find((b) => b.id === blockId) || null;
-      return prev.filter((b) => b.id !== blockId);
-    });
+    const snapshot = blocksRef.current.find((b) => b.id === blockId) || null;
+    if (snapshot) voidedSnapshots.current.set(blockId, snapshot);
+    setBlocks((prev) => prev.filter((b) => b.id !== blockId));
     const updated = await updateBlockDb(blockId, { hours: 0, voided: true });
     if (!updated) {
-      if (snapshot) setBlocks((prev) => [...prev, snapshot]);
+      voidedSnapshots.current.delete(blockId);
+      if (snapshot) {
+        setBlocks((prev) => (prev.some((b) => b.id === blockId) ? prev : [...prev, snapshot]));
+      }
       return { ok: false, error: 'Could not undo' };
     }
-    return { ok: true };
+    return { ok: true, snapshot };
   }, []);
+
+  // Put a voided block back on the timesheet. Update only — never insert a
+  // second row and never delete the voided one.
+  const restoreBlock = useCallback(
+    async (blockId, snapshotArg) => {
+      const snapshot = snapshotArg || voidedSnapshots.current.get(blockId) || null;
+      if (!blockId || !snapshot) return { ok: false, error: 'Nothing to restore' };
+      const updated = await updateBlockDb(blockId, {
+        hours: snapshot.hours || 0,
+        voided: false,
+      });
+      if (!updated || updated.voided) return { ok: false, error: 'Could not restore' };
+      voidedSnapshots.current.delete(blockId);
+      const restored = { ...updated, voided: false, hours: snapshot.hours || 0 };
+      if ((restored.workspaceId || null) == (workspaceId || null)) {
+        setBlocks((prev) => {
+          if (prev.some((b) => b.id === blockId)) {
+            return prev.map((b) => (b.id === blockId ? restored : b));
+          }
+          return [...prev, restored];
+        });
+      }
+      return { ok: true };
+    },
+    [workspaceId]
+  );
 
   // ── Block CRUD (used from the timesheet) ─────────────────────────────────
 
@@ -284,11 +315,6 @@ export function useTime(workspaceId) {
     }
   }, []);
 
-  const removeBlock = useCallback(async (blockId) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== blockId));
-    await deleteBlockDb(blockId);
-  }, []);
-
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const elapsedMsForRunning = runningTimer ? tickNow - runningTimer.startedAt : 0;
@@ -310,9 +336,9 @@ export function useTime(workspaceId) {
     cancelPrompt,
     discardTimer,
     voidBlock,
+    restoreBlock,
     addBlock,
     updateBlock,
-    removeBlock,
   };
 }
 

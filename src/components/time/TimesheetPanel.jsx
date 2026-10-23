@@ -38,7 +38,7 @@ export default function TimesheetPanel({
   workspaceId,
   onAddBlock,
   onUpdateBlock,
-  onRemoveBlock,
+  onVoidBlock,
   onStartTimer,
   onRequestStop,
 }) {
@@ -55,6 +55,9 @@ export default function TimesheetPanel({
   const blocksByCell = useMemo(() => {
     const m = {};
     for (const b of blocks) {
+      // Voided rows stay in the database (Undo restores them) but must not
+      // count toward the day, week, or OOS totals.
+      if (!b || b.voided) continue;
       const key = `${b.taskId}|${b.date}`;
       (m[key] = m[key] || []).push(b);
     }
@@ -68,7 +71,7 @@ export default function TimesheetPanel({
   const visibleTasks = useMemo(() => {
     const dayKeySet = new Set(dayKeys);
     const taskHasHoursThisWeek = (taskId) =>
-      blocks.some((b) => b.taskId === taskId && dayKeySet.has(b.date));
+      blocks.some((b) => b.taskId === taskId && dayKeySet.has(b.date) && !b.voided);
 
     return (tasks || [])
       .filter((t) => taskHasHoursThisWeek(t.id))
@@ -346,7 +349,7 @@ export default function TimesheetPanel({
           taskId={editingCell.taskId}
           onAddBlock={onAddBlock}
           onUpdateBlock={onUpdateBlock}
-          onRemoveBlock={onRemoveBlock}
+          onVoidBlock={onVoidBlock}
           onClose={() => setEditingCell(null)}
         />
       )}

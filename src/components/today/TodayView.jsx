@@ -365,7 +365,8 @@ export default function TodayView({
     });
   }, [tasks, doRows, currentUserId, projects]);
 
-  // Exceptions only: overdue waits, stalled current stations, unlogged hours.
+  // Exceptions only: overdue waits and stalled current stations.
+  // Unlogged hours stay on the timesheet — they are not a Today blocker.
   // Not a mirror of every Waiting row. The strip hides when this list is empty.
   const exceptions = useMemo(() => {
     const out = [];
@@ -401,31 +402,8 @@ export default function TodayView({
         });
       }
     }
-    for (const p of projects || []) {
-      for (const d of p.deliverables || []) {
-        const cur = currentStationOf(d);
-        for (const s of d.stations || []) {
-          const touched = !!stationLastActivityAt(s);
-          const gaps = (tasks || []).filter((t) => {
-            if (t.stationId !== s.id) return false;
-            if (Number(hoursByTask[t.id]) > 0) return false;
-            if (t.done) return true;
-            return touched && cur && s.id === cur.id && Number(t.estimate) > 0;
-          });
-          if (gaps.length === 0) continue;
-          out.push({
-            key: `unlog-${s.id}`,
-            kind: 'Time',
-            title: 'Unlogged time',
-            sub: `${gaps.length} task${gaps.length === 1 ? '' : 's'} on ${s.name || 'station'} with an estimate or done, and 0 of your hours`,
-            action: 'Log time',
-            jump: 'time',
-          });
-        }
-      }
-    }
     return out;
-  }, [wOverdue, projects, tasks, hoursByTask, today]);
+  }, [wOverdue, projects, today]);
 
   const visibleExceptions = exceptions.filter((e) => !dismissedBlock.has(e.key));
 
@@ -669,7 +647,7 @@ export default function TodayView({
                   </button>
                 </div>
                 <p style={desk.blockCap}>
-                  Exceptions only — overdue waits, stalled stations, unlogged time. Not a mirror of every Waiting item.
+                  Exceptions only — overdue waits and stalled stations. Not a mirror of every Waiting item.
                 </p>
                 {visibleExceptions.map((ex) => (
                   <div key={ex.key} style={desk.blockRow}>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSaveStatus } from './save/SaveStatus.jsx';
 import { useTasks } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useNotes } from '../hooks/useNotes.js';
@@ -84,6 +85,25 @@ NAV.forEach((n) => {
 });
 
 // All valid tab keys, for persistence validation.
+function placeLabelForTask(task, projects) {
+  if (!task) return '';
+  if (task.stationId) {
+    for (const p of projects || []) {
+      for (const d of p.deliverables || []) {
+        const s = (d.stations || []).find((x) => x.id === task.stationId);
+        if (s) return s.name || d.name || p.name || task.project || task.title || '';
+      }
+    }
+  }
+  return task.project || task.title || '';
+}
+
+function normalizeOpenTarget(target) {
+  if (!target) return null;
+  if (typeof target === 'string') return { projectId: target };
+  return target;
+}
+
 const ALL_TAB_KEYS = [
   'today', 'tasks', 'plan', 'projects', 'track', 'resource', 'status', 'waiting', 'deliverables',
   'notes', 'notepad', 'time', 'export', 'congresses', 'settings',
@@ -225,6 +245,7 @@ export default function WorkspaceView({
     loading: projectsLoading,
     addProject,
     updateProject,
+    patchProject,
     deleteProject,
   } = useProjects(workspaceId);
 
@@ -263,6 +284,7 @@ export default function WorkspaceView({
 
   const priorityApi = usePriority(workspaceId);
   const { prefs: userPrefs, updatePrefs: updateUserPrefs } = useUserPrefs();
+  const { runSave, showToast } = useSaveStatus();
 
   // Modal state for setting today's priority
   const [priorityModalOpen, setPriorityModalOpen] = useState(false);
@@ -292,6 +314,32 @@ export default function WorkspaceView({
   // row triggers this, we record the target project id and switch to the
   // Track tab; TrackTab picks the project up via its initialProjectId prop.
   const [trackTargetProjectId, setTrackTargetProjectId] = useState(null);
+  const [trackFocusKey, setTrackFocusKey] = useState(null);
+  const [trackFocusNonce, setTrackFocusNonce] = useState(0);
+  const [projectOpenId, setProjectOpenId] = useState(null);
+  const [projectOpenNonce, setProjectOpenNonce] = useState(0);
+  const openNonce = useRef(0);
+
+  // Open a project, and a station workbench when we have both ids.
+  // Accepts a project id string (older callers) or { projectId, deliverableId, stationId }.
+  const openRecord = (target) => {
+    const spec = normalizeOpenTarget(target);
+    if (!spec?.projectId) {
+      setTab('projects');
+      return;
+    }
+    const nonce = ++openNonce.current;
+    if (spec.stationId && spec.deliverableId) {
+      setTrackTargetProjectId(spec.projectId);
+      setTrackFocusKey(`${spec.deliverableId}:${spec.stationId}`);
+      setTrackFocusNonce(nonce);
+      setTab('track');
+      return;
+    }
+    setProjectOpenId(spec.projectId);
+    setProjectOpenNonce(nonce);
+    setTab('projects');
+  };
 
   const jumpToTrack = (task) => {
     if (!task) return;
@@ -330,33 +378,34 @@ export default function WorkspaceView({
   const handleToggleDone = (taskId) => {
     const task = (allTasks || []).find((t) => t.id === taskId);
     const wasDone = !!task?.done;
-    toggleDone(taskId);
-    // Only prompt on completion, and only for station-linked tasks.
-    if (task && !wasDone) {
-      const ctx = resolveStationForTask(task);
-      if (ctx) {
-        // Work out the station's position in its deliverable and what's next,
-        // so the prompt can show track progress and offer to advance it.
-        const stations = ctx.deliverable.stations || [];
-        const idx = stations.findIndex((s) => s.id === ctx.station.id);
-        const doneCount = stations.filter((s) => s.done).length;
-        const nextStation = stations.slice(idx + 1).find((s) => !s.done) || null;
-        setCommPrompt({
-          taskId,
-          taskTitle: task.title || '(untitled)',
-          projectId: ctx.project.id,
-          deliverableName: ctx.deliverable.name || '',
-          stationId: ctx.station.id,
-          stationName: ctx.station.name || '',
-          stationDone: !!ctx.station.done,
-          stationIndex: idx,
-          stationCount: stations.length,
-          doneCount,
-          nextStationName: nextStation ? nextStation.name : null,
-          pills: ctx.station.commPills || DEFAULT_COMM_PILLS,
-        });
+    runSave(async () => {
+      const result = await toggleDone(taskId);
+      // Only prompt on a persisted completion, and only for station-linked tasks.
+      if (result?.ok && task && !wasDone) {
+        const ctx = resolveStationForTask(task);
+        if (ctx) {
+          const stations = ctx.deliverable.stations || [];
+          const idx = stations.findIndex((s) => s.id === ctx.station.id);
+          const doneCount = stations.filter((s) => s.done).length;
+          const nextStation = stations.slice(idx + 1).find((s) => !s.done) || null;
+          setCommPrompt({
+            taskId,
+            taskTitle: task.title || '(untitled)',
+            projectId: ctx.project.id,
+            deliverableName: ctx.deliverable.name || '',
+            stationId: ctx.station.id,
+            stationName: ctx.station.name || '',
+            stationDone: !!ctx.station.done,
+            stationIndex: idx,
+            stationCount: stations.length,
+            doneCount,
+            nextStationName: nextStation ? nextStation.name : null,
+            pills: ctx.station.commPills || DEFAULT_COMM_PILLS,
+          });
+        }
       }
-    }
+      return result || { ok: false, error: 'Could not update task' };
+    });
   };
 
   // Mark the prompt's station complete (mirrors StationsEditor.toggleDone).
@@ -368,6 +417,7 @@ export default function WorkspaceView({
       setCommPrompt(null);
       return;
     }
+    const previous = project.deliverables;
     const deliverables = (project.deliverables || []).map((d) => ({
       ...d,
       stations: (d.stations || []).map((s) =>
@@ -376,14 +426,20 @@ export default function WorkspaceView({
           : s
       ),
     }));
-    updateProject(project.id, { deliverables });
-    // Update the prompt in place so it reflects the just-advanced state
-    // (station now done) rather than closing — the user still sees the payoff.
-    setCommPrompt((prev) =>
-      prev
-        ? { ...prev, stationDone: true, doneCount: prev.doneCount + (prev.stationDone ? 0 : 1) }
-        : prev
-    );
+    runSave(async () => {
+      const result = await updateProject(project.id, { deliverables });
+      if (!result?.ok) patchProject(project.id, { deliverables: previous });
+      return result || { ok: false, error: 'Could not save' };
+    }).then((result) => {
+      if (result?.ok === false) return;
+      // Update the prompt in place so it reflects the just-advanced state
+      // (station now done) rather than closing — the user still sees the payoff.
+      setCommPrompt((prev) =>
+        prev
+          ? { ...prev, stationDone: true, doneCount: prev.doneCount + (prev.stationDone ? 0 : 1) }
+          : prev
+      );
+    });
   };
 
   // Append a comm to the prompt's station, then dismiss the prompt.
@@ -409,6 +465,7 @@ export default function WorkspaceView({
       // Only reply-needing comms carry an expected-back date.
       expectReplyBy: needsReply ? (expectBy || null) : null,
     };
+    const previous = project.deliverables;
     const deliverables = (project.deliverables || []).map((d) => ({
       ...d,
       stations: (d.stations || []).map((s) =>
@@ -417,8 +474,14 @@ export default function WorkspaceView({
           : s
       ),
     }));
-    updateProject(project.id, { deliverables });
-    setCommPrompt(null);
+    runSave(async () => {
+      const result = await updateProject(project.id, { deliverables });
+      if (!result?.ok) patchProject(project.id, { deliverables: previous });
+      return result || { ok: false, error: 'Could not save' };
+    }).then((result) => {
+      if (result?.ok === false) return;
+      setCommPrompt(null);
+    });
   };
 
   // Check whether the current workspace is the demo
@@ -495,19 +558,47 @@ export default function WorkspaceView({
     }
   }, [workspaceId]);
 
-  // Auto-open the focus box when a timer starts (until user closes it or it stops)
+  // Esc leaves Focus Mode. It does not discard the timer.
   useEffect(() => {
-    if (time.runningTimer && !focusOpen) {
-      // Only auto-open the very first time we see this timer
-      // (don't reopen if user closed it)
-    }
-  }, [time.runningTimer, focusOpen]);
+    if (!focusOpen) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      setFocusOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focusOpen]);
 
-  // Wrapper around startTimer that caches the title AND opens focus box
+  // Start (or switch) a timer. Focus Mode opens only when the user opted in.
+  // Switching auto-logs the running block inside useTime — surface that as
+  // an Undo toast. A failed log leaves the original timer running.
   const startTimer = async (task) => {
+    if (!task) return;
     onTimerStartedForTask?.(task);
-    await time.startTimer(task);
-    setFocusOpen(true);
+    const prev = time.runningTimer;
+    const switching = prev && prev.taskId !== task.id;
+    const result = switching ? await runSave(() => time.startTimer(task)) : await time.startTimer(task);
+    if (result?.switched && result.blockId) {
+      const prevTask = (allTasks || []).find((t) => t.id === (result.previousTaskId || prev?.taskId));
+      const place =
+        placeLabelForTask(prevTask, projects) ||
+        result.previousProject ||
+        result.previousTitle ||
+        prev?.projectName ||
+        prev?.taskTitle ||
+        'previous timer';
+      showToast(`Logged ${result.minutes || 1} min to ${place}`, {
+        onUndo: () => runSave(() => time.voidBlock(result.blockId)),
+      });
+    }
+    if (result?.startFailed) {
+      showToast(result.switched ? 'Couldn’t start the new timer' : 'Couldn’t start timer');
+      return;
+    }
+    if (!result || result.ok === false) return;
+    if (userPrefs.focusModeOnStart) setFocusOpen(true);
   };
 
   // Find the running task across all loaded tasks
@@ -644,11 +735,19 @@ export default function WorkspaceView({
         >
           ⚙
         </button>
+        <label style={styles.focusOpt} title="Opt in — Focus Mode is not opened on every timer start">
+          <input
+            type="checkbox"
+            checked={!!userPrefs.focusModeOnStart}
+            onChange={(e) => updateUserPrefs({ focusModeOnStart: e.target.checked })}
+          />
+          Focus on start
+        </label>
         {/* Open focus button when timer is running but focus box is hidden */}
         {time.runningTimer && !focusOpen && (
           <button
             onClick={() => setFocusOpen(true)}
-            style={styles.openFocusBtn}
+            style={{ ...styles.openFocusBtn, marginLeft: 0 }}
             title="Open focus mode"
           >
             🎯 Focus
@@ -659,6 +758,7 @@ export default function WorkspaceView({
           onClick={() => setNotepadOpen(!notepadOpen)}
           style={{
             ...styles.notepadToggle,
+            marginLeft: 0,
             ...(notepadOpen ? styles.notepadToggleActive : {}),
           }}
           title={notepadOpen ? 'Close floating notepad' : 'Open floating notepad'}
@@ -678,7 +778,8 @@ export default function WorkspaceView({
             todayPriority={priorityApi.today}
             onOpenPriorityModal={() => setPriorityModalOpen(true)}
             onJumpToTab={(t) => setTab(t)}
-            onJumpToProject={() => setTab('projects')}
+            onJumpToProject={openRecord}
+            onPatchProject={patchProject}
             onJumpToTrack={jumpToTrack}
             onToggleDone={handleToggleDone}
             onUpdateTask={updateTask}
@@ -759,12 +860,14 @@ export default function WorkspaceView({
             priorities={settings.priorities}
             statuses={settings.statuses}
             projectGroups={settings.projectGroups || []}
+            initialOpenId={projectOpenId}
+            initialOpenNonce={projectOpenNonce}
             onAdd={addProject}
             onUpdate={updateProject}
             onDelete={deleteProject}
             onAddTask={addTask}
             onUpdateTask={updateTask}
-            onToggleTask={toggleDone}
+            onToggleTask={handleToggleDone}
             onDeleteTask={deleteTask}
             onAssignTask={assignToMember}
           />
@@ -777,6 +880,8 @@ export default function WorkspaceView({
             members={members}
             workspaceId={workspaceId}
             initialProjectId={trackTargetProjectId}
+            initialFocusKey={trackFocusKey}
+            initialFocusNonce={trackFocusNonce}
             stationTemplates={settings.stationTemplates || []}
             categories={settings.categories}
             priorities={settings.priorities}
@@ -814,7 +919,7 @@ export default function WorkspaceView({
           <WaitingOnView
             projects={projects}
             tasks={allTasks}
-            onOpenProject={() => setTab('projects')}
+            onOpenProject={openRecord}
           />
         )}
         {tab === 'deliverables' && (
@@ -822,7 +927,7 @@ export default function WorkspaceView({
             projects={projects}
             tasks={allTasks}
             onUpdateProject={updateProject}
-            onOpenProject={() => setTab('projects')}
+            onOpenProject={openRecord}
           />
         )}
         {tab === 'notes' && (
@@ -1077,6 +1182,16 @@ const styles = {
     background: 'var(--color-background-secondary)',
     color: 'var(--color-text-tertiary)',
     borderRadius: 8,
+  },
+  focusOpt: {
+    marginLeft: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 12,
+    color: 'var(--color-text-secondary)',
+    whiteSpace: 'nowrap',
+    userSelect: 'none',
   },
   openFocusBtn: {
     marginLeft: 'auto',

@@ -37,7 +37,7 @@ export async function loadTasks(workspaceId) {
 
 export async function saveTask(task, workspaceId) {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user) return { ok: false, error: 'Not signed in' };
 
   const row = {
     id: task.id,
@@ -50,7 +50,11 @@ export async function saveTask(task, workspaceId) {
   };
 
   const { error } = await supabase.from('tasks').upsert(row, { onConflict: 'id' });
-  if (error) console.error('saveTask:', error);
+  if (error) {
+    console.error('saveTask:', error);
+    return { ok: false, error: error.message || 'Could not save task' };
+  }
+  return { ok: true };
 }
 
 export async function deleteTask(taskId) {
@@ -59,17 +63,22 @@ export async function deleteTask(taskId) {
 }
 
 export async function toggleTaskDone(taskId, done, doneAt) {
-  const { data: existing } = await supabase
+  const { data: existing, error: readError } = await supabase
     .from('tasks')
     .select('data')
     .eq('id', taskId)
     .maybeSingle();
 
-  const updatedData = existing?.data
-    ? { ...existing.data, done, doneAt }
-    : null;
+  if (readError) {
+    console.error('toggleTaskDone:', readError);
+    return { ok: false, error: readError.message || 'Could not read task' };
+  }
+  if (!existing) return { ok: false, error: 'Task not found' };
 
-  const { error } = await supabase
+  // Merge into the existing jsonb. Never write data: null — that wipes the task.
+  const updatedData = { ...(existing.data || {}), done, doneAt };
+
+  const { data, error } = await supabase
     .from('tasks')
     .update({
       done,
@@ -77,9 +86,17 @@ export async function toggleTaskDone(taskId, done, doneAt) {
       data: updatedData,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', taskId);
+    .eq('id', taskId)
+    .select('id');
 
-  if (error) console.error('toggleTaskDone:', error);
+  if (error) {
+    console.error('toggleTaskDone:', error);
+    return { ok: false, error: error.message || 'Could not update task' };
+  }
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'Task update did not persist' };
+  }
+  return { ok: true };
 }
 
 // ── Assignments ──────────────────────────────────────────────────────────────

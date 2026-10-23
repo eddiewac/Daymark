@@ -63,6 +63,8 @@ export default function WaitingOnView({ projects, tasks, onOpenProject }) {
             kind: 'deliverable',
             title: d.name || '(deliverable)',
             project: p,
+            deliverableId: d.id,
+            stationId: null,
             with: woName,
             date: d.waitingOnDate || '',
           });
@@ -76,6 +78,8 @@ export default function WaitingOnView({ projects, tasks, onOpenProject }) {
                 kind: 'comm',
                 title: `${d.name || '(deliverable)'} · ${st.name || 'station'}`,
                 project: p,
+                deliverableId: d.id,
+                stationId: st.id,
                 with: c.label || c.channel || '',
                 date: c.expectReplyBy || '',
               });
@@ -156,13 +160,20 @@ export default function WaitingOnView({ projects, tasks, onOpenProject }) {
                   return (
                     <button
                       key={it.id}
-                      onClick={() => it.project && onOpenProject(it.project.id)}
+                      onClick={() =>
+                        it.project &&
+                        onOpenProject({
+                          projectId: it.project.id,
+                          deliverableId: it.deliverableId,
+                          stationId: it.stationId,
+                        })
+                      }
                       style={{
                         ...styles.row,
                         borderLeft: `3px solid ${pColor}`,
                         cursor: it.project ? 'pointer' : 'default',
                       }}
-                      title={it.project ? 'Open project' : undefined}
+                      title={it.project ? (it.stationId ? 'Open station' : 'Open project') : undefined}
                     >
                       <span style={styles.rowIcon} title={meta.label}>{meta.icon}</span>
                       <span style={styles.rowMain}>

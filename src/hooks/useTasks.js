@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase, getCurrentUser } from '../lib/supabase.js';
 import {
   loadTasks,
@@ -16,6 +16,10 @@ export function useTasks(workspaceId, workspaceName) {
   const [tasks, setTasks] = useState([]);
   const [assignedTasks, setAssignedTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const tasksRef = useRef(tasks);
+  const assignedRef = useRef(assignedTasks);
+  tasksRef.current = tasks;
+  assignedRef.current = assignedTasks;
 
   // Initial load
   useEffect(() => {
@@ -258,20 +262,35 @@ export function useTasks(workspaceId, workspaceName) {
   const toggleDone = useCallback(
     async (taskId) => {
       const task =
-        tasks.find((t) => t.id === taskId) || assignedTasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const nd = !task.done;
+        tasksRef.current.find((t) => t.id === taskId) ||
+        assignedRef.current.find((t) => t.id === taskId);
+      if (!task) return { ok: false, error: 'Task not found' };
+      const prevDone = !!task.done;
+      const prevDoneAt = task.doneAt || null;
+      const nd = !prevDone;
       const doneAt = nd ? new Date().toISOString() : null;
 
-      // Optimistic local update
-      setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, done: nd, doneAt } : t))
-      );
-      setAssignedTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, done: nd, doneAt } : t))
-      );
+      const apply = (done, at) => {
+        const nextTasks = tasksRef.current.map((t) =>
+          t.id === taskId ? { ...t, done, doneAt: at } : t
+        );
+        const nextAssigned = assignedRef.current.map((t) =>
+          t.id === taskId ? { ...t, done, doneAt: at } : t
+        );
+        tasksRef.current = nextTasks;
+        assignedRef.current = nextAssigned;
+        setTasks(nextTasks);
+        setAssignedTasks(nextAssigned);
+      };
 
-      await toggleTaskDoneDb(taskId, nd, doneAt);
+      // Optimistic local update — rolled back if the write does not persist.
+      apply(nd, doneAt);
+
+      const result = await toggleTaskDoneDb(taskId, nd, doneAt);
+      if (!result?.ok) {
+        apply(prevDone, prevDoneAt);
+        return result || { ok: false, error: 'Could not update task' };
+      }
 
       // If we just COMPLETED a recurring task, spawn the next instance.
       // We don't spawn on un-complete (toggling back to open shouldn't duplicate).
@@ -308,15 +327,23 @@ export function useTasks(workspaceId, workspaceName) {
             outOfScopeHours: null,
             outOfScopeNotes: '',
           };
-          setTasks((prev) => [next, ...prev]);
-          await saveTask(next, workspaceId);
+          const withNext = [next, ...tasksRef.current];
+          tasksRef.current = withNext;
+          setTasks(withNext);
+          const spawned = await saveTask(next, workspaceId);
+          if (!spawned?.ok) {
+            const without = tasksRef.current.filter((t) => t.id !== next.id);
+            tasksRef.current = without;
+            setTasks(without);
+          }
           if (next.assignedToId && workspaceId) {
             await assignTaskDb(next, next.assignedToId, workspaceId, workspaceName);
           }
         }
       }
+      return { ok: true };
     },
-    [tasks, assignedTasks, workspaceId, workspaceName]
+    [workspaceId, workspaceName]
   );
 
   const assignToMember = useCallback(

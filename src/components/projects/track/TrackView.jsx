@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { projectColor } from '../../../lib/constants.js';
 import { uid } from '../../../lib/utils.js';
 import StationFocus from './StationFocus.jsx';
@@ -87,8 +87,13 @@ export default function TrackView({
   onDeleteTask,
   onAssignTask,
   onClose,
+  initialFocusKey = null,
+  initialFocusNonce = 0,
 }) {
-  const [focusKey, setFocusKey] = useState(null);
+  const [focusKey, setFocusKey] = useState(initialFocusKey);
+  useEffect(() => {
+    if (initialFocusKey) setFocusKey(initialFocusKey);
+  }, [initialFocusKey, initialFocusNonce]);
   const [seedingForId, setSeedingForId] = useState(null);
   const [duplicating, setDuplicating] = useState(null); // null | { delivId, taskCount }
   // Quick "add a task named after this station" from the train. Holds the

@@ -16,13 +16,22 @@ export function todayStr() {
   return `${y}-${m}-${day}`;
 }
 
-// YYYY-MM-DD for a given Date in local time
+// YYYY-MM-DD for a given Date in local time (Brisbane-correct when the
+// browser timezone is local — never slice a UTC ISO string for a calendar day).
 export function localDateStr(date) {
   const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+// HH:MM for a given Date in local time.
+export function localTimeStr(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 // Days difference (today - dueDate). Negative = overdue.

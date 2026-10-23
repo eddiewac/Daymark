@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ProjectCard from './ProjectCard.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import GanttView from './GanttView.jsx';
@@ -19,6 +19,8 @@ export default function ProjectsPanel({
   priorities,
   statuses,
   projectGroups,
+  initialOpenId,
+  initialOpenNonce,
   onAdd,
   onUpdate,
   onDelete,
@@ -28,7 +30,12 @@ export default function ProjectsPanel({
   onDeleteTask,
   onAssignTask,
 }) {
-  const [activeId, setActiveId] = useState(null);
+  const [activeId, setActiveId] = useState(initialOpenId || null);
+  // Jump-to-project from Today / Waiting / Deliverables. Nonce so opening the
+  // same project twice still focuses it after the user closed the detail.
+  useEffect(() => {
+    if (initialOpenId) setActiveId(initialOpenId);
+  }, [initialOpenId, initialOpenNonce]);
   const [trackingId, setTrackingId] = useState(null); // when set, full-screen track mode
   const [view, setView] = useState('grid'); // grid | gantt | track | tracker | forecast
   const [search, setSearch] = useState('');

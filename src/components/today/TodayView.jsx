@@ -73,6 +73,8 @@ export default function TodayView({
   onStopTimer,
   onSeedDemo,
   seedingDemo,
+  blocks,
+  onOpenItem,
 }) {
   const today = todayStr();
   const { runSave, showToast } = useSaveStatus();
@@ -80,6 +82,8 @@ export default function TodayView({
   const [closeDayOpen, setCloseDayOpen] = useState(false);
   // Which waiting item currently has its chase popover open (by key).
   const [chaseOpen, setChaseOpen] = useState(null);
+  const [waitingOpen, setWaitingOpen] = useState(true);
+  const [blockingOpen, setBlockingOpen] = useState(true);
 
   // ── Priority ids (pinned in the Do column; excluded from the lists below so
   //    they aren't shown twice) ───────────────────────────────────────────────
@@ -106,13 +110,13 @@ export default function TodayView({
   const overdueTasks = useMemo(
     () =>
       (tasks || [])
-        .filter((t) => !t.done && t.dueDate && t.dueDate < today && !priorityIds.has(t.id))
+        .filter((t) => !t.done && !t.isFollowUp && t.dueDate && t.dueDate < today && !priorityIds.has(t.id))
         .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')),
     [tasks, today, priorityIds]
   );
 
   const dueTodayTasks = useMemo(
-    () => (tasks || []).filter((t) => !t.done && t.dueDate === today && !priorityIds.has(t.id)),
+    () => (tasks || []).filter((t) => !t.done && !t.isFollowUp && t.dueDate === today && !priorityIds.has(t.id)),
     [tasks, today, priorityIds]
   );
 
@@ -158,8 +162,25 @@ export default function TodayView({
         }
       }
     }
+    // Follow-ups created by Capture triage (expect-back lives on dueDate).
+    for (const t of tasks || []) {
+      if (!t.isFollowUp || t.done || !t.dueDate) continue;
+      const project =
+        (projects || []).find((p) => p.id === t.projectId || (t.project && p.name === t.project)) ||
+        null;
+      items.push({
+        key: `fu-${t.id}`,
+        type: 'followup',
+        project: project || { id: t.projectId || '', name: t.project || '' },
+        taskId: t.id,
+        who: null,
+        date: t.dueDate,
+        label: t.title || '(follow-up)',
+        sub: 'follow-up · expect-back',
+      });
+    }
     return items;
-  }, [projects]);
+  }, [projects, tasks]);
 
   const byDate = (a, b) => (a.date || '').localeCompare(b.date || '');
   const wOverdue = useMemo(() => waitingItems.filter((i) => i.date < today).sort(byDate), [waitingItems, today]);
@@ -196,9 +217,60 @@ export default function TodayView({
     return runSave(attempt);
   };
 
+  const yourHoursToday = useMemo(() => {
+    return (blocks || [])
+      .filter((b) => b.date === today && !b.voided)
+      .reduce((s, b) => s + (Number(b.hours) || 0), 0);
+  }, [blocks, today]);
+
+  const budgetHours = useMemo(() => {
+    const ids = new Set();
+    const list = [];
+    const push = (t) => {
+      if (t && !ids.has(t.id)) {
+        ids.add(t.id);
+        list.push(t);
+      }
+    };
+    push(primaryTask);
+    stretchTasks.forEach(push);
+    overdueTasks.forEach(push);
+    dueTodayTasks.forEach(push);
+    return list.reduce((s, t) => s + (Number(t.estimate) || 0), 0);
+  }, [primaryTask, stretchTasks, overdueTasks, dueTodayTasks]);
+
+  // What's blocking = exceptions only (overdue work, overdue waits, late stations).
+  const blockingTasks = useMemo(
+    () =>
+      (tasks || []).filter((t) => !t.done && !t.isFollowUp && t.dueDate && t.dueDate < today),
+    [tasks, today]
+  );
+  const lateStations = useMemo(() => {
+    const out = [];
+    for (const p of projects || []) {
+      for (const d of p.deliverables || []) {
+        for (const s of d.stations || []) {
+          if (s.done || !s.targetDate || s.targetDate >= today) continue;
+          out.push({ project: p, deliverable: d, station: s });
+        }
+      }
+    }
+    return out;
+  }, [projects, today]);
+  const blockingCount = blockingTasks.length + wOverdue.length + lateStations.length;
+
   // ── Chase handler — writes the new expected-back date to the right place ────
   const handleChase = (item, newDate) => {
-    if (!onUpdateProject || !newDate) {
+    if (!newDate) {
+      setChaseOpen(null);
+      return;
+    }
+    if (item.type === 'followup') {
+      onUpdateTask && onUpdateTask(item.taskId, { dueDate: newDate });
+      setChaseOpen(null);
+      return;
+    }
+    if (!onUpdateProject) {
       setChaseOpen(null);
       return;
     }
@@ -239,6 +311,11 @@ export default function TodayView({
   //    showing here AND on the project card. The row leaves immediately; the
   //    write has to succeed or the row comes back with Retry. ────────────────
   const handleResolve = (item) => {
+    if (item.type === 'followup') {
+      onToggleDone && onToggleDone(item.taskId);
+      setChaseOpen((k) => (k === item.key ? null : k));
+      return;
+    }
     if (!onUpdateProject) return;
     const proj = (projects || []).find((p) => p.id === item.project.id);
     if (!proj) return;
@@ -303,6 +380,19 @@ export default function TodayView({
     runSave(attempt);
   };
 
+  const openWaiting = (item) => {
+    if (item.type === 'comm' && item.station && onOpenItem) {
+      onOpenItem({
+        kind: 'station',
+        projectId: item.project.id,
+        deliverableId: item.deliverable.id,
+        stationId: item.station.id,
+      });
+      return;
+    }
+    if (item.project?.id) onJumpToProject(item.project.id);
+  };
+
   const draftChaseEmail = (item) => {
     const what = item.type === 'deliverable' ? item.deliverable.name : item.label;
     const who = item.who ? ` ${item.who}` : '';
@@ -333,6 +423,12 @@ export default function TodayView({
                   {doCount} to do · {waitCount} waiting
                 </span>
               )}
+              {(budgetHours > 0 || yourHoursToday > 0) && (
+                <span style={styles.countLine} title="Budget is the estimate on today's tasks. Hours are yours only.">
+                  {' · '}
+                  Budget {budgetHours.toFixed(1)}h · your hours {yourHoursToday.toFixed(1)}h
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -352,7 +448,7 @@ export default function TodayView({
             onSeedDemo={onSeedDemo}
             seedingDemo={seedingDemo}
           />
-        ) : hasNothing && !primaryTask ? (
+        ) : hasNothing && blockingCount === 0 && !primaryTask ? (
           <div style={styles.allClear}>
             <div style={styles.allClearTitle}>👌 All clear</div>
             <div style={styles.allClearText}>
@@ -387,6 +483,7 @@ export default function TodayView({
                       onStartTimer={onStartTimer}
                       onStopTimer={onStopTimer}
                       onJumpToTrack={onJumpToTrack}
+                      onOpenItem={onOpenItem}
                       isPrimary
                     />
                     {stretchTasks.map((t) => (
@@ -399,6 +496,7 @@ export default function TodayView({
                         onStartTimer={onStartTimer}
                         onStopTimer={onStopTimer}
                         onJumpToTrack={onJumpToTrack}
+                        onOpenItem={onOpenItem}
                       />
                     ))}
                   </>
@@ -420,6 +518,7 @@ export default function TodayView({
                         onStartTimer={onStartTimer}
                         onStopTimer={onStopTimer}
                         onJumpToTrack={onJumpToTrack}
+                        onOpenItem={onOpenItem}
                         showDate
                       />
                     ))}
@@ -443,6 +542,7 @@ export default function TodayView({
                         onStartTimer={onStartTimer}
                         onStopTimer={onStopTimer}
                         onJumpToTrack={onJumpToTrack}
+                        onOpenItem={onOpenItem}
                       />
                     ))}
                   </>
@@ -455,14 +555,20 @@ export default function TodayView({
 
               {/* ── WAITING ────────────────────────────────────────────── */}
               <section style={styles.bucket}>
-                <div style={styles.bucketHead}>
+                <button
+                  type="button"
+                  style={styles.bucketHeadBtn}
+                  onClick={() => setWaitingOpen((v) => !v)}
+                  aria-expanded={waitingOpen}
+                >
                   <span style={styles.bucketIcon}>⏳</span>
                   <h2 style={styles.bucketTitle}>Waiting on</h2>
                   <span style={styles.bucketCount}>{waitCount}</span>
-                </div>
+                  <span style={styles.foldMark}>{waitingOpen ? '▾' : '▸'}</span>
+                </button>
 
-                {wOverdue.length > 0 && <SubHead tone="red" label="Overdue" />}
-                {wOverdue.map((item) => (
+                {waitingOpen && wOverdue.length > 0 && <SubHead tone="red" label="Overdue" />}
+                {waitingOpen && wOverdue.map((item) => (
                   <WaitingRow
                     key={item.key}
                     item={item}
@@ -473,18 +579,12 @@ export default function TodayView({
                     onChase={handleChase}
                     onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
-                    onOpen={() =>
-                      onJumpToProject({
-                        projectId: item.project.id,
-                        deliverableId: item.deliverable?.id,
-                        stationId: item.station?.id || null,
-                      })
-                    }
+                    onOpen={() => openWaiting(item)}
                   />
                 ))}
 
-                {wDueToday.length > 0 && <SubHead tone="amber" label="Due back today" />}
-                {wDueToday.map((item) => (
+                {waitingOpen && wDueToday.length > 0 && <SubHead tone="amber" label="Due back today" />}
+                {waitingOpen && wDueToday.map((item) => (
                   <WaitingRow
                     key={item.key}
                     item={item}
@@ -495,18 +595,12 @@ export default function TodayView({
                     onChase={handleChase}
                     onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
-                    onOpen={() =>
-                      onJumpToProject({
-                        projectId: item.project.id,
-                        deliverableId: item.deliverable?.id,
-                        stationId: item.station?.id || null,
-                      })
-                    }
+                    onOpen={() => openWaiting(item)}
                   />
                 ))}
 
-                {wLater.length > 0 && <SubHead tone="muted" label="Expected later" />}
-                {wLater.map((item) => (
+                {waitingOpen && wLater.length > 0 && <SubHead tone="muted" label="Expected later" />}
+                {waitingOpen && wLater.map((item) => (
                   <WaitingRow
                     key={item.key}
                     item={item}
@@ -517,21 +611,77 @@ export default function TodayView({
                     onChase={handleChase}
                     onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
-                    onOpen={() =>
-                      onJumpToProject({
-                        projectId: item.project.id,
-                        deliverableId: item.deliverable?.id,
-                        stationId: item.station?.id || null,
-                      })
-                    }
+                    onOpen={() => openWaiting(item)}
                   />
                 ))}
 
-                {waitCount === 0 && (
+                {waitingOpen && waitCount === 0 && (
                   <div style={styles.colEmpty}>Nothing out with anyone right now.</div>
                 )}
               </section>
             </div>
+
+            <section style={styles.blocking}>
+              <button
+                type="button"
+                style={styles.bucketHeadBtn}
+                onClick={() => setBlockingOpen((v) => !v)}
+                aria-expanded={blockingOpen}
+              >
+                <span style={styles.bucketIcon}>⚑</span>
+                <h2 style={styles.bucketTitle}>What’s blocking</h2>
+                <span style={styles.bucketCount}>{blockingCount}</span>
+                <span style={styles.foldHint}>exceptions only</span>
+                <span style={styles.foldMark}>{blockingOpen ? '▾' : '▸'}</span>
+              </button>
+              {blockingOpen && blockingCount === 0 && (
+                <div style={styles.colEmpty}>No exceptions. Overdue work, overdue waits, and late stations show up here.</div>
+              )}
+              {blockingOpen && blockingTasks.slice(0, 8).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  style={styles.blockRow}
+                  onClick={() => onOpenItem && onOpenItem({ kind: 'task', task: t })}
+                >
+                  <span style={styles.blockKind}>Overdue</span>
+                  <span style={styles.blockTitle}>{t.title || '(untitled)'}</span>
+                  {t.project && <span style={styles.blockMeta}>{t.project}</span>}
+                </button>
+              ))}
+              {blockingOpen && wOverdue.slice(0, 8).map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  style={styles.blockRow}
+                  onClick={() => openWaiting(item)}
+                >
+                  <span style={styles.blockKind}>Wait</span>
+                  <span style={styles.blockTitle}>{item.label}</span>
+                  <span style={styles.blockMeta}>{item.date}</span>
+                </button>
+              ))}
+              {blockingOpen && lateStations.slice(0, 8).map((row) => (
+                <button
+                  key={row.station.id}
+                  type="button"
+                  style={styles.blockRow}
+                  onClick={() =>
+                    onOpenItem &&
+                    onOpenItem({
+                      kind: 'station',
+                      projectId: row.project.id,
+                      deliverableId: row.deliverable.id,
+                      stationId: row.station.id,
+                    })
+                  }
+                >
+                  <span style={styles.blockKind}>Late</span>
+                  <span style={styles.blockTitle}>{row.station.name || 'Station'}</span>
+                  <span style={styles.blockMeta}>{row.project.name}</span>
+                </button>
+              ))}
+            </section>
 
             {/* Awareness strip — upcoming congresses only. Below the fold
                 deliberately: not a daily action, just a date not to forget. */}
@@ -678,7 +828,7 @@ function ChasePopover({ item, onChase, onDraftEmail }) {
 }
 
 // ── Priority / task mini rows ────────────────────────────────────────────────
-function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, onStartTimer, onStopTimer, onJumpToTrack }) {
+function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, onStartTimer, onStopTimer, onJumpToTrack, onOpenItem }) {
   const projColor = projectColor(task.project, projects);
   return (
     <div style={{ ...styles.miniRow, borderLeft: `3px solid ${projColor}` }}>
@@ -716,9 +866,14 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
           </span>
         );
       })()}
-      {task.stationId && onJumpToTrack && (
-        <button onClick={() => onJumpToTrack(task)} style={styles.trackJumpBtn} title="Open in Track">
-          🚂
+      {onOpenItem && (
+        <button
+          type="button"
+          onClick={() => onOpenItem({ kind: 'task', task })}
+          style={styles.trackJumpBtn}
+          title={task.stationId ? 'Open station' : 'Open'}
+        >
+          Open
         </button>
       )}
       <TimerButton task={task} runningTimer={runningTimer} onStartTimer={onStartTimer} onStopTimer={onStopTimer} />
@@ -726,7 +881,7 @@ function PriorityRow({ task, projects, onToggleDone, isPrimary, runningTimer, on
   );
 }
 
-function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onStartTimer, onStopTimer, onJumpToTrack }) {
+function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onStartTimer, onStopTimer, onJumpToTrack, onOpenItem }) {
   const projColor = projectColor(task.project, projects);
   return (
     <div style={{ ...styles.miniRow, borderLeft: `3px solid ${projColor}` }}>
@@ -766,9 +921,14 @@ function TaskRowMini({ task, projects, onToggleDone, showDate, runningTimer, onS
           </span>
         );
       })()}
-      {task.stationId && onJumpToTrack && (
-        <button onClick={() => onJumpToTrack(task)} style={styles.trackJumpBtn} title="Open in Track">
-          🚂
+      {onOpenItem && (
+        <button
+          type="button"
+          onClick={() => onOpenItem({ kind: 'task', task })}
+          style={styles.trackJumpBtn}
+          title={task.stationId ? 'Open station' : 'Open'}
+        >
+          Open
         </button>
       )}
       <TimerButton task={task} runningTimer={runningTimer} onStartTimer={onStartTimer} onStopTimer={onStopTimer} />
@@ -1104,6 +1264,57 @@ const styles = {
     borderRadius: 10,
     padding: '1px 8px',
   },
+  bucketHeadBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '12px 14px',
+    border: 'none',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+    background: 'transparent',
+    width: '100%',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  foldMark: { fontSize: 11, color: 'var(--color-text-tertiary)' },
+  foldHint: { fontSize: 11, color: 'var(--color-text-tertiary)', fontWeight: 500 },
+  blocking: {
+    background: 'var(--bg-surface)',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  blockRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    padding: '8px 14px',
+    border: 'none',
+    borderTop: '0.5px solid var(--color-border-tertiary)',
+    background: 'transparent',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  blockKind: {
+    fontSize: 10,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    color: '#e24b4a',
+    width: 58,
+    flexShrink: 0,
+  },
+  blockTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    color: 'var(--color-text-primary)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  blockMeta: { fontSize: 11, color: 'var(--color-text-secondary)', flexShrink: 0 },
   colEmpty: {
     fontSize: 12,
     color: 'var(--color-text-tertiary)',

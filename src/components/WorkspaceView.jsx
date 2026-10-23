@@ -31,6 +31,7 @@ import PriorityModal from './priority/PriorityModal.jsx';
 import QuickCapture from './QuickCapture.jsx';
 import HelpPanel from './HelpPanel.jsx';
 import TodayView from './today/TodayView.jsx';
+import StationWorkbench from './projects/track/StationWorkbench.jsx';
 import FocusBox from './FocusBox.jsx';
 import QuickCommPrompt from './QuickCommPrompt.jsx';
 import { DEFAULT_COMM_PILLS } from './projects/CommsTab.jsx';
@@ -57,22 +58,27 @@ const TAB_LABELS = {
   settings: 'Settings',
 };
 
+// Five doors: Today, Projects, Plan, Track, Record.
+// Projects and Record open on click (not hover-only). Plan and Track are
+// single destinations. Record is Timesheet + Notes; Export stays in that menu
+// so it is not stranded. The floating notepad is not a door.
 const NAV = [
   { type: 'tab', key: 'today' },
   {
     type: 'group',
-    id: 'work',
-    label: 'Work',
+    id: 'projects',
+    label: 'Projects',
     color: '#185FA5',
-    // First key is the default landing when the group header is clicked.
-    keys: ['projects', 'tasks', 'plan', 'track', 'resource', 'status', 'waiting', 'deliverables'],
+    keys: ['projects', 'tasks', 'waiting', 'deliverables', 'status', 'resource'],
   },
+  { type: 'tab', key: 'plan' },
+  { type: 'tab', key: 'track' },
   {
     type: 'group',
     id: 'record',
     label: 'Record',
     color: '#0F6E56',
-    keys: ['time', 'notes', 'notepad', 'export'],
+    keys: ['time', 'notes', 'export'],
   },
   { type: 'tab', key: 'congresses' },
 ];
@@ -123,14 +129,11 @@ export default function WorkspaceView({
   // can remember different tabs (e.g. you might be on Tasks in one workspace
   // but Status in another).
   const tabStorageKey = `daymark-tab:${workspaceId || 'personal'}`;
-  const [tab, setTab] = useState(() => {
-    try {
-      const stored = localStorage.getItem(tabStorageKey);
-      // Validate that the stored value is one of the known tabs
-      if (stored && ALL_TAB_KEYS.includes(stored)) return stored;
-    } catch {}
-    return 'tasks';
-  });
+  // First land after login is Today in the last workspace. Tab memory was
+  // restoring Settings (and other tabs) and skipping the desk. The tab is
+  // still remembered during the session for group menus, but a fresh mount
+  // — login, refresh, or switching workspace — opens Today.
+  const [tab, setTab] = useState('today');
 
   // Save the tab whenever it changes
   useEffect(() => {
@@ -295,19 +298,28 @@ export default function WorkspaceView({
 
   // Floating notepad: a docked panel that stays open while navigating other
   // tabs. Its open-state is persisted so it survives reloads and tab changes.
+  // v2 key: the old flag defaulted closed, so live only showed the nav
+  // button. This ship restores the float for everyone; closing it sticks.
   const [notepadOpen, setNotepadOpenState] = useState(() => {
     try {
-      return localStorage.getItem('daymark-notepad-floating') === '1';
+      return localStorage.getItem('daymark-notepad-floating-v2') !== '0';
     } catch {
-      return false;
+      return true;
     }
   });
   const setNotepadOpen = (v) => {
     setNotepadOpenState(v);
     try {
-      localStorage.setItem('daymark-notepad-floating', v ? '1' : '0');
+      localStorage.setItem('daymark-notepad-floating-v2', v ? '1' : '0');
     } catch {}
   };
+  const floatVisible = notepadOpen && tab !== 'notepad';
+  if (typeof window !== 'undefined') window.__daymarkNotepadOpen = floatVisible;
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('daymark-notepad-visibility', { detail: { open: floatVisible } })
+    );
+  }, [floatVisible]);
 
   // ── Jump to Track ─────────────────────────────────────────────────────────
   // A task can link directly through to its project's Track view. When a task
@@ -319,9 +331,28 @@ export default function WorkspaceView({
   const [projectOpenId, setProjectOpenId] = useState(null);
   const [projectOpenNonce, setProjectOpenNonce] = useState(0);
   const openNonce = useRef(0);
+  const [focusProjectId, setFocusProjectId] = useState(null);
+  const [stationOverlay, setStationOverlay] = useState(null);
+  const [switchToast, setSwitchToast] = useState(null);
 
-  // Open a project, and a station workbench when we have both ids.
-  // Accepts a project id string (older callers) or { projectId, deliverableId, stationId }.
+  const contextKey = `daymark-context-project:${workspaceId || 'personal'}`;
+  const [contextProjectId, setContextProjectIdState] = useState(() => {
+    try {
+      return localStorage.getItem(contextKey) || '';
+    } catch {
+      return '';
+    }
+  });
+  const setContextProjectId = (id) => {
+    const next = id || '';
+    setContextProjectIdState(next);
+    try {
+      localStorage.setItem(contextKey, next);
+    } catch {}
+  };
+
+  // Open a project by id, or the station workbench when both ids are present.
+  // Accepts a project id string or { projectId, deliverableId, stationId }.
   const openRecord = (target) => {
     const spec = normalizeOpenTarget(target);
     if (!spec?.projectId) {
@@ -329,17 +360,22 @@ export default function WorkspaceView({
       return;
     }
     const nonce = ++openNonce.current;
+    setFocusProjectId(spec.projectId);
+    setContextProjectId(spec.projectId);
     if (spec.stationId && spec.deliverableId) {
-      setTrackTargetProjectId(spec.projectId);
-      setTrackFocusKey(`${spec.deliverableId}:${spec.stationId}`);
-      setTrackFocusNonce(nonce);
-      setTab('track');
+      setStationOverlay({
+        projectId: spec.projectId,
+        deliverableId: spec.deliverableId,
+        stationId: spec.stationId,
+      });
       return;
     }
     setProjectOpenId(spec.projectId);
     setProjectOpenNonce(nonce);
     setTab('projects');
   };
+
+  const openProjectById = (projectId) => openRecord(projectId);
 
   const jumpToTrack = (task) => {
     if (!task) return;
@@ -572,8 +608,8 @@ export default function WorkspaceView({
   }, [focusOpen]);
 
   // Start (or switch) a timer. Focus Mode opens only when the user opted in.
-  // Switching auto-logs the running block inside useTime — surface that as
-  // an Undo toast. A failed log leaves the original timer running.
+  // Switching auto-logs the running block inside useTime. The toast names that
+  // logged task (and its station), never the task just started.
   const startTimer = async (task) => {
     if (!task) return;
     onTimerStartedForTask?.(task);
@@ -582,13 +618,11 @@ export default function WorkspaceView({
     const result = switching ? await runSave(() => time.startTimer(task)) : await time.startTimer(task);
     if (result?.switched && result.blockId) {
       const prevTask = (allTasks || []).find((t) => t.id === (result.previousTaskId || prev?.taskId));
+      const ctx = prevTask ? resolveStationForTask(prevTask) : null;
+      const taskName = prevTask?.title || result.previousTitle || prev?.taskTitle || 'previous task';
+      const stationName = ctx?.station?.name || '';
       const place =
-        placeLabelForTask(prevTask, projects) ||
-        result.previousProject ||
-        result.previousTitle ||
-        prev?.projectName ||
-        prev?.taskTitle ||
-        'previous timer';
+        stationName && stationName !== taskName ? `${taskName} · ${stationName}` : taskName;
       showToast(`Logged ${result.minutes || 1} min to ${place}`, {
         onUndo: () => runSave(() => time.voidBlock(result.blockId)),
       });
@@ -600,6 +634,55 @@ export default function WorkspaceView({
     if (!result || result.ok === false) return;
     if (userPrefs.focusModeOnStart) setFocusOpen(true);
   };
+
+  const undoSwitchLog = async () => {
+    if (!switchToast?.blockId) return;
+    const id = switchToast.blockId;
+    setSwitchToast(null);
+    await time.voidBlock(id);
+  };
+
+  const openDoItem = (item) => {
+    if (!item) return;
+    if (item.kind === 'station') {
+      setContextProjectId(item.projectId);
+      setStationOverlay({
+        projectId: item.projectId,
+        deliverableId: item.deliverableId,
+        stationId: item.stationId,
+      });
+      return;
+    }
+    const task = item.task || item;
+    const ctx = resolveStationForTask(task);
+    if (ctx) {
+      setContextProjectId(ctx.project.id);
+      setStationOverlay({
+        projectId: ctx.project.id,
+        deliverableId: ctx.deliverable.id,
+        stationId: ctx.station.id,
+      });
+      return;
+    }
+    const proj = (projects || []).find(
+      (p) => p.id === task.projectId || (task.project && p.name === task.project)
+    );
+    if (proj) openProjectById(proj.id);
+  };
+
+  const overlayProject = stationOverlay
+    ? (projects || []).find((p) => p.id === stationOverlay.projectId)
+    : null;
+  let overlayDeliverable = null;
+  let overlayStation = null;
+  if (overlayProject && stationOverlay) {
+    overlayDeliverable = (overlayProject.deliverables || []).find(
+      (d) => d.id === stationOverlay.deliverableId
+    );
+    overlayStation = (overlayDeliverable?.stations || []).find(
+      (s) => s.id === stationOverlay.stationId
+    );
+  }
 
   // Find the running task across all loaded tasks
   const runningTask =
@@ -663,17 +746,13 @@ export default function WorkspaceView({
             >
               <button
                 onClick={(e) => {
-                  // Tap/click the header: on touch (no hover) first tap opens;
-                  // otherwise it lands on the group's default (first) tab.
-                  const noHover =
-                    typeof window !== 'undefined' &&
-                    window.matchMedia &&
-                    window.matchMedia('(hover: none)').matches;
-                  if (noHover && !isOpen) {
-                    openFlyout(node.id, e.currentTarget);
-                  } else {
+                  // Click opens the menu on every pointer, not only touch.
+                  // A second click on the open door lands on its default tab.
+                  if (isOpen) {
                     setTab(groupLandingTab(node));
                     setOpenGroup(null);
+                  } else {
+                    openFlyout(node.id, e.currentTarget);
                   }
                 }}
                 style={{
@@ -780,6 +859,8 @@ export default function WorkspaceView({
             onJumpToTab={(t) => setTab(t)}
             onJumpToProject={openRecord}
             onPatchProject={patchProject}
+            blocks={time.blocks}
+            onOpenItem={openDoItem}
             onJumpToTrack={jumpToTrack}
             onToggleDone={handleToggleDone}
             onUpdateTask={updateTask}
@@ -865,6 +946,8 @@ export default function WorkspaceView({
             onAdd={addProject}
             onUpdate={updateProject}
             onDelete={deleteProject}
+            focusProjectId={focusProjectId}
+            onContextProject={setContextProjectId}
             onAddTask={addTask}
             onUpdateTask={updateTask}
             onToggleTask={handleToggleDone}
@@ -882,6 +965,7 @@ export default function WorkspaceView({
             initialProjectId={trackTargetProjectId}
             initialFocusKey={trackFocusKey}
             initialFocusNonce={trackFocusNonce}
+            onContextProject={setContextProjectId}
             stationTemplates={settings.stationTemplates || []}
             categories={settings.categories}
             priorities={settings.priorities}
@@ -1007,11 +1091,12 @@ export default function WorkspaceView({
       {/* Floating notepad — docked beside the main content, stays open
           across tab changes. Hidden on the Notepad tab itself, where the
           full-screen notepad is already shown. */}
-      {notepadOpen && tab !== 'notepad' && (
+      {floatVisible && (
         <FloatingNotepad
           projects={projects}
           tasks={allTasks}
           workspaceId={workspaceId}
+          contextProjectId={contextProjectId}
           onAddTask={addTask}
           onAddProject={addProject}
           onAddNote={addNote}
@@ -1076,6 +1161,52 @@ export default function WorkspaceView({
           onCompleteStation={completeStationFromPrompt}
           onPick={logCommFromPrompt}
           onDismiss={() => setCommPrompt(null)}
+          placement={floatVisible ? 'top' : 'bottom'}
+        />
+      )}
+
+      {switchToast && (
+        <div style={styles.switchToast} role="status">
+          <div>{switchToast.main}</div>
+          <button type="button" onClick={undoSwitchLog} style={styles.switchUndo}>
+            Undo
+          </button>
+        </div>
+      )}
+
+      {overlayProject && overlayDeliverable && overlayStation && (
+        <StationWorkbench
+          project={overlayProject}
+          deliverable={overlayDeliverable}
+          station={overlayStation}
+          allProjects={projects}
+          tasks={allTasks}
+          members={members}
+          workspaceId={workspaceId}
+          categories={settings.categories}
+          priorities={settings.priorities}
+          statuses={settings.statuses}
+          onUpdateStation={(updatedStation) => {
+            const deliverables = (overlayProject.deliverables || []).map((d) => {
+              if (d.id !== overlayDeliverable.id) return d;
+              return {
+                ...d,
+                stations: (d.stations || []).map((s) =>
+                  s.id === updatedStation.id ? updatedStation : s
+                ),
+              };
+            });
+            updateProject(overlayProject.id, { deliverables });
+          }}
+          onSelectStation={(stationId) =>
+            setStationOverlay((cur) => (cur ? { ...cur, stationId } : cur))
+          }
+          onAddTask={addTask}
+          onUpdateTask={updateTask}
+          onToggleTask={handleToggleDone}
+          onDeleteTask={deleteTask}
+          onAssignTask={assignToMember}
+          onClose={() => setStationOverlay(null)}
         />
       )}
     </div>
@@ -1220,6 +1351,38 @@ const styles = {
     background: 'var(--accent-soft)',
     color: 'var(--accent)',
     border: '0.5px solid var(--accent)',
+  },
+  switchToast: {
+    position: 'fixed',
+    top: 64,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 2000,
+    background: '#111827',
+    color: '#f9fafb',
+    padding: '10px 14px',
+    borderRadius: 8,
+    fontSize: 13,
+    display: 'flex',
+    gap: 12,
+    alignItems: 'center',
+    boxShadow: '0 8px 24px rgba(0,0,0,.18)',
+    maxWidth: 460,
+  },
+  switchToastSub: {
+    fontSize: 11.5,
+    color: '#c4b5fd',
+    marginTop: 2,
+  },
+  switchUndo: {
+    padding: '4px 10px',
+    background: 'transparent',
+    color: '#fff',
+    border: '0.5px solid rgba(255,255,255,.35)',
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 650,
+    cursor: 'pointer',
   },
   bodyRow: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
   body: { flex: 1, display: 'flex', minHeight: 0 },

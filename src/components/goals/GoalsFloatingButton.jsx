@@ -9,7 +9,18 @@ export default function GoalsFloatingButton({
   const [pickedGoalId, setPickedGoalId] = useState(null);
   const [draft, setDraft] = useState('');
   const [flash, setFlash] = useState('');
+  const [padOpen, setPadOpen] = useState(
+    () => typeof window !== 'undefined' && !!window.__daymarkNotepadOpen
+  );
   const popoverRef = useRef(null);
+
+  // The floating notepad occupies the bottom-right. Shift this button left
+  // so it does not sit under the float.
+  useEffect(() => {
+    const onVis = (e) => setPadOpen(!!e.detail?.open);
+    window.addEventListener('daymark-notepad-visibility', onVis);
+    return () => window.removeEventListener('daymark-notepad-visibility', onVis);
+  }, []);
 
   const activeGoals = (goals || []).filter((g) => !g.archived);
 
@@ -52,14 +63,23 @@ export default function GoalsFloatingButton({
     <>
       <button
         onClick={() => setOpen((v) => !v)}
-        style={styles.fab}
+        style={{
+          ...styles.fab,
+          ...(padOpen ? { left: 20, right: 'auto' } : {}),
+        }}
         title="Log evidence against a goal"
       >
         🎯
       </button>
 
       {open && (
-        <div ref={popoverRef} style={styles.popover}>
+        <div
+          ref={popoverRef}
+          style={{
+            ...styles.popover,
+            ...(padOpen ? { left: 20, right: 'auto' } : {}),
+          }}
+        >
           <div style={styles.header}>
             <span style={styles.title}>Log evidence</span>
             <button

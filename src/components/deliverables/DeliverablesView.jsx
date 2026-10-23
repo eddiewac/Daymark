@@ -150,7 +150,7 @@ export default function DeliverablesView({ projects, tasks, onUpdateProject, onO
               <th style={{ ...styles.th, ...styles.delivCol }}>Deliverable</th>
               <th style={{ ...styles.th, ...styles.stationCol }}>Current station</th>
               <th style={{ ...styles.th, ...styles.ownerCol }}>Assigned to</th>
-              <th style={{ ...styles.th, ...styles.budgetCol }} title="Budgeted hours (sum of task estimates) vs actual logged">Budget / Actual</th>
+              <th style={{ ...styles.th, ...styles.budgetCol }} title="Budgeted hours (task estimates) vs your logged hours only">Budget / your hours</th>
               <th style={{ ...styles.th, ...styles.dateCol }}>Start</th>
               <th style={{ ...styles.th, ...styles.dateCol }}>Due</th>
               <th style={{ ...styles.th, ...styles.actionCol }}></th>
@@ -252,7 +252,7 @@ function DeliverableRow({ row, pColor, patchDeliverable, patchStation, completeC
 
       <td style={{ ...styles.td, ...styles.budgetCol }}>
         {budget > 0 || actual > 0 ? (
-          <span style={styles.budgetActual} title="Budgeted (task estimates) vs actual logged hours">
+          <span style={styles.budgetActual} title="Budgeted (task estimates) vs your logged hours">
             <span style={styles.budgetNum}>{budget > 0 ? `${budget.toFixed(1)}h` : '—'}</span>
             <span style={styles.budgetSep}> / </span>
             <span style={{ ...styles.actualNum, ...(over ? styles.actualOver : {}) }}>

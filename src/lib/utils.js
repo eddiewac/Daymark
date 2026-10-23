@@ -7,6 +7,22 @@ export function uid() {
   );
 }
 
+// YYYY-MM-DD, `n` business days after today (weekends skipped).
+export function addBusinessDays(n = 3) {
+  const d = new Date();
+  let added = 0;
+  const target = Math.max(0, n);
+  while (added < target) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // YYYY-MM-DD for today in local time
 export function todayStr() {
   const d = new Date();

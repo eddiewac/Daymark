@@ -29,8 +29,19 @@ export default function ProjectsPanel({
   onToggleTask,
   onDeleteTask,
   onAssignTask,
+  focusProjectId,
+  onContextProject,
 }) {
-  const [activeId, setActiveId] = useState(initialOpenId || null);
+  const lastOpenedKey = `daymark-projects-last-opened:${workspaceId || 'personal'}`;
+  const [activeId, setActiveId] = useState(() => {
+    if (initialOpenId) return initialOpenId;
+    if (focusProjectId) return focusProjectId;
+    try {
+      return localStorage.getItem(lastOpenedKey) || null;
+    } catch {
+      return null;
+    }
+  });
   // Jump-to-project from Today / Waiting / Deliverables. Nonce so opening the
   // same project twice still focuses it after the user closed the detail.
   useEffect(() => {
@@ -95,12 +106,31 @@ export default function ProjectsPanel({
   const taskCountFor = (projectName) =>
     tasks.filter((t) => t.project === projectName && !t.done).length;
 
+  const rememberOpen = (id) => {
+    setActiveId(id);
+    if (!id) return;
+    try {
+      localStorage.setItem(lastOpenedKey, id);
+    } catch {}
+    onContextProject && onContextProject(id);
+  };
+
+  useEffect(() => {
+    if (focusProjectId) rememberOpen(focusProjectId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusProjectId]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (activeId && !(projects || []).some((p) => p.id === activeId)) setActiveId(null);
+  }, [loading, projects, activeId]);
+
   const active = projects.find((p) => p.id === activeId);
   const tracking = projects.find((p) => p.id === trackingId);
 
   const handleAdd = async () => {
     const proj = await onAdd();
-    setActiveId(proj.id);
+    rememberOpen(proj.id);
   };
 
   // When a project is being tracked, show the full-screen TrackView
@@ -166,6 +196,11 @@ export default function ProjectsPanel({
         >
           {showArchived ? '← Active' : `🗄 Archived${archivedCount ? ` (${archivedCount})` : ''}`}
         </button>
+        {active && (
+          <span style={styles.lastOpened} title="Last opened project, shown beside the list">
+            Last opened · {active.name}
+          </span>
+        )}
         <button onClick={handleAdd} style={styles.addBtn}>
           + New project
         </button>
@@ -217,7 +252,7 @@ export default function ProjectsPanel({
                             projectGroups={projectGroups || []}
                             taskCount={taskCountFor(p.name)}
                             projectTasks={(tasks || []).filter((t) => t.project === p.name)}
-                            onClick={() => setActiveId(p.id)}
+                            onClick={() => rememberOpen(p.id)}
                           />
                         ))}
                       </div>
@@ -235,7 +270,7 @@ export default function ProjectsPanel({
               projectGroups={projectGroups || []}
               tasks={tasks}
               onUpdate={onUpdate}
-              onOpenProject={(id) => setActiveId(id)}
+              onOpenProject={(id) => rememberOpen(id)}
             />
           ) : view === 'forecast' ? (
             <ForecastView
@@ -245,7 +280,7 @@ export default function ProjectsPanel({
               forecastLabel={forecastLabel}
               onUpdate={onUpdate}
               onUpdateForecastLabel={updateForecastLabel}
-              onOpenProject={(id) => setActiveId(id)}
+              onOpenProject={(id) => rememberOpen(id)}
             />
           ) : (
             // Track picker - choose a project to enter Track mode
@@ -366,6 +401,19 @@ const styles = {
     borderRadius: 8,
     fontSize: 12,
     outline: 'none',
+  },
+  lastOpened: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--accent)',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid var(--accent-soft-border)',
+    borderRadius: 999,
+    padding: '4px 10px',
+    maxWidth: 240,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   addBtn: {
     padding: '5px 14px',

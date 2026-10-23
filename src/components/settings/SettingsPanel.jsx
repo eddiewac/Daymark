@@ -1153,15 +1153,15 @@ const themeStyles = {
 // read by WorkspaceView when a group header is tapped.
 const NAV_GROUPS = [
   {
-    id: 'work',
-    label: 'Work',
+    id: 'projects',
+    label: 'Projects',
     options: [
       { key: 'projects', label: 'Projects' },
       { key: 'tasks', label: 'Tasks' },
-      { key: 'plan', label: 'Plan' },
-      { key: 'track', label: 'Track' },
-      { key: 'resource', label: 'Resource' },
+      { key: 'waiting', label: 'Waiting on' },
+      { key: 'deliverables', label: 'Deliverables' },
       { key: 'status', label: 'Status' },
+      { key: 'resource', label: 'Resource' },
     ],
   },
   {
@@ -1170,7 +1170,6 @@ const NAV_GROUPS = [
     options: [
       { key: 'time', label: 'Timesheet' },
       { key: 'notes', label: 'Notes' },
-      { key: 'notepad', label: 'Notepad' },
       { key: 'export', label: 'Export' },
     ],
   },
@@ -1203,7 +1202,7 @@ function NavDefaultsEditor({ workspaceId }) {
     <section style={styles.section}>
       <div style={styles.sectionTitle}>Tab defaults</div>
       <div style={styles.sectionHint}>
-        Choose which view the Work and Record tabs open to. “Last viewed”
+        Choose which view the Projects and Record menus open to. “Last viewed”
         returns you to wherever you were; or pin a specific view so it always
         opens there. Applies to this workspace.
       </div>

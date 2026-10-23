@@ -89,6 +89,10 @@ export default function TrackView({
   onClose,
   initialFocusKey = null,
   initialFocusNonce = 0,
+  blocks,
+  runningTimer,
+  onStartTimer,
+  onStopTimer,
 }) {
   const [focusKey, setFocusKey] = useState(initialFocusKey);
   useEffect(() => {
@@ -574,6 +578,10 @@ export default function TrackView({
           onSelectStation={(stationId) =>
             setFocusKey(`${focused.deliverable.id}:${stationId}`)
           }
+          blocks={blocks}
+          runningTimer={runningTimer}
+          onStartTimer={onStartTimer}
+          onStopTimer={onStopTimer}
           onAddTask={onAddTask}
           onUpdateTask={onUpdateTask}
           onToggleTask={onToggleTask}

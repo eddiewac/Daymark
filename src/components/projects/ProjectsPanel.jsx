@@ -30,6 +30,13 @@ export default function ProjectsPanel({
   onDeleteTask,
   onAssignTask,
   focusProjectId,
+  focusNonce,
+  requestedView,
+  requestedViewNonce,
+  blocks,
+  runningTimer,
+  onStartTimer,
+  onStopTimer,
   onContextProject,
 }) {
   const lastOpenedKey = `daymark-projects-last-opened:${workspaceId || 'personal'}`;
@@ -118,7 +125,14 @@ export default function ProjectsPanel({
   useEffect(() => {
     if (focusProjectId) rememberOpen(focusProjectId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusProjectId]);
+  }, [focusProjectId, focusNonce]);
+
+  useEffect(() => {
+    if (!requestedView) return;
+    if (['grid', 'gantt', 'track', 'tracker', 'forecast'].includes(requestedView)) {
+      setView(requestedView);
+    }
+  }, [requestedView, requestedViewNonce]);
 
   useEffect(() => {
     if (loading) return;
@@ -152,6 +166,10 @@ export default function ProjectsPanel({
         onToggleTask={onToggleTask}
         onDeleteTask={onDeleteTask}
         onAssignTask={onAssignTask}
+        blocks={blocks}
+        runningTimer={runningTimer}
+        onStartTimer={onStartTimer}
+        onStopTimer={onStopTimer}
         onClose={() => setTrackingId(null)}
       />
     );
@@ -252,6 +270,7 @@ export default function ProjectsPanel({
                             projectGroups={projectGroups || []}
                             taskCount={taskCountFor(p.name)}
                             projectTasks={(tasks || []).filter((t) => t.project === p.name)}
+                            lastOpened={p.id === activeId}
                             onClick={() => rememberOpen(p.id)}
                           />
                         ))}

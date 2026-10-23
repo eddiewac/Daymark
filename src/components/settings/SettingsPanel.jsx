@@ -1156,21 +1156,35 @@ const NAV_GROUPS = [
     id: 'projects',
     label: 'Projects',
     options: [
-      { key: 'projects', label: 'Projects' },
-      { key: 'tasks', label: 'Tasks' },
-      { key: 'waiting', label: 'Waiting on' },
+      { key: 'projects', label: 'All projects' },
       { key: 'deliverables', label: 'Deliverables' },
-      { key: 'status', label: 'Status' },
-      { key: 'resource', label: 'Resource' },
+      { key: 'forecast', label: 'Forecast' },
+    ],
+  },
+  {
+    id: 'plan',
+    label: 'Plan',
+    options: [
+      { key: 'plan', label: 'This week' },
+      { key: 'congresses', label: 'Congresses' },
+    ],
+  },
+  {
+    id: 'track',
+    label: 'Track',
+    options: [
+      { key: 'track', label: 'Station track' },
+      { key: 'time', label: 'Timesheet' },
+      { key: 'deliverables', label: 'Budget vs actual' },
     ],
   },
   {
     id: 'record',
     label: 'Record',
     options: [
-      { key: 'time', label: 'Timesheet' },
-      { key: 'notes', label: 'Notes' },
-      { key: 'export', label: 'Export' },
+      { key: 'record', label: 'Timesheet + Notes' },
+      { key: 'comms', label: 'Comms log' },
+      { key: 'export', label: 'Export / handoff' },
     ],
   },
 ];
@@ -1202,9 +1216,9 @@ function NavDefaultsEditor({ workspaceId }) {
     <section style={styles.section}>
       <div style={styles.sectionTitle}>Tab defaults</div>
       <div style={styles.sectionHint}>
-        Choose which view the Projects and Record menus open to. “Last viewed”
-        returns you to wherever you were; or pin a specific view so it always
-        opens there. Applies to this workspace.
+        Choose which view each door opens to. “Last viewed” returns you to
+        wherever you were; or pin a specific view so it always opens there.
+        Applies to this workspace.
       </div>
       <div style={navStyles.rows}>
         {NAV_GROUPS.map((g) => (

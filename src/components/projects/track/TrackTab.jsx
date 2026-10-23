@@ -30,6 +30,10 @@ export default function TrackTab({
   onDeleteTask,
   onAssignTask,
   onContextProject,
+  blocks,
+  runningTimer,
+  onStartTimer,
+  onStopTimer,
 }) {
   const activeProjects = (projects || []).filter((p) => !p.archived);
 
@@ -155,6 +159,10 @@ export default function TrackTab({
             onAssignTask={onAssignTask}
             initialFocusKey={initialProjectId === selected.id ? initialFocusKey : null}
             initialFocusNonce={initialFocusNonce}
+            blocks={blocks}
+            runningTimer={runningTimer}
+            onStartTimer={onStartTimer}
+            onStopTimer={onStopTimer}
             onClose={null}
           />
         )}

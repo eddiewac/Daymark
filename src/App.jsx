@@ -274,7 +274,7 @@ export default function App() {
           body={`Discard ${fmtElapsed(time.elapsedMsForRunning)} without logging?`}
           onClose={time.cancelPrompt}
           actions={[
-            { label: 'Keep timing', onClick: time.cancelPrompt },
+            { label: 'Keep running', onClick: time.cancelPrompt },
             {
               label: 'Confirm discard',
               danger: true,

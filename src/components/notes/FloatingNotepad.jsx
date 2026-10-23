@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import Notepad from './Notepad.jsx';
 import { addBusinessDays } from '../../lib/utils.js';
+import { pulseSave } from '../../lib/savePulse.js';
 import {
   parseDumpLines,
   projectMatch,
@@ -81,6 +82,7 @@ export default function FloatingNotepad({
   const convertAll = async () => {
     if (busy || converted || rows.length === 0) return;
     setBusy(true);
+    pulseSave();
     let nTask = 0;
     let nWait = 0;
     let nProj = 0;
@@ -126,10 +128,13 @@ export default function FloatingNotepad({
       notepadRef.current?.setBody(removeDumpLines(body, consumed));
       setRows((prev) => prev.map((r) => ({ ...r, done: true })));
       setConverted(true);
-      const waitBit = nWait ? `${nWait} waiting · expect-back set` : '0 waiting';
+      const bits = [];
+      if (nTask) bits.push(`${nTask} task${nTask === 1 ? '' : 's'}`);
+      if (nWait) bits.push(`${nWait} waiting · expect-back set`);
+      if (nProj) bits.push(`${nProj} → Projects`);
       showToast(
         `Converted all · ${consumed.length} item${consumed.length === 1 ? '' : 's'}`,
-        `${nTask} → Today · Do · ${waitBit} · ${nProj} → Projects`
+        bits.join(' · ')
       );
     } finally {
       setBusy(false);

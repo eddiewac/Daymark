@@ -43,6 +43,16 @@ function defaultChaseDate() {
   return localDateStr(d);
 }
 
+function stationLoadedIn(task, projects) {
+  if (!task?.stationId) return false;
+  for (const p of projects || []) {
+    for (const d of p.deliverables || []) {
+      if ((d.stations || []).some((s) => s.id === task.stationId)) return true;
+    }
+  }
+  return false;
+}
+
 // Short relative label for a waiting item's date vs today.
 function currentStationOf(deliverable) {
   return (deliverable?.stations || []).find((s) => !s.done) || null;
@@ -342,15 +352,18 @@ export default function TodayView({
     return rows;
   }, [projects, tasks, hoursByTask]);
 
-  // Tasks assigned to you that are not already a row on the station spine.
+  // Assigned tasks whose station is not loaded in this workspace. The Do spine
+  // only walks local stations, so team assignments on Personal would otherwise
+  // disappear. Tasks already sitting on a loaded station stay on that spine.
   const assignedToMe = useMemo(() => {
     const shown = new Set(doRows.map((r) => r.task?.id).filter(Boolean));
     return (tasks || []).filter((t) => {
       if (t.done || t.isFollowUp || shown.has(t.id)) return false;
-      if (t.isAssigned) return true;
-      return !!(currentUserId && t.assignedToId === currentUserId);
+      const mine = t.isAssigned || (currentUserId && t.assignedToId === currentUserId);
+      if (!mine) return false;
+      return !stationLoadedIn(t, projects);
     });
-  }, [tasks, doRows, currentUserId]);
+  }, [tasks, doRows, currentUserId, projects]);
 
   // Exceptions only: overdue waits, stalled current stations, unlogged hours.
   // Not a mirror of every Waiting row. The strip hides when this list is empty.
@@ -627,7 +640,7 @@ export default function TodayView({
           </button>
         </div>
 
-        {deliverableCount === 0 ? (
+        {deliverableCount === 0 && assignedToMe.length === 0 ? (
           <EmptyDesk
             workspaceName={workspaceName}
             onSeedDemo={onSeedDemo}
@@ -685,7 +698,7 @@ export default function TodayView({
               <section style={styles.bucket} aria-labelledby="doTitle">
                 <div style={styles.bucketHead}>
                   <h2 id="doTitle" style={styles.bucketTitle}>Do</h2>
-                  <span style={styles.bucketCount}>{doRows.length}</span>
+                  <span style={styles.bucketCount}>{doRows.length + assignedToMe.length}</span>
                 </div>
                 {doRows.length === 0 && (
                   <div style={styles.colEmpty}>No open station on your deliverables.</div>
@@ -770,6 +783,7 @@ export default function TodayView({
                 {assignedToMe.length > 0 && (
                   <div style={desk.assigned}>
                     <div style={desk.assignedHd}>Assigned to me</div>
+                    <div style={desk.assignedCap}>No station loaded in this workspace.</div>
                     {assignedToMe.map((t) => (
                       <div key={t.id} style={desk.assignedRow}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -783,6 +797,11 @@ export default function TodayView({
                         <button
                           type="button"
                           style={desk.btn}
+                          title={
+                            t.isAssigned && t.assignedFrom
+                              ? `Open in ${t.assignedFrom}`
+                              : 'Open'
+                          }
                           onClick={() => onOpenItem && onOpenItem({ kind: 'task', task: t })}
                         >
                           Open
@@ -1821,11 +1840,16 @@ const desk = {
     background: 'var(--color-background-secondary)',
   },
   assignedHd: {
-    padding: '8px 14px 2px',
+    padding: '8px 14px 0',
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: '0.04em',
     textTransform: 'uppercase',
+    color: 'var(--color-text-secondary)',
+  },
+  assignedCap: {
+    padding: '2px 14px 6px',
+    fontSize: 11.5,
     color: 'var(--color-text-secondary)',
   },
   assignedRow: {

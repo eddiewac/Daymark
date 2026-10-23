@@ -98,6 +98,8 @@ export default function WorkspaceView({
   activeWorkspace,
   time,
   onTimerStartedForTask,
+  workspaces,
+  onSwitchWorkspace,
 }) {
   // Derive workspaceId early — needed by the tab persistence key below.
   const workspaceId = activeWorkspace?.id || null;
@@ -365,6 +367,50 @@ export default function WorkspaceView({
   };
 
   const openProjectById = (projectId) => openRecord(projectId);
+
+  // Assigned tasks on Personal have no station in this workspace. Open switches
+  // into the workspace that owns the task and opens that station once it loads.
+  useEffect(() => {
+    if (projectsLoading) return;
+    let raw = null;
+    try {
+      raw = sessionStorage.getItem('daymark-open-assigned');
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    let intent = null;
+    try {
+      intent = JSON.parse(raw);
+    } catch {
+      try {
+        sessionStorage.removeItem('daymark-open-assigned');
+      } catch {}
+      return;
+    }
+    if (!intent || intent.workspaceId !== workspaceId) return;
+    try {
+      sessionStorage.removeItem('daymark-open-assigned');
+    } catch {}
+    if (intent.stationId) {
+      for (const p of projects || []) {
+        for (const d of p.deliverables || []) {
+          const s = (d.stations || []).find((x) => x.id === intent.stationId);
+          if (!s) continue;
+          setContextProjectId(p.id);
+          setStationOverlay({
+            projectId: p.id,
+            deliverableId: d.id,
+            stationId: s.id,
+          });
+          return;
+        }
+      }
+    }
+    if (intent.projectId && (projects || []).some((p) => p.id === intent.projectId)) {
+      openProjectById(intent.projectId);
+    }
+  }, [projectsLoading, projects, workspaceId]);
 
   const jumpToTrack = (task) => {
     if (!task) return;
@@ -656,7 +702,26 @@ export default function WorkspaceView({
     const proj = (projects || []).find(
       (p) => p.id === task.projectId || (task.project && p.name === task.project)
     );
-    if (proj) openProjectById(proj.id);
+    if (proj) {
+      openProjectById(proj.id);
+      return;
+    }
+    if (task.workspaceId && task.workspaceId !== workspaceId && onSwitchWorkspace) {
+      const ws = (workspaces || []).find((w) => w.id === task.workspaceId);
+      if (!ws) return;
+      try {
+        sessionStorage.setItem(
+          'daymark-open-assigned',
+          JSON.stringify({
+            workspaceId: ws.id,
+            projectId: task.projectId || null,
+            deliverableId: task.deliverableId || null,
+            stationId: task.stationId || null,
+          })
+        );
+      } catch {}
+      onSwitchWorkspace(ws);
+    }
   };
 
   const overlayProject = stationOverlay

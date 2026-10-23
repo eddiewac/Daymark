@@ -265,6 +265,8 @@ export default function App() {
       <WorkspaceView
         key={activeWorkspace?.id || 'personal'}
         activeWorkspace={activeWorkspace}
+        workspaces={workspaces}
+        onSwitchWorkspace={handleSwitch}
         time={time}
         onTimerStartedForTask={(task) => setRunningTaskTitle(task?.title || '')}
       />

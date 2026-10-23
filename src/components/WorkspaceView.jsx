@@ -690,6 +690,30 @@ export default function WorkspaceView({
 
   const openDoItem = (item) => {
     if (!item) return;
+    if (item.kind === 'project') {
+      const id = item.projectId || item.task?.projectId || '';
+      if (id && (projects || []).some((p) => p.id === id)) {
+        setStationOverlay(null);
+        openProjectById(id);
+        return;
+      }
+      const task = item.task;
+      if (task?.workspaceId && task.workspaceId !== workspaceId && onSwitchWorkspace) {
+        const ws = (workspaces || []).find((w) => w.id === task.workspaceId);
+        if (!ws) return;
+        try {
+          sessionStorage.setItem(
+            'daymark-open-assigned',
+            JSON.stringify({
+              workspaceId: ws.id,
+              projectId: id || task.projectId || null,
+            })
+          );
+        } catch {}
+        onSwitchWorkspace(ws);
+      }
+      return;
+    }
     if (item.kind === 'station') {
       setContextProjectId(item.projectId);
       setStationOverlay({
@@ -1152,6 +1176,9 @@ export default function WorkspaceView({
             runningTimer={time.runningTimer}
             onStartTimer={startTimer}
             onStopTimer={time.requestStop}
+            onOpenProject={(projectId) => {
+              if (projectId) openProjectById(projectId);
+            }}
             stationTemplates={settings.stationTemplates || []}
             categories={settings.categories}
             priorities={settings.priorities}
@@ -1458,6 +1485,19 @@ export default function WorkspaceView({
           onToggleTask={handleToggleDone}
           onDeleteTask={deleteTask}
           onAssignTask={assignToMember}
+          onOpenProject={(projectId) => {
+            setStationOverlay(null);
+            if (projectId) openProjectById(projectId);
+          }}
+          onAddStation={(created) => {
+            if (!created || !overlayProject || !overlayDeliverable) return;
+            const deliverables = (overlayProject.deliverables || []).map((d) => {
+              if (d.id !== overlayDeliverable.id) return d;
+              return { ...d, stations: [...(d.stations || []), created] };
+            });
+            updateProject(overlayProject.id, { deliverables });
+            setStationOverlay((cur) => (cur ? { ...cur, stationId: created.id } : cur));
+          }}
           onClose={() => setStationOverlay(null)}
         />
       )}

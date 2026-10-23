@@ -34,6 +34,7 @@ export default function TrackTab({
   runningTimer,
   onStartTimer,
   onStopTimer,
+  onOpenProject,
 }) {
   const activeProjects = (projects || []).filter((p) => !p.archived);
 
@@ -163,6 +164,7 @@ export default function TrackTab({
             runningTimer={runningTimer}
             onStartTimer={onStartTimer}
             onStopTimer={onStopTimer}
+            onOpenProject={onOpenProject}
             onClose={null}
           />
         )}

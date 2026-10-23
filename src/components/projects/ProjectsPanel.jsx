@@ -170,6 +170,10 @@ export default function ProjectsPanel({
         runningTimer={runningTimer}
         onStartTimer={onStartTimer}
         onStopTimer={onStopTimer}
+        onOpenProject={(id) => {
+          setTrackingId(null);
+          if (id) rememberOpen(id);
+        }}
         onClose={() => setTrackingId(null)}
       />
     );

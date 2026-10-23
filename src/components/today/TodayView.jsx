@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
-import { localDateStr, todayStr } from '../../lib/utils.js';
+import {
+  localDateStr,
+  todayStr,
+  CLOSE_OUT_PREP_SEEN_KEY,
+  readCloseOutDismissedDay,
+  markCloseOutDismissed,
+  closeOutPrepDecision,
+} from '../../lib/utils.js';
 import { useSaveStatus } from '../save/SaveStatus.jsx';
 import { taskDeliverableName, taskProjectName } from '../../lib/deliverableStatus.js';
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
@@ -20,8 +27,7 @@ import CloseDayPanel from './CloseDayPanel.jsx';
 //            urgency (Overdue → Due back today → Expected later). Merges what
 //            used to be two separate "overdue replies" and "expected today"
 //            sections, and adds a per-item Chase action: log the chase + reset
-//            the expected-back date (so overdue items stop nagging), with an
-//            optional pre-filled email draft.
+//            the expected-back date (so overdue items stop nagging).
 //
 // Awareness items that aren't daily actions (upcoming congresses, project
 // health) sit in a slim strip below the two columns. Stale stations were
@@ -40,6 +46,17 @@ function defaultChaseDate() {
     if (day !== 0 && day !== 6) added++;
   }
   return localDateStr(d);
+}
+
+function isCrossWorkspaceTask(task, workspaceId) {
+  if (!task?.isAssigned) return false;
+  if (!task.workspaceId) return true;
+  return task.workspaceId !== (workspaceId || null);
+}
+
+function onTodayDesk(task, today) {
+  if (!task?.dueDate) return true;
+  return task.dueDate <= today;
 }
 
 function stationLoadedIn(task, projects) {
@@ -129,6 +146,8 @@ export default function TodayView({
   blocks,
   onOpenItem,
   workspaceName,
+  workspaceId,
+  assignedTasks,
   prepSignal,
   currentUserId,
 }) {
@@ -320,8 +339,33 @@ export default function TodayView({
   const blockingCount = blockingTasks.length + wOverdue.length + lateStations.length;
 
   useEffect(() => {
-    if (prepSignal) setCloseDayOpen(true);
+    const todayKey = todayStr();
+    let seen = 0;
+    try {
+      seen = Number(sessionStorage.getItem(CLOSE_OUT_PREP_SEEN_KEY) || 0);
+    } catch {
+      seen = 0;
+    }
+    const decision = closeOutPrepDecision({
+      prepSignal,
+      seenSignal: seen,
+      dismissedDay: readCloseOutDismissedDay(),
+      today: todayKey,
+    });
+    if (decision.seen !== seen) {
+      try {
+        sessionStorage.setItem(CLOSE_OUT_PREP_SEEN_KEY, String(decision.seen));
+      } catch {
+        /* private mode */
+      }
+    }
+    if (decision.open) setCloseDayOpen(true);
   }, [prepSignal]);
+
+  const dismissCloseOut = () => {
+    markCloseOutDismissed(todayStr());
+    setCloseDayOpen(false);
+  };
 
   const deliverableCount = useMemo(
     () => (projects || []).reduce((n, p) => n + (p.deliverables || []).length, 0),
@@ -340,6 +384,9 @@ export default function TodayView({
     };
     const list = (tasks || []).filter((t) => {
       if (!t || t.done || t.isFollowUp) return false;
+      // Cross-workspace assignments stay on the Assigned strip so a due-today
+      // team task is not swallowed by this spine and dropped from Assigned.
+      if (isCrossWorkspaceTask(t, workspaceId)) return false;
       if (priorityIds.has(t.id)) return true;
       return !!(t.dueDate && t.dueDate <= today);
     });
@@ -370,20 +417,37 @@ export default function TodayView({
         incomplete,
       };
     });
-  }, [projects, tasks, today, priorityIds, todayPriority]);
+  }, [projects, tasks, today, priorityIds, todayPriority, workspaceId]);
 
-  // Assigned tasks whose station is not loaded in this workspace. The Do spine
-  // only walks local stations, so team assignments on Personal would otherwise
-  // disappear. Tasks already sitting on a loaded station stay on that spine.
+  // One Assigned list: same-workspace tasks with no station loaded here, plus
+  // tasks assigned to me from another workspace (team → personal and the
+  // reverse). Due today and overdue always qualify; undated assignments stay
+  // so the existing strip does not drop them. Future-dated cross-workspace
+  // work waits for its day.
   const assignedToMe = useMemo(() => {
     const shown = new Set(doRows.map((r) => r.task?.id).filter(Boolean));
-    return (tasks || []).filter((t) => {
-      if (t.done || t.isFollowUp || shown.has(t.id)) return false;
-      const mine = t.isAssigned || (currentUserId && t.assignedToId === currentUserId);
-      if (!mine) return false;
-      return !stationLoadedIn(t, projects);
-    });
-  }, [tasks, doRows, currentUserId, projects]);
+    const byId = new Map();
+    const consider = (t) => {
+      if (!t || t.done || t.isFollowUp || t.dismissed || shown.has(t.id) || byId.has(t.id)) return;
+      const cross = isCrossWorkspaceTask(t, workspaceId);
+      if (cross) {
+        if (!onTodayDesk(t, today)) return;
+        byId.set(t.id, t);
+        return;
+      }
+      const mine = !!(currentUserId && t.assignedToId === currentUserId);
+      if (!mine) return;
+      if (stationLoadedIn(t, projects)) return;
+      byId.set(t.id, t);
+    };
+    (tasks || []).forEach(consider);
+    (assignedTasks || []).forEach(consider);
+    return [...byId.values()].sort(
+      (a, b) =>
+        (a.dueDate || '9999-99-99').localeCompare(b.dueDate || '9999-99-99') ||
+        (a.title || '').localeCompare(b.title || '')
+    );
+  }, [tasks, assignedTasks, doRows, currentUserId, projects, workspaceId, today]);
 
   // Exceptions only: overdue waits and stalled current stations.
   // Unlogged hours stay on the timesheet — they are not a Today blocker.
@@ -609,21 +673,42 @@ export default function TodayView({
   };
 
   const openProjectById = (projectId, task) => {
-    if (projectId && (projects || []).some((p) => p.id === projectId)) {
+    const ctx = task ? contextForTask(task, projects) : null;
+    if (ctx?.project && ctx.deliverable && ctx.station) {
+      onJumpToProject &&
+        onJumpToProject({
+          projectId: ctx.project.id,
+          deliverableId: ctx.deliverable.id,
+          stationId: ctx.station.id,
+        });
+      return;
+    }
+    const loaded = projectId && (projects || []).some((p) => p.id === projectId);
+    if (loaded) {
       onJumpToProject && onJumpToProject(projectId);
       return;
     }
-    if (onOpenItem) onOpenItem({ kind: 'project', task: task || null, projectId: projectId || null });
+    if (onOpenItem) {
+      onOpenItem({
+        kind: 'project',
+        task: task || null,
+        projectId: projectId || task?.projectId || null,
+        deliverableId: task?.deliverableId || null,
+        stationId: task?.stationId || null,
+      });
+    }
   };
 
-  const draftChaseEmail = (item) => {
-    const what = item.type === 'deliverable' ? item.deliverable.name : item.label;
-    const who = item.who ? ` ${item.who}` : '';
-    const subject = `Chasing: ${what}`;
-    const body = `Hi${who},\n\nJust following up on ${what} — do you have an update for me?\n\nThanks`;
-    try {
-      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    } catch {}
+  const completeAssigned = (task) => {
+    if (!onToggleDone || !task) return;
+    const title = task.title || 'Task';
+    const pending = onToggleDone(task.id);
+    const finish = (res) => {
+      if (res && res.ok === false) return;
+      showToast(`Done · ${title}`);
+    };
+    if (pending && typeof pending.then === 'function') pending.then(finish);
+    else finish();
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -722,7 +807,7 @@ export default function TodayView({
                   <h2 id="doTitle" style={styles.bucketTitle}>Do</h2>
                   <span style={styles.bucketCount}>{doRows.length + assignedToMe.length}</span>
                 </div>
-                {doRows.length === 0 && (
+                {doRows.length === 0 && assignedToMe.length === 0 && (
                   <div style={styles.colEmpty}>Nothing to do today.</div>
                 )}
                 {doRows.map((row) => {
@@ -731,6 +816,7 @@ export default function TodayView({
                     <div key={row.key} style={desk.doRow}>
                       <input
                         type="checkbox"
+                        className="dm-check"
                         checked={false}
                         aria-label={`Complete ${row.title}`}
                         onChange={() => onToggleDone && onToggleDone(row.task.id)}
@@ -746,7 +832,7 @@ export default function TodayView({
                           />
                           {row.deliverableName ? <span>{row.deliverableName}</span> : null}
                         </div>
-                        <div style={desk.rowActions}>
+                        <div style={desk.doActions}>
                           {onStartTimer && (
                             <button
                               type="button"
@@ -812,16 +898,31 @@ export default function TodayView({
                 {assignedToMe.length > 0 && (
                   <div style={desk.assigned}>
                     <div style={desk.assignedHd}>Assigned to me</div>
-                    <div style={desk.assignedCap}>No station loaded in this workspace.</div>
                     {assignedToMe.map((t) => {
                       const projectName = taskProjectName(t, projects);
                       const deliverableName = taskDeliverableName(t, projects);
                       const projectId = t.projectId || '';
+                      const ctx = contextForTask(t, projects);
+                      const station = ctx?.station || null;
+                      const running = runningTimer?.taskId === t.id;
+                      const otherDesk =
+                        isCrossWorkspaceTask(t, workspaceId) &&
+                        t.assignedFrom &&
+                        t.assignedFrom !== workspaceName;
+                      const title = t.title || '(untitled)';
+                      const canOpenStation = !!(station || t.stationId);
                       return (
-                      <div key={t.id} style={desk.assignedRow}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={desk.rowTitle}>{t.title || '(untitled)'}</div>
-                          {(projectName || deliverableName || t.assignedFrom) && (
+                        <div key={t.id} style={desk.doRow}>
+                          <input
+                            type="checkbox"
+                            className="dm-check"
+                            checked={false}
+                            aria-label={`Complete ${title}`}
+                            onChange={() => completeAssigned(t)}
+                            style={desk.check}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={desk.rowTitle}>{title}</div>
                             <div style={desk.meta}>
                               <ProjectChip
                                 name={projectName}
@@ -829,23 +930,52 @@ export default function TodayView({
                                 onOpen={(id) => openProjectById(id, t)}
                               />
                               {deliverableName ? <span>{deliverableName}</span> : null}
-                              {t.assignedFrom ? <span>{t.assignedFrom}</span> : null}
+                              {otherDesk ? <span style={desk.quietChip}>{t.assignedFrom}</span> : null}
                             </div>
-                          )}
+                            <div style={desk.doActions}>
+                              {onStartTimer && (
+                                <button
+                                  type="button"
+                                  style={desk.primary}
+                                  onClick={() =>
+                                    running ? onStopTimer && onStopTimer() : onStartTimer(t)
+                                  }
+                                >
+                                  {running ? '■ Stop' : '▶ Start timer'}
+                                </button>
+                              )}
+                              {canOpenStation && (
+                                <button
+                                  type="button"
+                                  style={desk.btn}
+                                  onClick={() => {
+                                    if (station && ctx?.deliverable && ctx?.project && onOpenItem) {
+                                      onOpenItem({
+                                        kind: 'station',
+                                        projectId: ctx.project.id,
+                                        deliverableId: ctx.deliverable.id,
+                                        stationId: station.id,
+                                      });
+                                      return;
+                                    }
+                                    onOpenItem && onOpenItem({ kind: 'task', task: t });
+                                  }}
+                                >
+                                  Open station
+                                </button>
+                              )}
+                              {projectId && (
+                                <button
+                                  type="button"
+                                  style={desk.btn}
+                                  onClick={() => openProjectById(projectId, t)}
+                                >
+                                  Open project
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          style={desk.btn}
-                          title={
-                            t.isAssigned && t.assignedFrom
-                              ? `Open in ${t.assignedFrom}`
-                              : 'Open'
-                          }
-                          onClick={() => onOpenItem && onOpenItem({ kind: 'task', task: t })}
-                        >
-                          Open
-                        </button>
-                      </div>
                       );
                     })}
                   </div>
@@ -867,7 +997,6 @@ export default function TodayView({
                     today={today}
                     onChase={() => chaseNow(item)}
                     onResolve={() => resolveNow(item)}
-                    onDraft={() => draftChaseEmail(item)}
                     onOpen={() => openWaiting(item)}
                     onOpenProject={(id) => openProjectById(id)}
                   />
@@ -911,10 +1040,10 @@ export default function TodayView({
           onRollForward={(taskId) => {
             const t = new Date();
             t.setDate(t.getDate() + 1);
-            onUpdateTask && onUpdateTask(taskId, { dueDate: t.toISOString().slice(0, 10) });
+            onUpdateTask && onUpdateTask(taskId, { dueDate: localDateStr(t) });
           }}
           onJumpToProject={onJumpToProject}
-          onClose={() => setCloseDayOpen(false)}
+          onClose={dismissCloseOut}
         />
       )}
     </div>
@@ -958,7 +1087,7 @@ function ProjectChip({ name, projectId, onOpen }) {
   return <span style={desk.chip} title="Project">{label}</span>;
 }
 
-function WaitingRow({ item, today, onChase, onResolve, onDraft, onOpen, onOpenProject }) {
+function WaitingRow({ item, today, onChase, onResolve, onOpen, onOpenProject }) {
   const late = item.date && item.date < today;
   const rel = waitRelLabel(item.date, today);
   const projectName = (item.project?.name || '').trim();
@@ -984,38 +1113,6 @@ function WaitingRow({ item, today, onChase, onResolve, onDraft, onOpen, onOpenPr
         <button type="button" style={desk.btn} onClick={onOpen}>
           Open
         </button>
-        <button type="button" style={desk.btn} onClick={onDraft}>
-          ✉ Draft
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── ChasePopover — pick a new expected-back date, log the chase, draft email ─
-function ChasePopover({ item, onChase, onDraftEmail }) {
-  const [date, setDate] = useState(defaultChaseDate);
-  return (
-    <div style={chaseStyles.wrap}>
-      <div style={chaseStyles.row}>
-        <span style={chaseStyles.text}>
-          Chased{item.who ? <strong> {item.who}</strong> : ''} — now expect back
-        </span>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={chaseStyles.date}
-        />
-        <button style={chaseStyles.go} onClick={() => onChase(item, date)}>
-          Log chase
-        </button>
-        <button style={chaseStyles.email} onClick={() => onDraftEmail(item)}>
-          ✉ Draft email
-        </button>
-      </div>
-      <div style={chaseStyles.hint}>
-        Logs the chase and resets the expected date, so it drops off “overdue”.
       </div>
     </div>
   );
@@ -1366,58 +1463,6 @@ const waitStyles = {
     fontSize: 12,
     fontWeight: 700,
     lineHeight: 1,
-  },
-};
-
-const chaseStyles = {
-  wrap: {
-    margin: '0 14px 10px',
-    background: 'var(--accent-soft)',
-    border: '0.5px solid #534AB733',
-    borderRadius: 10,
-    padding: '9px 11px',
-  },
-  row: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  text: {
-    fontSize: 11.5,
-    color: 'var(--color-text-primary)',
-  },
-  date: {
-    fontSize: 11.5,
-    padding: '3px 6px',
-    border: '0.5px solid var(--color-border-secondary)',
-    borderRadius: 6,
-    background: 'var(--bg-surface)',
-    color: 'var(--color-text-primary)',
-  },
-  go: {
-    fontSize: 11.5,
-    background: 'var(--accent)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 6,
-    padding: '4px 10px',
-    cursor: 'pointer',
-    fontWeight: 500,
-  },
-  email: {
-    fontSize: 11.5,
-    background: 'transparent',
-    border: '0.5px solid var(--accent)',
-    color: 'var(--accent)',
-    borderRadius: 6,
-    padding: '4px 10px',
-    cursor: 'pointer',
-  },
-  hint: {
-    fontSize: 10.5,
-    color: 'var(--color-text-tertiary)',
-    marginTop: 6,
   },
 };
 
@@ -1857,6 +1902,25 @@ const desk = {
     fontWeight: 650,
   },
   rowActions: { display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 },
+  doActions: {
+    display: 'flex',
+    flexWrap: 'nowrap',
+    gap: 5,
+    marginTop: 8,
+    overflowX: 'auto',
+    maxWidth: '100%',
+  },
+  quietChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    color: 'var(--color-text-tertiary)',
+    background: 'transparent',
+    border: '0.5px solid var(--color-border-tertiary)',
+    borderRadius: 999,
+    padding: '1px 8px',
+    fontSize: 11,
+    fontWeight: 550,
+  },
   play: {
     width: 28,
     height: 28,
@@ -1881,6 +1945,7 @@ const desk = {
     fontSize: 12,
     cursor: 'pointer',
     color: 'var(--color-text-primary)',
+    flexShrink: 0,
   },
   primary: {
     background: 'var(--accent)',
@@ -1891,6 +1956,7 @@ const desk = {
     fontWeight: 650,
     fontSize: 12,
     cursor: 'pointer',
+    flexShrink: 0,
   },
   ok: {
     background: '#ecfdf5',
@@ -1901,6 +1967,7 @@ const desk = {
     fontWeight: 650,
     fontSize: 12,
     cursor: 'pointer',
+    flexShrink: 0,
   },
   ghost: {
     background: 'transparent',

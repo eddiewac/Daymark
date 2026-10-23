@@ -400,11 +400,15 @@ export default function FloatingNotepad({
       <div
         role="separator"
         aria-orientation="horizontal"
-        aria-label="Resize notepad"
-        title="Drag up to grow"
+        aria-label="Drag to resize notepad"
+        title="Drag to resize"
         style={styles.resize}
         onPointerDown={onResizePointerDown}
-      />
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M3 9h8M5 11h6M7 7h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      </div>
     </aside>
   );
 }
@@ -614,7 +618,7 @@ const styles = {
     color: 'var(--color-text-primary)',
   },
   footer: {
-    padding: '10px 22px 16px 12px',
+    padding: '10px 48px 16px 12px',
     borderTop: '0.5px solid var(--color-border-tertiary)',
     display: 'flex',
     alignItems: 'center',
@@ -623,15 +627,21 @@ const styles = {
   },
   resize: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 18,
-    height: 18,
+    right: 8,
+    bottom: 8,
+    width: 32,
+    height: 32,
     cursor: 'ns-resize',
     touchAction: 'none',
-    zIndex: 3,
-    background:
-      'linear-gradient(135deg, transparent 0 46%, var(--color-text-tertiary) 46% 54%, transparent 54% 62%, var(--color-text-tertiary) 62% 70%, transparent 70%)',
+    zIndex: 4,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'var(--accent)',
+    background: 'var(--accent-soft)',
+    border: '0.5px solid var(--accent)',
+    borderRadius: 8,
+    boxShadow: '0 1px 4px rgba(17,24,39,0.12)',
   },
   count: {
     fontSize: 11.5,

@@ -36,6 +36,7 @@ import CommsLog from './record/CommsLog.jsx';
 import FocusBox from './FocusBox.jsx';
 import QuickCommPrompt from './QuickCommPrompt.jsx';
 import { DEFAULT_COMM_PILLS } from './projects/CommsTab.jsx';
+import { clearCloseOutDismissed } from '../lib/utils.js';
 
 // Tab keys are unchanged — only their *presentation* is grouped. Each key still
 // routes exactly as before via setTab(key). NAV defines the grouped structure:
@@ -65,7 +66,7 @@ const DOORS = [
   { id: 'today', label: 'Today' },
   { id: 'projects', label: 'Projects' },
   { id: 'plan', label: 'Plan' },
-  { id: 'track', label: 'Track' },
+  { id: 'track', label: 'Time' },
   { id: 'record', label: 'Record' },
 ];
 
@@ -225,6 +226,7 @@ export default function WorkspaceView({
 
   const {
     allTasks,
+    assignedTasks,
     loading: tasksLoading,
     addTask,
     updateTask,
@@ -353,14 +355,23 @@ export default function WorkspaceView({
     const nonce = ++openNonce.current;
     setFocusProjectId(spec.projectId);
     setContextProjectId(spec.projectId);
-    if (spec.stationId && spec.deliverableId) {
-      setStationOverlay({
-        projectId: spec.projectId,
-        deliverableId: spec.deliverableId,
-        stationId: spec.stationId,
-      });
-      return;
+    if (spec.stationId) {
+      for (const p of projects || []) {
+        if (p.id !== spec.projectId) continue;
+        for (const d of p.deliverables || []) {
+          if (spec.deliverableId && d.id !== spec.deliverableId) continue;
+          const s = (d.stations || []).find((x) => x.id === spec.stationId);
+          if (!s) continue;
+          setStationOverlay({
+            projectId: p.id,
+            deliverableId: d.id,
+            stationId: s.id,
+          });
+          return;
+        }
+      }
     }
+    setStationOverlay(null);
     setProjectOpenId(spec.projectId);
     setProjectOpenNonce(nonce);
     setTab('projects');
@@ -393,18 +404,26 @@ export default function WorkspaceView({
       sessionStorage.removeItem('daymark-open-assigned');
     } catch {}
     if (intent.stationId) {
+      let fallback = null;
       for (const p of projects || []) {
         for (const d of p.deliverables || []) {
           const s = (d.stations || []).find((x) => x.id === intent.stationId);
           if (!s) continue;
-          setContextProjectId(p.id);
-          setStationOverlay({
-            projectId: p.id,
-            deliverableId: d.id,
-            stationId: s.id,
-          });
-          return;
+          const hit = { projectId: p.id, deliverableId: d.id, stationId: s.id };
+          const exactProject = !intent.projectId || p.id === intent.projectId;
+          const exactDeliverable = !intent.deliverableId || d.id === intent.deliverableId;
+          if (exactProject && exactDeliverable) {
+            setContextProjectId(p.id);
+            setStationOverlay(hit);
+            return;
+          }
+          if (!fallback) fallback = hit;
         }
+      }
+      if (fallback) {
+        setContextProjectId(fallback.projectId);
+        setStationOverlay(fallback);
+        return;
       }
     }
     if (intent.projectId && (projects || []).some((p) => p.id === intent.projectId)) {
@@ -447,9 +466,10 @@ export default function WorkspaceView({
   // so intercepting here covers Tasks, Today, Plan and the priority banner
   // without touching any of them.
   const handleToggleDone = (taskId) => {
-    const task = (allTasks || []).find((t) => t.id === taskId);
+    const task = (allTasks || []).find((t) => t.id === taskId) ||
+      (assignedTasks || []).find((t) => t.id === taskId);
     const wasDone = !!task?.done;
-    runSave(async () => {
+    return runSave(async () => {
       const result = await toggleDone(taskId);
       // Only prompt on a persisted completion, and only for station-linked tasks.
       if (result?.ok && task && !wasDone) {
@@ -688,18 +708,39 @@ export default function WorkspaceView({
     await time.voidBlock(id);
   };
 
+  const openLoadedStation = (project, deliverable, station) => {
+    if (!project || !deliverable || !station) return false;
+    setContextProjectId(project.id);
+    setStationOverlay({
+      projectId: project.id,
+      deliverableId: deliverable.id,
+      stationId: station.id,
+    });
+    return true;
+  };
+
   const openDoItem = (item) => {
     if (!item) return;
     if (item.kind === 'project') {
-      const id = item.projectId || item.task?.projectId || '';
+      const task = item.task || null;
+      const id = item.projectId || task?.projectId || '';
+      const stationId = item.stationId || task?.stationId || null;
+      const deliverableId = item.deliverableId || task?.deliverableId || null;
+      const ctx = resolveStationForTask(task);
+      if (ctx && openLoadedStation(ctx.project, ctx.deliverable, ctx.station)) return;
+      if (id && stationId && deliverableId) {
+        const project = (projects || []).find((p) => p.id === id);
+        const deliverable = (project?.deliverables || []).find((d) => d.id === deliverableId);
+        const station = (deliverable?.stations || []).find((s) => s.id === stationId);
+        if (openLoadedStation(project, deliverable, station)) return;
+      }
       if (id && (projects || []).some((p) => p.id === id)) {
-        setStationOverlay(null);
-        openProjectById(id);
+        openRecord(id);
         return;
       }
-      const task = item.task;
-      if (task?.workspaceId && task.workspaceId !== workspaceId && onSwitchWorkspace) {
-        const ws = (workspaces || []).find((w) => w.id === task.workspaceId);
+      const ownerId = task?.workspaceId;
+      if (ownerId && ownerId !== workspaceId && onSwitchWorkspace) {
+        const ws = (workspaces || []).find((w) => w.id === ownerId);
         if (!ws) return;
         try {
           sessionStorage.setItem(
@@ -707,6 +748,8 @@ export default function WorkspaceView({
             JSON.stringify({
               workspaceId: ws.id,
               projectId: id || task.projectId || null,
+              deliverableId,
+              stationId,
             })
           );
         } catch {}
@@ -725,20 +768,19 @@ export default function WorkspaceView({
     }
     const task = item.task || item;
     const ctx = resolveStationForTask(task);
-    if (ctx) {
-      setContextProjectId(ctx.project.id);
-      setStationOverlay({
-        projectId: ctx.project.id,
-        deliverableId: ctx.deliverable.id,
-        stationId: ctx.station.id,
-      });
-      return;
-    }
-    const proj = (projects || []).find(
-      (p) => p.id === task.projectId || (task.project && p.name === task.project)
-    );
+    if (ctx && openLoadedStation(ctx.project, ctx.deliverable, ctx.station)) return;
+    const foreign = !!(task.workspaceId && task.workspaceId !== (workspaceId || null));
+    const proj = (projects || []).find((p) => {
+      if (task.projectId && p.id === task.projectId) return true;
+      if (foreign) return false;
+      return !!(task.project && p.name === task.project);
+    });
     if (proj) {
-      openProjectById(proj.id);
+      openRecord({
+        projectId: proj.id,
+        deliverableId: task.deliverableId || null,
+        stationId: task.stationId || null,
+      });
       return;
     }
     if (task.workspaceId && task.workspaceId !== workspaceId && onSwitchWorkspace) {
@@ -848,9 +890,10 @@ export default function WorkspaceView({
       return;
     }
     if (doorId === 'track') {
-      if (pref === 'time') setTab('time');
-      else if (pref === 'deliverables') setTab('deliverables');
-      else setTab('track');
+      // Legacy pin "track" was the top-level station track. That view lives
+      // on the project. Time opens Timesheet unless Budget vs actual is pinned.
+      if (pref === 'deliverables') setTab('deliverables');
+      else setTab('time');
       return;
     }
     if (doorId === 'record') {
@@ -897,6 +940,7 @@ export default function WorkspaceView({
         {
           label: 'Prep tomorrow',
           run: () => {
+            clearCloseOutDismissed();
             setPrepSignal((n) => n + 1);
             setTab('today');
             setNavDoor('plan');
@@ -908,7 +952,6 @@ export default function WorkspaceView({
     }
     if (doorId === 'track') {
       return [
-        { label: 'Station track', run: () => go('track', 'track') },
         { label: 'Timesheet', run: () => go('time', 'track') },
         { label: 'Budget vs actual', run: () => go('deliverables', 'track') },
       ];
@@ -1068,6 +1111,8 @@ export default function WorkspaceView({
             onSeedDemo={handleSeedDemo}
             seedingDemo={seedingDemo}
             workspaceName={workspaceName}
+            workspaceId={workspaceId}
+            assignedTasks={assignedTasks}
             prepSignal={prepSignal}
             currentUserId={time.currentUserId}
           />

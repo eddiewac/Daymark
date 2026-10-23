@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { collectDeliverableWaiting } from '../../lib/deliverableStatus.js';
+import { localDateStr, todayStr } from '../../lib/utils.js';
 
 // ── Close-out-day panel ─────────────────────────────────────────────────────
 //
@@ -15,10 +16,6 @@ import { collectDeliverableWaiting } from '../../lib/deliverableStatus.js';
 //   onRollForward(taskId)  — move a task's due date to tomorrow
 //   onJumpToProject(id)    — navigate to a project
 //   onClose()              — dismiss the panel
-
-function dateStr(d) {
-  return d.toISOString().slice(0, 10);
-}
 
 function fmtShort(iso) {
   if (!iso) return '';
@@ -35,10 +32,10 @@ export default function CloseDayPanel({
   onJumpToProject,
   onClose,
 }) {
-  const today = dateStr(new Date());
+  const today = todayStr();
   const tomorrowDate = new Date();
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-  const tomorrow = dateStr(tomorrowDate);
+  const tomorrow = localDateStr(tomorrowDate);
 
   // ── PREP (forward-looking) ──────────────────────────────────────────────
   // Unfinished tasks that were due today or earlier — the carry-over.
@@ -85,9 +82,7 @@ export default function CloseDayPanel({
     () =>
       (tasks || []).filter((t) => {
         if (!t.done || !t.doneAt) return false;
-        const d = new Date(t.doneAt);
-        if (isNaN(d)) return false;
-        return dateStr(d) === today;
+        return localDateStr(t.doneAt) === today;
       }),
     [tasks, today]
   );

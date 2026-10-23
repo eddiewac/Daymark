@@ -560,7 +560,9 @@ function PlanListRow({
     >
       <input
         type="checkbox"
+        className="dm-check"
         checked={!!task.done}
+        aria-label={`${task.done ? 'Completed' : 'Mark complete'}: ${task.title || 'task'}`}
         onChange={() => onToggleDone(task.id)}
         style={listStyles.check}
       />
@@ -1093,6 +1095,11 @@ function TaskCard({ task, projects, onToggleDone, onEditTask, overdue }) {
       }}
     >
       <button
+        type="button"
+        className="dm-check"
+        role="checkbox"
+        aria-checked={!!task.done}
+        aria-label={`${task.done ? 'Completed' : 'Mark complete'}: ${task.title || 'task'}`}
         onClick={(e) => {
           e.stopPropagation();
           onToggleDone(task.id);

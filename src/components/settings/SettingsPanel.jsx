@@ -1171,9 +1171,8 @@ const NAV_GROUPS = [
   },
   {
     id: 'track',
-    label: 'Track',
+    label: 'Time',
     options: [
-      { key: 'track', label: 'Station track' },
       { key: 'time', label: 'Timesheet' },
       { key: 'deliverables', label: 'Budget vs actual' },
     ],
@@ -1193,8 +1192,15 @@ function NavDefaultsEditor({ workspaceId }) {
   const pinKey = `daymark-group-pin:${workspaceId || 'personal'}`;
   const [pins, setPins] = useState(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem(pinKey) || '{}');
-      return stored && typeof stored === 'object' ? stored : {};
+    const stored = JSON.parse(localStorage.getItem(pinKey) || '{}');
+    if (!stored || typeof stored !== 'object') return {};
+    if (stored.track === 'track') {
+      stored.track = 'time';
+      try {
+        localStorage.setItem(pinKey, JSON.stringify(stored));
+      } catch {}
+    }
+    return stored;
     } catch {
       return {};
     }

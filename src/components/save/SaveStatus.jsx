@@ -22,12 +22,14 @@ export function SaveStatusProvider({ children }) {
   const inflight = useRef(0);
   const savedTimer = useRef(null);
 
-  const showToast = useCallback((message, { onUndo, duration = 5000 } = {}) => {
+  const showToast = useCallback((message, { onUndo, duration } = {}) => {
     const id = uid();
+    // Undo after void/log needs time to reach. Plain notices stay short.
+    const ms = duration ?? (onUndo ? 12000 : 5000);
     setToasts((prev) => [...prev, { id, message, onUndo }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, duration);
+    }, ms);
     return id;
   }, []);
 

@@ -3,6 +3,8 @@ import { projectColor } from '../../lib/constants.js';
 import {
   localDateStr,
   todayStr,
+  formatDue,
+  daysUntil,
   CLOSE_OUT_PREP_SEEN_KEY,
   readCloseOutDismissedDay,
   markCloseOutDismissed,
@@ -831,6 +833,7 @@ export default function TodayView({
                             onOpen={(id) => openProjectById(id, row.task)}
                           />
                           {row.deliverableName ? <span>{row.deliverableName}</span> : null}
+                          <TaskDueFlags task={row.task} />
                         </div>
                         <div style={desk.doActions}>
                           {onStartTimer && (
@@ -930,6 +933,7 @@ export default function TodayView({
                                 onOpen={(id) => openProjectById(id, t)}
                               />
                               {deliverableName ? <span>{deliverableName}</span> : null}
+                              <TaskDueFlags task={t} />
                               {otherDesk ? <span style={desk.quietChip}>{t.assignedFrom}</span> : null}
                             </div>
                             <div style={desk.doActions}>
@@ -1073,7 +1077,42 @@ function SubHead({ label, tone, action, onAction }) {
   );
 }
 
-// ── WaitingRow — one item out with someone, with an inline Chase action ──────
+// Same due pill + deadline flag as Plan → Tasks (TaskRow). Quiet in the meta
+// line: overdue / due-soon / later share TaskRow's urgency colours; ⚑ only
+// when task.deadline is set.
+function TaskDueFlags({ task }) {
+  if (!task) return null;
+  const due = formatDue(task.dueDate);
+  const dueDays = daysUntil(task.dueDate);
+  const dueColor =
+    dueDays == null
+      ? 'var(--color-text-secondary)'
+      : dueDays < 0
+      ? '#e24b4a'
+      : dueDays === 0
+      ? '#D85A30'
+      : dueDays <= 2
+      ? '#BA7517'
+      : 'var(--color-text-secondary)';
+  if (!due && !task.deadline) return null;
+  const dc = task.deadline ? deadlineColor(task.deadline) : null;
+  return (
+    <>
+      {due ? (
+        <span style={{ ...desk.flag, color: dueColor, background: dueColor + '15' }}>{due}</span>
+      ) : null}
+      {task.deadline ? (
+        <span
+          style={{ ...desk.flag, color: dc, background: dc + '18', fontWeight: 600 }}
+          title={`Deadline: ${task.deadline}`}
+        >
+          ⚑ {fmtDeadline(task.deadline)}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 function ProjectChip({ name, projectId, onOpen }) {
   const label = (name || '').trim();
   if (!label) return null;
@@ -1087,6 +1126,7 @@ function ProjectChip({ name, projectId, onOpen }) {
   return <span style={desk.chip} title="Project">{label}</span>;
 }
 
+// ── WaitingRow — one item out with someone, with an inline Chase action ──────
 function WaitingRow({ item, today, onChase, onResolve, onOpen, onOpenProject }) {
   const late = item.date && item.date < today;
   const rel = waitRelLabel(item.date, today);
@@ -1920,6 +1960,13 @@ const desk = {
     padding: '1px 8px',
     fontSize: 11,
     fontWeight: 550,
+  },
+  // TaskRow pill, kept small so it sits in the meta line rather than the actions.
+  flag: {
+    fontSize: 10,
+    padding: '1px 7px',
+    borderRadius: 10,
+    fontWeight: 500,
   },
   play: {
     width: 28,

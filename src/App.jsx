@@ -265,6 +265,8 @@ export default function App() {
       <WorkspaceView
         key={activeWorkspace?.id || 'personal'}
         activeWorkspace={activeWorkspace}
+        workspaces={workspaces}
+        onSwitchWorkspace={handleSwitch}
         time={time}
         onTimerStartedForTask={(task) => setRunningTaskTitle(task?.title || '')}
       />
@@ -274,7 +276,7 @@ export default function App() {
           body={`Discard ${fmtElapsed(time.elapsedMsForRunning)} without logging?`}
           onClose={time.cancelPrompt}
           actions={[
-            { label: 'Keep timing', onClick: time.cancelPrompt },
+            { label: 'Keep running', onClick: time.cancelPrompt },
             {
               label: 'Confirm discard',
               danger: true,

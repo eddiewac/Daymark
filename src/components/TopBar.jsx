@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { DaymarkWordmark } from './Logo.jsx';
 import { createWorkspace, setStoredActiveWorkspaceId } from '../lib/workspaces.js';
@@ -21,6 +21,27 @@ export default function TopBar({
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [savePhase, setSavePhase] = useState(null);
+
+  useEffect(() => {
+    let clearTimer;
+    const onSave = (e) => {
+      const phase = e.detail?.phase;
+      if (phase === 'saving') {
+        setSavePhase('saving');
+        window.clearTimeout(clearTimer);
+      } else if (phase === 'saved') {
+        setSavePhase('saved');
+        window.clearTimeout(clearTimer);
+        clearTimer = window.setTimeout(() => setSavePhase(null), 1400);
+      }
+    };
+    window.addEventListener('daymark-save', onSave);
+    return () => {
+      window.removeEventListener('daymark-save', onSave);
+      window.clearTimeout(clearTimer);
+    };
+  }, []);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -109,6 +130,18 @@ export default function TopBar({
 
       <div style={{ flex: 1 }} />
 
+      {savePhase && (
+        <span
+          style={{
+            ...styles.savePill,
+            ...(savePhase === 'saved' ? styles.savePillOk : {}),
+          }}
+          role="status"
+        >
+          {savePhase === 'saved' ? 'Saved' : 'Saving…'}
+        </span>
+      )}
+
       {timerIndicator}
 
       <NotificationBell assignedTasks={assignedTasks} currentUserId={currentUserId} />
@@ -179,6 +212,18 @@ export default function TopBar({
 }
 
 const styles = {
+  savePill: {
+    fontSize: 11.5,
+    background: '#111827',
+    color: '#e5e7eb',
+    borderRadius: 999,
+    padding: '4px 10px',
+    fontWeight: 600,
+  },
+  savePillOk: {
+    background: '#065f46',
+    color: '#d1fae5',
+  },
   bar: {
     display: 'flex',
     alignItems: 'center',

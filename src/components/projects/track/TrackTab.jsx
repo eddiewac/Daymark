@@ -29,6 +29,11 @@ export default function TrackTab({
   onToggleTask,
   onDeleteTask,
   onAssignTask,
+  onContextProject,
+  blocks,
+  runningTimer,
+  onStartTimer,
+  onStopTimer,
 }) {
   const activeProjects = (projects || []).filter((p) => !p.archived);
 
@@ -63,11 +68,16 @@ export default function TrackTab({
     setSelectedId(activeProjects[0]?.id || null);
   }, [activeProjects, selectedId]);
 
+  useEffect(() => {
+    if (selectedId && onContextProject) onContextProject(selectedId);
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectProject = (id) => {
     setSelectedId(id);
     try {
       localStorage.setItem(LAST_PROJECT_KEY, id);
     } catch {}
+    onContextProject && onContextProject(id);
   };
 
   const selected = activeProjects.find((p) => p.id === selectedId) || null;
@@ -149,6 +159,10 @@ export default function TrackTab({
             onAssignTask={onAssignTask}
             initialFocusKey={initialProjectId === selected.id ? initialFocusKey : null}
             initialFocusNonce={initialFocusNonce}
+            blocks={blocks}
+            runningTimer={runningTimer}
+            onStartTimer={onStartTimer}
+            onStopTimer={onStopTimer}
             onClose={null}
           />
         )}

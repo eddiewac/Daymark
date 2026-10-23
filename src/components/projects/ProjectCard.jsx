@@ -23,6 +23,7 @@ export default function ProjectCard({
   taskCount,
   projectTasks,
   onClick,
+  lastOpened,
 }) {
   const color = projectColorWithGroups(project, allProjects, projectGroups);
   const group = findGroup(projectGroups, project.group);
@@ -45,9 +46,21 @@ export default function ProjectCard({
   const hasScopeCreep = oosItemCount > 0 || wholeOosCount > 0;
 
   return (
-    <button onClick={onClick} style={{ ...styles.card, borderTop: `3px solid ${color}` }}>
+    <button
+      onClick={onClick}
+      style={{
+        ...styles.card,
+        borderTop: `3px solid ${color}`,
+        ...(lastOpened ? { outline: '2px solid var(--accent)', background: 'var(--accent-soft)' } : {}),
+      }}
+    >
       <div style={styles.titleRow}>
         <div style={styles.title}>{project.name || '(untitled)'}</div>
+        {lastOpened && (
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+            Last opened
+          </span>
+        )}
         <span
           style={{
             ...styles.healthDot,

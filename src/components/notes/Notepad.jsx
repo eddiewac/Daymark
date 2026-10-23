@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { loadNotepad, saveNotepad } from '../../lib/notepad.js';
 import TaskMultiSelect from './TaskMultiSelect.jsx';
 
-export default function Notepad({
+const Notepad = forwardRef(function Notepad({
   projects,
   tasks,
   workspaceId,
   onAddTask,
   onAddProject,
   onAddNote, // new — used for "Save as note"
-}) {
+  embedded = false,
+}, ref) {
   const [body, setBody] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
@@ -43,6 +44,13 @@ export default function Notepad({
 
   const textareaRef = useRef(null);
   const saveTimer = useRef(null);
+  const bodyRef = useRef(body);
+  bodyRef.current = body;
+
+  useImperativeHandle(ref, () => ({
+    getBody: () => bodyRef.current,
+    setBody: (next) => setBody(next ?? ''),
+  }), []);
 
   useEffect(() => {
     loadNotepad()
@@ -192,14 +200,21 @@ export default function Notepad({
 
   return (
     <div style={styles.wrap}>
-      <div style={styles.header}>
-        <div>
-          <div style={styles.title}>📒 Notepad</div>
-          <div style={styles.sub}>
-            Quick personal scratchpad. Select text and convert to a task,
-            project, note, or follow-up.
+      <div style={embedded ? styles.headerEmbedded : styles.header}>
+        {!embedded && (
+          <div>
+            <div style={styles.title}>📒 Notepad</div>
+            <div style={styles.sub}>
+              Quick personal scratchpad. Select text and convert to a task,
+              project, note, or follow-up.
+            </div>
           </div>
-        </div>
+        )}
+        {embedded && (
+          <div style={styles.sub}>
+            One line per thought. Select text to convert one item, or switch to Triage for the batch.
+          </div>
+        )}
         <div style={styles.savedNote}>
           {savedAt ? `Saved ${fmtTime(savedAt)}` : loaded ? 'Loaded' : ''}
         </div>
@@ -497,7 +512,9 @@ export default function Notepad({
         onKeyUp={handleSelect}
         placeholder={
           loaded
-            ? 'Start jotting…\n\nTip: select any text and click "Convert to task", "Convert to project", or "Save as note".'
+            ? embedded
+              ? 'Dump lines as they come in…\n\n• one thought per line\n• switch to Triage when the batch is ready'
+              : 'Start jotting…\n\nTip: select any text and click "Convert to task", "Convert to project", or "Save as note".'
             : 'Loading…'
         }
         disabled={!loaded}
@@ -505,7 +522,9 @@ export default function Notepad({
       />
     </div>
   );
-}
+});
+
+export default Notepad;
 
 function fmtTime(ts) {
   const diff = Date.now() - ts;
@@ -528,6 +547,14 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     padding: '14px 18px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+  },
+  headerEmbedded: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 12px',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
   },
   title: { fontSize: 16, fontWeight: 600 },

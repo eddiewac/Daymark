@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { projectColor } from '../../../lib/constants.js';
+import { uid, addBusinessDays } from '../../../lib/utils.js';
 import CommsTab from '../CommsTab.jsx';
 import TaskForm from '../../tasks/TaskForm.jsx';
 
@@ -21,8 +22,10 @@ export default function StationFocus({
   onToggleTask,
   onDeleteTask,
   onAssignTask,
+  initialTab = 'details',
+  onAdvanced,
 }) {
-  const [tab, setTab] = useState('details');
+  const [tab, setTab] = useState(initialTab);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskAssignee, setNewTaskAssignee] = useState('');
   const [assigningId, setAssigningId] = useState(null);
@@ -89,6 +92,47 @@ export default function StationFocus({
     station.targetDate || new Date().toISOString().slice(0, 10)
   );
   const [stationTaskAdded, setStationTaskAdded] = useState(false);
+  const [advanceAsk, setAdvanceAsk] = useState(false);
+  const [commNote, setCommNote] = useState('');
+
+  const incompleteCount = stationTasks.filter((t) => !t.done).length;
+
+  // Log a reply-needed comm with expect-back so it lands on Today · Waiting.
+  const logWaitingComm = () => {
+    const expectReplyBy = addBusinessDays(3);
+    const newComm = {
+      id: uid(),
+      type: 'Awaiting reply',
+      color: '#ef9f27',
+      needsReply: true,
+      sentAt: Date.now(),
+      replyReceived: false,
+      replyAt: null,
+      expectReplyBy,
+    };
+    updateStation({ ...station, comms: [...(station.comms || []), newComm] });
+    setCommNote(`In Waiting · expect-back ${expectReplyBy}`);
+    setTimeout(() => setCommNote(''), 2800);
+  };
+
+  const commitAdvance = () => {
+    const turningOn = !station.done;
+    updateStation({
+      done: turningOn,
+      completedAt: turningOn ? new Date().toISOString() : null,
+    });
+    setAdvanceAsk(false);
+    if (turningOn && nextStation && onAdvanced) onAdvanced(nextStation.id);
+  };
+
+  // Advance confirms when tasks on this station are still open.
+  const requestAdvance = () => {
+    if (!station.done && incompleteCount > 0) {
+      setAdvanceAsk(true);
+      return;
+    }
+    commitAdvance();
+  };
   const addStationAsTask = async () => {
     await onAddTask({
       title: station.name || 'Station task',
@@ -113,10 +157,33 @@ export default function StationFocus({
           <span style={styles.crumbSep}>›</span>
           <span style={styles.crumbStation}>{station.name}</span>
         </div>
-        <button onClick={onClose} style={styles.closeBtn} title="Back to overview">
-          ×
-        </button>
+        <div style={styles.headerActions}>
+          <button type="button" onClick={logWaitingComm} style={styles.logCommBtn}>
+            Log comm → Waiting
+          </button>
+          <button type="button" onClick={requestAdvance} style={{ ...styles.advanceBtn, background: color }}>
+            {station.done ? 'Reopen' : 'Advance'}
+          </button>
+          <button onClick={onClose} style={styles.closeBtn} title="Back to overview">
+            ×
+          </button>
+        </div>
       </div>
+
+      {commNote && <div style={styles.commNote}>{commNote}</div>}
+      {advanceAsk && (
+        <div style={styles.advanceAsk}>
+          <span>
+            {incompleteCount} task{incompleteCount === 1 ? '' : 's'} still open. Advance anyway?
+          </span>
+          <button type="button" onClick={commitAdvance} style={styles.advanceConfirm}>
+            Advance
+          </button>
+          <button type="button" onClick={() => setAdvanceAsk(false)} style={styles.advanceStay}>
+            Keep working
+          </button>
+        </div>
+      )}
 
       {/* Sub-tabs */}
       <div style={styles.tabs}>
@@ -238,12 +305,7 @@ export default function StationFocus({
 
             <div style={styles.completeRow}>
               <button
-                onClick={() =>
-                  updateStation({
-                    done: !station.done,
-                    completedAt: !station.done ? new Date().toISOString() : null,
-                  })
-                }
+                onClick={requestAdvance}
                 style={{
                   ...styles.completeBtn,
                   background: station.done ? '#1d9e7522' : color,
@@ -251,7 +313,7 @@ export default function StationFocus({
                   border: station.done ? '0.5px solid #1d9e75' : 'none',
                 }}
               >
-                {station.done ? '✓ Completed — click to reopen' : 'Mark station complete →'}
+                {station.done ? '✓ Completed — click to reopen' : 'Advance →'}
               </button>
               {station.done && station.completedAt && (
                 <div style={styles.completedAt}>
@@ -582,6 +644,70 @@ const styles = {
     flexDirection: 'column',
     background: 'var(--bg-surface)',
     overflow: 'hidden',
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  logCommBtn: {
+    padding: '4px 8px',
+    fontSize: 11,
+    fontWeight: 650,
+    background: '#fffbeb',
+    color: '#d97706',
+    border: '0.5px solid #fde68a',
+    borderRadius: 6,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  advanceBtn: {
+    padding: '4px 10px',
+    fontSize: 11,
+    fontWeight: 650,
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  commNote: {
+    padding: '6px 14px',
+    fontSize: 12,
+    color: '#065f46',
+    background: '#ecfdf5',
+    borderBottom: '0.5px solid #a7f3d0',
+  },
+  advanceAsk: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    padding: '8px 14px',
+    fontSize: 12,
+    color: '#92400e',
+    background: '#fffbeb',
+    borderBottom: '0.5px solid #fde68a',
+  },
+  advanceConfirm: {
+    padding: '3px 8px',
+    fontSize: 11,
+    fontWeight: 650,
+    background: '#d97706',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  advanceStay: {
+    padding: '3px 8px',
+    fontSize: 11,
+    background: 'transparent',
+    border: '0.5px solid #fde68a',
+    borderRadius: 6,
+    cursor: 'pointer',
+    color: '#92400e',
   },
   header: {
     display: 'flex',

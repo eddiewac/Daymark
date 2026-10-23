@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { projectColor } from '../../../lib/constants.js';
 import { uid } from '../../../lib/utils.js';
-import StationFocus from './StationFocus.jsx';
+import StationWorkbench from './StationWorkbench.jsx';
 import { stationLastActivityAt, relativeTime } from '../../../lib/stations.js';
 import { deadlineColor, fmtDeadline } from '../../../lib/deadline.js';
 import { useCurrentTheme } from '../../../hooks/useCurrentTheme.js';
@@ -89,6 +89,10 @@ export default function TrackView({
   onClose,
   initialFocusKey = null,
   initialFocusNonce = 0,
+  blocks,
+  runningTimer,
+  onStartTimer,
+  onStopTimer,
 }) {
   const [focusKey, setFocusKey] = useState(initialFocusKey);
   useEffect(() => {
@@ -236,32 +240,6 @@ export default function TrackView({
 
   const currentTheme = useCurrentTheme();
   const isKaspa = currentTheme === 'kaspa';
-
-  if (focused) {
-    return (
-      <StationFocus
-        project={project}
-        deliverable={focused.deliverable}
-        station={focused.station}
-        allProjects={allProjects}
-        tasks={tasks}
-        members={members}
-        workspaceId={workspaceId}
-        categories={categories}
-        priorities={priorities}
-        statuses={statuses}
-        onUpdateStation={(updatedStation) => {
-          updateStation(focused.deliverable.id, focused.station.id, updatedStation);
-        }}
-        onAddTask={onAddTask}
-        onUpdateTask={onUpdateTask}
-        onToggleTask={onToggleTask}
-        onDeleteTask={onDeleteTask}
-        onAssignTask={onAssignTask}
-        onClose={() => setFocusKey(null)}
-      />
-    );
-  }
 
   const allStations = deliverables.flatMap((d) => d.stations || []);
   const totalStations = allStations.length;
@@ -581,6 +559,36 @@ export default function TrackView({
             </div>
           )}
         </div>
+      )}
+      {focused && (
+        <StationWorkbench
+          project={project}
+          deliverable={focused.deliverable}
+          station={focused.station}
+          allProjects={allProjects}
+          tasks={tasks}
+          members={members}
+          workspaceId={workspaceId}
+          categories={categories}
+          priorities={priorities}
+          statuses={statuses}
+          onUpdateStation={(updatedStation) => {
+            updateStation(focused.deliverable.id, focused.station.id, updatedStation);
+          }}
+          onSelectStation={(stationId) =>
+            setFocusKey(`${focused.deliverable.id}:${stationId}`)
+          }
+          blocks={blocks}
+          runningTimer={runningTimer}
+          onStartTimer={onStartTimer}
+          onStopTimer={onStopTimer}
+          onAddTask={onAddTask}
+          onUpdateTask={onUpdateTask}
+          onToggleTask={onToggleTask}
+          onDeleteTask={onDeleteTask}
+          onAssignTask={onAssignTask}
+          onClose={() => setFocusKey(null)}
+        />
       )}
     </div>
   );

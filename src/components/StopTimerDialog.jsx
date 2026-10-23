@@ -51,7 +51,7 @@ export default function StopTimerDialog({
               {taskTitle || '(unknown task)'}
             </div>
           </div>
-          <button onClick={onCancel} style={styles.closeBtn} title="Close">
+          <button onClick={onCancel} style={styles.closeBtn} title="Keep running">
             ×
           </button>
         </div>
@@ -109,8 +109,8 @@ export default function StopTimerDialog({
             Discard
           </button>
           <div style={{ flex: 1 }} />
-          <button onClick={onCancel} style={styles.cancelBtn}>
-            Cancel
+          <button onClick={onCancel} style={styles.cancelBtn} title="Close without logging — timer keeps running">
+            Keep running
           </button>
           <button
             onClick={handleSave}

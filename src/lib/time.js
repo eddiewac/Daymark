@@ -66,7 +66,9 @@ export async function loadTimeForTasks(taskIds) {
       continue;
     }
     for (const row of data || []) {
-      // Undone logs stay in the table (no deletes) but must not count.
+      // Budget actuals are this user's hours only (query is user-scoped).
+      // Voided rows stay in the table — undo never deletes time_entries —
+      // but they must not count.
       if (row.data?.voided) continue;
       const h = parseFloat(row.hours) || 0;
       totals[row.task_id] = (totals[row.task_id] || 0) + h;

@@ -38,6 +38,7 @@ export default function QuickCommPrompt({
   nextStationName,
   onCompleteStation,
   onPick,
+  placement = 'bottom',
   onDismiss,
 }) {
   const [leaving, setLeaving] = useState(false);
@@ -65,8 +66,9 @@ export default function QuickCommPrompt({
     <div
       style={{
         ...styles.wrap,
+        ...(placement === 'top' ? styles.wrapTop : {}),
         opacity: leaving ? 0 : 1,
-        transform: leaving ? 'translateY(8px)' : 'translateY(0)',
+        transform: leaving ? 'translateX(-50%) translateY(8px)' : 'translateX(-50%)',
       }}
     >
       <div style={styles.textCol}>
@@ -149,6 +151,10 @@ export default function QuickCommPrompt({
 }
 
 const styles = {
+  wrapTop: {
+    top: 64,
+    bottom: 'auto',
+  },
   wrap: {
     position: 'fixed',
     left: '50%',

@@ -31,6 +31,8 @@ import PriorityModal from './priority/PriorityModal.jsx';
 import QuickCapture from './QuickCapture.jsx';
 import HelpPanel from './HelpPanel.jsx';
 import TodayView from './today/TodayView.jsx';
+import StationWorkbench from './projects/track/StationWorkbench.jsx';
+import CommsLog from './record/CommsLog.jsx';
 import FocusBox from './FocusBox.jsx';
 import QuickCommPrompt from './QuickCommPrompt.jsx';
 import { DEFAULT_COMM_PILLS } from './projects/CommsTab.jsx';
@@ -57,32 +59,15 @@ const TAB_LABELS = {
   settings: 'Settings',
 };
 
-const NAV = [
-  { type: 'tab', key: 'today' },
-  {
-    type: 'group',
-    id: 'work',
-    label: 'Work',
-    color: '#185FA5',
-    // First key is the default landing when the group header is clicked.
-    keys: ['projects', 'tasks', 'plan', 'track', 'resource', 'status', 'waiting', 'deliverables'],
-  },
-  {
-    type: 'group',
-    id: 'record',
-    label: 'Record',
-    color: '#0F6E56',
-    keys: ['time', 'notes', 'notepad', 'export'],
-  },
-  { type: 'tab', key: 'congresses' },
+// Five doors. Menus open on click (Escape closes). Waiting-on and Notepad are
+// not doors — Waiting lives on Today, the notepad stays a float.
+const DOORS = [
+  { id: 'today', label: 'Today' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'track', label: 'Track' },
+  { id: 'record', label: 'Record' },
 ];
-
-// Which group (if any) a tab key belongs to — used to highlight the active
-// group header when one of its tabs is selected.
-const KEY_TO_GROUP = {};
-NAV.forEach((n) => {
-  if (n.type === 'group') n.keys.forEach((k) => { KEY_TO_GROUP[k] = n.id; });
-});
 
 // All valid tab keys, for persistence validation.
 function placeLabelForTask(task, projects) {
@@ -106,13 +91,15 @@ function normalizeOpenTarget(target) {
 
 const ALL_TAB_KEYS = [
   'today', 'tasks', 'plan', 'projects', 'track', 'resource', 'status', 'waiting', 'deliverables',
-  'notes', 'notepad', 'time', 'export', 'congresses', 'settings',
+  'notes', 'notepad', 'time', 'export', 'congresses', 'settings', 'record', 'comms', 'forecast',
 ];
 
 export default function WorkspaceView({
   activeWorkspace,
   time,
   onTimerStartedForTask,
+  workspaces,
+  onSwitchWorkspace,
 }) {
   // Derive workspaceId early — needed by the tab persistence key below.
   const workspaceId = activeWorkspace?.id || null;
@@ -123,14 +110,17 @@ export default function WorkspaceView({
   // can remember different tabs (e.g. you might be on Tasks in one workspace
   // but Status in another).
   const tabStorageKey = `daymark-tab:${workspaceId || 'personal'}`;
-  const [tab, setTab] = useState(() => {
-    try {
-      const stored = localStorage.getItem(tabStorageKey);
-      // Validate that the stored value is one of the known tabs
-      if (stored && ALL_TAB_KEYS.includes(stored)) return stored;
-    } catch {}
-    return 'tasks';
-  });
+  // First land after login is Today in the last workspace. Tab memory was
+  // restoring Settings (and other tabs) and skipping the desk. The tab is
+  // still remembered during the session for group menus, but a fresh mount
+  // — login, refresh, or switching workspace — opens Today.
+  const [tab, setTab] = useState('today');
+  const [navDoor, setNavDoor] = useState('today');
+  const [projectsView, setProjectsView] = useState('grid');
+  const [projectsViewNonce, setProjectsViewNonce] = useState(0);
+  const [focusNonce, setFocusNonce] = useState(0);
+  const [prepSignal, setPrepSignal] = useState(0);
+  const [recordPane, setRecordPane] = useState('time');
 
   // Save the tab whenever it changes
   useEffect(() => {
@@ -152,19 +142,18 @@ export default function WorkspaceView({
       return {};
     }
   });
-  // Whenever the active tab belongs to a group, record it as that group's last view.
+  // Whenever the active tab belongs to a door, record it as that door's last view.
   useEffect(() => {
-    const gid = KEY_TO_GROUP[tab];
-    if (!gid) return;
+    if (!navDoor || navDoor === 'today') return;
     setGroupLastView((prev) => {
-      if (prev[gid] === tab) return prev;
-      const next = { ...prev, [gid]: tab };
+      if (prev[navDoor] === tab) return prev;
+      const next = { ...prev, [navDoor]: tab };
       try {
         localStorage.setItem(groupMemKey, JSON.stringify(next));
       } catch {}
       return next;
     });
-  }, [tab, groupMemKey]);
+  }, [tab, navDoor, groupMemKey]);
   // A pinned default (set in Settings → Tab defaults) overrides remember-last:
   // if the user pinned a specific view for a group, tapping the header always
   // goes there. No pin → fall back to last-viewed → group's first tab.
@@ -221,11 +210,16 @@ export default function WorkspaceView({
   useEffect(() => {
     if (!openGroup) return;
     const close = () => setOpenGroup(null);
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
     window.addEventListener('scroll', close, true);
     window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
     };
   }, [openGroup]);
 
@@ -295,19 +289,28 @@ export default function WorkspaceView({
 
   // Floating notepad: a docked panel that stays open while navigating other
   // tabs. Its open-state is persisted so it survives reloads and tab changes.
+  // v2 key: the old flag defaulted closed, so live only showed the nav
+  // button. This ship restores the float for everyone; closing it sticks.
   const [notepadOpen, setNotepadOpenState] = useState(() => {
     try {
-      return localStorage.getItem('daymark-notepad-floating') === '1';
+      return localStorage.getItem('daymark-notepad-floating-v2') !== '0';
     } catch {
-      return false;
+      return true;
     }
   });
   const setNotepadOpen = (v) => {
     setNotepadOpenState(v);
     try {
-      localStorage.setItem('daymark-notepad-floating', v ? '1' : '0');
+      localStorage.setItem('daymark-notepad-floating-v2', v ? '1' : '0');
     } catch {}
   };
+  const floatVisible = notepadOpen && tab !== 'notepad';
+  if (typeof window !== 'undefined') window.__daymarkNotepadOpen = floatVisible;
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('daymark-notepad-visibility', { detail: { open: floatVisible } })
+    );
+  }, [floatVisible]);
 
   // ── Jump to Track ─────────────────────────────────────────────────────────
   // A task can link directly through to its project's Track view. When a task
@@ -319,9 +322,28 @@ export default function WorkspaceView({
   const [projectOpenId, setProjectOpenId] = useState(null);
   const [projectOpenNonce, setProjectOpenNonce] = useState(0);
   const openNonce = useRef(0);
+  const [focusProjectId, setFocusProjectId] = useState(null);
+  const [stationOverlay, setStationOverlay] = useState(null);
+  const [switchToast, setSwitchToast] = useState(null);
 
-  // Open a project, and a station workbench when we have both ids.
-  // Accepts a project id string (older callers) or { projectId, deliverableId, stationId }.
+  const contextKey = `daymark-context-project:${workspaceId || 'personal'}`;
+  const [contextProjectId, setContextProjectIdState] = useState(() => {
+    try {
+      return localStorage.getItem(contextKey) || '';
+    } catch {
+      return '';
+    }
+  });
+  const setContextProjectId = (id) => {
+    const next = id || '';
+    setContextProjectIdState(next);
+    try {
+      localStorage.setItem(contextKey, next);
+    } catch {}
+  };
+
+  // Open a project by id, or the station workbench when both ids are present.
+  // Accepts a project id string or { projectId, deliverableId, stationId }.
   const openRecord = (target) => {
     const spec = normalizeOpenTarget(target);
     if (!spec?.projectId) {
@@ -329,17 +351,66 @@ export default function WorkspaceView({
       return;
     }
     const nonce = ++openNonce.current;
+    setFocusProjectId(spec.projectId);
+    setContextProjectId(spec.projectId);
     if (spec.stationId && spec.deliverableId) {
-      setTrackTargetProjectId(spec.projectId);
-      setTrackFocusKey(`${spec.deliverableId}:${spec.stationId}`);
-      setTrackFocusNonce(nonce);
-      setTab('track');
+      setStationOverlay({
+        projectId: spec.projectId,
+        deliverableId: spec.deliverableId,
+        stationId: spec.stationId,
+      });
       return;
     }
     setProjectOpenId(spec.projectId);
     setProjectOpenNonce(nonce);
     setTab('projects');
   };
+
+  const openProjectById = (projectId) => openRecord(projectId);
+
+  // Assigned tasks on Personal have no station in this workspace. Open switches
+  // into the workspace that owns the task and opens that station once it loads.
+  useEffect(() => {
+    if (projectsLoading) return;
+    let raw = null;
+    try {
+      raw = sessionStorage.getItem('daymark-open-assigned');
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    let intent = null;
+    try {
+      intent = JSON.parse(raw);
+    } catch {
+      try {
+        sessionStorage.removeItem('daymark-open-assigned');
+      } catch {}
+      return;
+    }
+    if (!intent || intent.workspaceId !== workspaceId) return;
+    try {
+      sessionStorage.removeItem('daymark-open-assigned');
+    } catch {}
+    if (intent.stationId) {
+      for (const p of projects || []) {
+        for (const d of p.deliverables || []) {
+          const s = (d.stations || []).find((x) => x.id === intent.stationId);
+          if (!s) continue;
+          setContextProjectId(p.id);
+          setStationOverlay({
+            projectId: p.id,
+            deliverableId: d.id,
+            stationId: s.id,
+          });
+          return;
+        }
+      }
+    }
+    if (intent.projectId && (projects || []).some((p) => p.id === intent.projectId)) {
+      openProjectById(intent.projectId);
+    }
+  }, [projectsLoading, projects, workspaceId]);
 
   const jumpToTrack = (task) => {
     if (!task) return;
@@ -572,8 +643,8 @@ export default function WorkspaceView({
   }, [focusOpen]);
 
   // Start (or switch) a timer. Focus Mode opens only when the user opted in.
-  // Switching auto-logs the running block inside useTime — surface that as
-  // an Undo toast. A failed log leaves the original timer running.
+  // Switching auto-logs the running block inside useTime. The toast names that
+  // logged task (and its station), never the task just started.
   const startTimer = async (task) => {
     if (!task) return;
     onTimerStartedForTask?.(task);
@@ -582,13 +653,11 @@ export default function WorkspaceView({
     const result = switching ? await runSave(() => time.startTimer(task)) : await time.startTimer(task);
     if (result?.switched && result.blockId) {
       const prevTask = (allTasks || []).find((t) => t.id === (result.previousTaskId || prev?.taskId));
+      const ctx = prevTask ? resolveStationForTask(prevTask) : null;
+      const taskName = prevTask?.title || result.previousTitle || prev?.taskTitle || 'previous task';
+      const stationName = ctx?.station?.name || '';
       const place =
-        placeLabelForTask(prevTask, projects) ||
-        result.previousProject ||
-        result.previousTitle ||
-        prev?.projectName ||
-        prev?.taskTitle ||
-        'previous timer';
+        stationName && stationName !== taskName ? `${taskName} · ${stationName}` : taskName;
       showToast(`Logged ${result.minutes || 1} min to ${place}`, {
         onUndo: () => runSave(() => time.voidBlock(result.blockId)),
       });
@@ -600,6 +669,74 @@ export default function WorkspaceView({
     if (!result || result.ok === false) return;
     if (userPrefs.focusModeOnStart) setFocusOpen(true);
   };
+
+  const undoSwitchLog = async () => {
+    if (!switchToast?.blockId) return;
+    const id = switchToast.blockId;
+    setSwitchToast(null);
+    await time.voidBlock(id);
+  };
+
+  const openDoItem = (item) => {
+    if (!item) return;
+    if (item.kind === 'station') {
+      setContextProjectId(item.projectId);
+      setStationOverlay({
+        projectId: item.projectId,
+        deliverableId: item.deliverableId,
+        stationId: item.stationId,
+      });
+      return;
+    }
+    const task = item.task || item;
+    const ctx = resolveStationForTask(task);
+    if (ctx) {
+      setContextProjectId(ctx.project.id);
+      setStationOverlay({
+        projectId: ctx.project.id,
+        deliverableId: ctx.deliverable.id,
+        stationId: ctx.station.id,
+      });
+      return;
+    }
+    const proj = (projects || []).find(
+      (p) => p.id === task.projectId || (task.project && p.name === task.project)
+    );
+    if (proj) {
+      openProjectById(proj.id);
+      return;
+    }
+    if (task.workspaceId && task.workspaceId !== workspaceId && onSwitchWorkspace) {
+      const ws = (workspaces || []).find((w) => w.id === task.workspaceId);
+      if (!ws) return;
+      try {
+        sessionStorage.setItem(
+          'daymark-open-assigned',
+          JSON.stringify({
+            workspaceId: ws.id,
+            projectId: task.projectId || null,
+            deliverableId: task.deliverableId || null,
+            stationId: task.stationId || null,
+          })
+        );
+      } catch {}
+      onSwitchWorkspace(ws);
+    }
+  };
+
+  const overlayProject = stationOverlay
+    ? (projects || []).find((p) => p.id === stationOverlay.projectId)
+    : null;
+  let overlayDeliverable = null;
+  let overlayStation = null;
+  if (overlayProject && stationOverlay) {
+    overlayDeliverable = (overlayProject.deliverables || []).find(
+      (d) => d.id === stationOverlay.deliverableId
+    );
+    overlayStation = (overlayDeliverable?.stations || []).find(
+      (s) => s.id === stationOverlay.stationId
+    );
+  }
 
   // Find the running task across all loaded tasks
   const runningTask =
@@ -623,6 +760,140 @@ export default function WorkspaceView({
   // All notes the focus box might display
   const allNotes = [...personalNotes, ...teamNotes];
 
+  const lastOpenedKey = `daymark-projects-last-opened:${workspaceId || 'personal'}`;
+  let lastOpenedProjectId = null;
+  try {
+    lastOpenedProjectId = localStorage.getItem(lastOpenedKey);
+  } catch {}
+  const lastOpenedProject = (projects || []).find((p) => p.id === lastOpenedProjectId) || null;
+
+  const go = (nextTab, door) => {
+    setTab(nextTab);
+    if (door) setNavDoor(door);
+    setOpenGroup(null);
+  };
+
+  const openProjects = (view, projectId) => {
+    const nextView = view === 'forecast' ? 'forecast' : 'grid';
+    setProjectsView(nextView);
+    setProjectsViewNonce((n) => n + 1);
+    const openId = projectId || (nextView === 'grid' ? lastOpenedProjectId : null);
+    if (openId) {
+      setFocusProjectId(openId);
+      setFocusNonce((n) => n + 1);
+    }
+    setTab('projects');
+    setNavDoor('projects');
+    setOpenGroup(null);
+  };
+
+  const landDoor = (doorId, pref) => {
+    if (doorId === 'projects') {
+      if (pref === 'deliverables') {
+        setTab('deliverables');
+        return;
+      }
+      if (pref === 'forecast') {
+        setProjectsView('forecast');
+        setProjectsViewNonce((n) => n + 1);
+        setTab('projects');
+        return;
+      }
+      setProjectsView('grid');
+      setProjectsViewNonce((n) => n + 1);
+      if (lastOpenedProjectId) {
+        setFocusProjectId(lastOpenedProjectId);
+        setFocusNonce((n) => n + 1);
+      }
+      setTab('projects');
+      return;
+    }
+    if (doorId === 'plan') {
+      setTab(pref === 'congresses' ? 'congresses' : 'plan');
+      return;
+    }
+    if (doorId === 'track') {
+      if (pref === 'time') setTab('time');
+      else if (pref === 'deliverables') setTab('deliverables');
+      else setTab('track');
+      return;
+    }
+    if (doorId === 'record') {
+      if (pref === 'comms') setTab('comms');
+      else if (pref === 'export') setTab('export');
+      else {
+        setRecordPane(pref === 'notes' ? 'notes' : 'time');
+        setTab('record');
+      }
+    }
+  };
+
+  const onDoorClick = (door, el) => {
+    setNavDoor(door.id);
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setFlyAnchor({ left: r.left, top: r.bottom + 4 });
+    }
+    if (door.id === 'today') {
+      setTab('today');
+      setOpenGroup(null);
+      return;
+    }
+    const pinned = groupPins[door.id];
+    const pref = pinned || groupLastView[door.id] || null;
+    landDoor(door.id, pref);
+    setOpenGroup((cur) => (cur === door.id ? null : door.id));
+  };
+
+  const doorMenu = (doorId) => {
+    if (doorId === 'projects') {
+      return [
+        { label: 'All projects', run: () => openProjects('grid') },
+        ...(lastOpenedProject
+          ? [{ label: lastOpenedProject.name, run: () => openProjects('grid', lastOpenedProject.id) }]
+          : []),
+        { label: 'Deliverables', run: () => go('deliverables', 'projects') },
+        { label: 'Forecast', run: () => openProjects('forecast') },
+      ];
+    }
+    if (doorId === 'plan') {
+      return [
+        { label: 'This week', run: () => go('plan', 'plan') },
+        {
+          label: 'Prep tomorrow',
+          run: () => {
+            setPrepSignal((n) => n + 1);
+            setTab('today');
+            setNavDoor('plan');
+            setOpenGroup(null);
+          },
+        },
+        { label: 'Congresses', run: () => go('congresses', 'plan') },
+      ];
+    }
+    if (doorId === 'track') {
+      return [
+        { label: 'Station track', run: () => go('track', 'track') },
+        { label: 'Timesheet', run: () => go('time', 'track') },
+        { label: 'Budget vs actual', run: () => go('deliverables', 'track') },
+      ];
+    }
+    if (doorId === 'record') {
+      return [
+        {
+          label: 'Timesheet + Notes',
+          run: () => {
+            setRecordPane('time');
+            go('record', 'record');
+          },
+        },
+        { label: 'Comms log', run: () => go('comms', 'record') },
+        { label: 'Export / handoff', run: () => go('export', 'record') },
+      ];
+    }
+    return [];
+  };
+
   return (
     <div style={styles.wrap}>
       {isDemo && (
@@ -631,91 +902,54 @@ export default function WorkspaceView({
           onDelete={handleDeleteDemo}
         />
       )}
+      {openGroup && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setOpenGroup(null)}
+          style={styles.menuScrim}
+        />
+      )}
       <div style={styles.tabBar}>
-        {NAV.map((node) => {
-          if (node.type === 'tab') {
-            const k = node.key;
-            return (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                style={{
-                  ...styles.tab,
-                  ...(tab === k ? styles.tabActive : {}),
-                }}
-              >
-                {TAB_LABELS[k]}
-              </button>
-            );
-          }
-          // Group node — header that reveals a flyout of its tabs.
-          const isOpen = openGroup === node.id;
-          const groupActive = KEY_TO_GROUP[tab] === node.id;
-          // When a tab inside this group is active, show it in the header so you
-          // always know where you are (e.g. "Work · Status").
-          const activeChildLabel = groupActive ? TAB_LABELS[tab] : null;
+        {DOORS.map((door) => {
+          const isOpen = openGroup === door.id;
+          const active = navDoor === door.id;
+          const items = doorMenu(door.id);
           return (
-            <div
-              key={node.id}
-              style={styles.navGroup}
-              onMouseEnter={(e) => openFlyout(node.id, e.currentTarget.firstChild)}
-              onMouseLeave={() => setOpenGroup((g) => (g === node.id ? null : g))}
-            >
+            <div key={door.id} style={styles.navGroup}>
               <button
-                onClick={(e) => {
-                  // Tap/click the header: on touch (no hover) first tap opens;
-                  // otherwise it lands on the group's default (first) tab.
-                  const noHover =
-                    typeof window !== 'undefined' &&
-                    window.matchMedia &&
-                    window.matchMedia('(hover: none)').matches;
-                  if (noHover && !isOpen) {
-                    openFlyout(node.id, e.currentTarget);
-                  } else {
-                    setTab(groupLandingTab(node));
-                    setOpenGroup(null);
-                  }
-                }}
+                type="button"
+                onClick={(e) => onDoorClick(door, e.currentTarget)}
+                aria-current={active ? 'page' : undefined}
+                aria-expanded={door.id === 'today' ? undefined : isOpen}
+                aria-haspopup={door.id === 'today' ? undefined : 'menu'}
                 style={{
                   ...styles.tab,
-                  ...(groupActive ? styles.tabActive : {}),
+                  ...(active ? styles.tabActive : {}),
+                  ...(isOpen ? styles.tabExpanded : {}),
                 }}
               >
-                {node.label}
-                {activeChildLabel && (
-                  <span style={styles.activeChild}>· {activeChildLabel}</span>
-                )}
-                <span style={styles.navCaret}>▾</span>
+                {door.label}
+                {door.id !== 'today' && <span style={styles.navCaret}>▾</span>}
               </button>
-              {isOpen && (
+              {isOpen && items.length > 0 && (
                 <div
+                  role="menu"
                   style={{
                     ...styles.flyout,
                     left: flyAnchor.left,
                     top: flyAnchor.top,
                   }}
-                  onMouseEnter={() => setOpenGroup(node.id)}
-                  onMouseLeave={() => setOpenGroup(null)}
                 >
-                  {node.keys.map((k) => (
+                  {items.map((item) => (
                     <button
-                      key={k}
-                      onClick={() => {
-                        setTab(k);
-                        setOpenGroup(null);
-                      }}
-                      style={{
-                        ...styles.flyItem,
-                        ...(tab === k ? styles.flyItemActive : {}),
-                      }}
+                      key={item.label}
+                      type="button"
+                      role="menuitem"
+                      onClick={item.run}
+                      style={styles.flyItem}
                     >
-                      <span
-                        style={{
-                          ...styles.flyDot,
-                          ...(tab === k ? { background: node.color } : {}),
-                        }}
-                      />
-                      {TAB_LABELS[k]}
+                      {item.label}
                     </button>
                   ))}
                 </div>
@@ -777,9 +1011,18 @@ export default function WorkspaceView({
             congresses={congresses}
             todayPriority={priorityApi.today}
             onOpenPriorityModal={() => setPriorityModalOpen(true)}
-            onJumpToTab={(t) => setTab(t)}
+            onJumpToTab={(t) => {
+              setTab(t);
+              if (t === 'today') setNavDoor('today');
+              else if (t === 'projects' || t === 'deliverables') setNavDoor('projects');
+              else if (t === 'plan' || t === 'congresses') setNavDoor('plan');
+              else if (t === 'track' || t === 'time') setNavDoor('track');
+              else if (t === 'record' || t === 'notes' || t === 'export' || t === 'comms') setNavDoor('record');
+            }}
             onJumpToProject={openRecord}
             onPatchProject={patchProject}
+            blocks={time.blocks}
+            onOpenItem={openDoItem}
             onJumpToTrack={jumpToTrack}
             onToggleDone={handleToggleDone}
             onUpdateTask={updateTask}
@@ -789,6 +1032,9 @@ export default function WorkspaceView({
             onStopTimer={time.requestStop}
             onSeedDemo={handleSeedDemo}
             seedingDemo={seedingDemo}
+            workspaceName={workspaceName}
+            prepSignal={prepSignal}
+            currentUserId={time.currentUserId}
           />
         )}
         {tab === 'tasks' && (
@@ -865,6 +1111,14 @@ export default function WorkspaceView({
             onAdd={addProject}
             onUpdate={updateProject}
             onDelete={deleteProject}
+            focusProjectId={focusProjectId}
+            focusNonce={focusNonce}
+            requestedView={projectsView}
+            requestedViewNonce={projectsViewNonce}
+            runningTimer={time.runningTimer}
+            onStartTimer={startTimer}
+            onStopTimer={time.requestStop}
+            onContextProject={setContextProjectId}
             onAddTask={addTask}
             onUpdateTask={updateTask}
             onToggleTask={handleToggleDone}
@@ -882,6 +1136,11 @@ export default function WorkspaceView({
             initialProjectId={trackTargetProjectId}
             initialFocusKey={trackFocusKey}
             initialFocusNonce={trackFocusNonce}
+            onContextProject={setContextProjectId}
+            blocks={time.blocks}
+            runningTimer={time.runningTimer}
+            onStartTimer={startTimer}
+            onStopTimer={time.requestStop}
             stationTemplates={settings.stationTemplates || []}
             categories={settings.categories}
             priorities={settings.priorities}
@@ -970,6 +1229,68 @@ export default function WorkspaceView({
             onRequestStop={time.requestStop}
           />
         )}
+        {(tab === 'record' || tab === 'notes' || tab === 'time') && tab === 'record' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={styles.recordSeg} role="tablist" aria-label="Timesheet and notes">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={recordPane === 'time'}
+                onClick={() => setRecordPane('time')}
+                style={{ ...styles.recordSegBtn, ...(recordPane === 'time' ? styles.recordSegOn : {}) }}
+              >
+                Timesheet
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={recordPane === 'notes'}
+                onClick={() => setRecordPane('notes')}
+                style={{ ...styles.recordSegBtn, ...(recordPane === 'notes' ? styles.recordSegOn : {}) }}
+              >
+                Notes
+              </button>
+            </div>
+            {recordPane === 'notes' ? (
+              <NotesPanel
+                personal={personalNotes}
+                team={teamNotes}
+                loading={notesLoading}
+                projects={projects}
+                tasks={allTasks}
+                workspaceId={workspaceId}
+                onAdd={addNote}
+                onUpdate={updateNote}
+                onDelete={deleteNote}
+                onMove={moveNote}
+              />
+            ) : (
+              <TimesheetPanel
+                tasks={allTasks}
+                projects={projects}
+                blocks={time.blocks}
+                loadingEntries={time.loadingEntries}
+                runningTimer={time.runningTimer}
+                currentUserId={time.currentUserId}
+                workspaceId={workspaceId}
+                onAddBlock={time.addBlock}
+                onUpdateBlock={time.updateBlock}
+                onRemoveBlock={time.removeBlock}
+                onStartTimer={startTimer}
+                onRequestStop={time.requestStop}
+              />
+            )}
+          </div>
+        )}
+        {tab === 'comms' && (
+          <CommsLog
+            projects={projects}
+            onOpenStation={(item) => {
+              setContextProjectId(item.projectId);
+              setStationOverlay(item);
+            }}
+          />
+        )}
         {tab === 'export' && (
           <ExportPanel
             tasks={allTasks}
@@ -1007,11 +1328,12 @@ export default function WorkspaceView({
       {/* Floating notepad — docked beside the main content, stays open
           across tab changes. Hidden on the Notepad tab itself, where the
           full-screen notepad is already shown. */}
-      {notepadOpen && tab !== 'notepad' && (
+      {floatVisible && (
         <FloatingNotepad
           projects={projects}
           tasks={allTasks}
           workspaceId={workspaceId}
+          contextProjectId={contextProjectId}
           onAddTask={addTask}
           onAddProject={addProject}
           onAddNote={addNote}
@@ -1076,6 +1398,56 @@ export default function WorkspaceView({
           onCompleteStation={completeStationFromPrompt}
           onPick={logCommFromPrompt}
           onDismiss={() => setCommPrompt(null)}
+          placement={floatVisible ? 'top' : 'bottom'}
+        />
+      )}
+
+      {switchToast && (
+        <div style={styles.switchToast} role="status">
+          <div>{switchToast.main}</div>
+          <button type="button" onClick={undoSwitchLog} style={styles.switchUndo}>
+            Undo
+          </button>
+        </div>
+      )}
+
+      {overlayProject && overlayDeliverable && overlayStation && (
+        <StationWorkbench
+          project={overlayProject}
+          deliverable={overlayDeliverable}
+          station={overlayStation}
+          allProjects={projects}
+          tasks={allTasks}
+          members={members}
+          workspaceId={workspaceId}
+          categories={settings.categories}
+          priorities={settings.priorities}
+          statuses={settings.statuses}
+          onUpdateStation={(updatedStation) => {
+            const deliverables = (overlayProject.deliverables || []).map((d) => {
+              if (d.id !== overlayDeliverable.id) return d;
+              return {
+                ...d,
+                stations: (d.stations || []).map((s) =>
+                  s.id === updatedStation.id ? updatedStation : s
+                ),
+              };
+            });
+            updateProject(overlayProject.id, { deliverables });
+          }}
+          onSelectStation={(stationId) =>
+            setStationOverlay((cur) => (cur ? { ...cur, stationId } : cur))
+          }
+          blocks={time.blocks}
+          runningTimer={time.runningTimer}
+          onStartTimer={startTimer}
+          onStopTimer={time.requestStop}
+          onAddTask={addTask}
+          onUpdateTask={updateTask}
+          onToggleTask={handleToggleDone}
+          onDeleteTask={deleteTask}
+          onAssignTask={assignToMember}
+          onClose={() => setStationOverlay(null)}
         />
       )}
     </div>
@@ -1089,6 +1461,14 @@ const styles = {
     flexDirection: 'column',
     minHeight: 0,
   },
+  menuScrim: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 20,
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+  },
   tabBar: {
     display: 'flex',
     alignItems: 'center',
@@ -1097,6 +1477,35 @@ const styles = {
     background: 'var(--bg-surface)',
     borderBottom: '0.5px solid var(--color-border-tertiary)',
     overflowX: 'auto',
+    position: 'relative',
+    zIndex: 40,
+  },
+  tabExpanded: {
+    background: 'var(--color-background-secondary)',
+    color: 'var(--color-text-primary)',
+  },
+  recordSeg: {
+    display: 'flex',
+    gap: 6,
+    padding: '10px 16px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+    background: 'var(--bg-surface)',
+    flexShrink: 0,
+  },
+  recordSegBtn: {
+    border: '0.5px solid var(--color-border-secondary)',
+    background: 'transparent',
+    borderRadius: 8,
+    padding: '5px 12px',
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: 'pointer',
+    color: 'var(--color-text-secondary)',
+  },
+  recordSegOn: {
+    background: 'var(--accent-soft)',
+    color: 'var(--accent)',
+    borderColor: 'var(--accent)',
   },
   tab: {
     padding: '5px 12px',
@@ -1220,6 +1629,38 @@ const styles = {
     background: 'var(--accent-soft)',
     color: 'var(--accent)',
     border: '0.5px solid var(--accent)',
+  },
+  switchToast: {
+    position: 'fixed',
+    top: 64,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 2000,
+    background: '#111827',
+    color: '#f9fafb',
+    padding: '10px 14px',
+    borderRadius: 8,
+    fontSize: 13,
+    display: 'flex',
+    gap: 12,
+    alignItems: 'center',
+    boxShadow: '0 8px 24px rgba(0,0,0,.18)',
+    maxWidth: 460,
+  },
+  switchToastSub: {
+    fontSize: 11.5,
+    color: '#c4b5fd',
+    marginTop: 2,
+  },
+  switchUndo: {
+    padding: '4px 10px',
+    background: 'transparent',
+    color: '#fff',
+    border: '0.5px solid rgba(255,255,255,.35)',
+    borderRadius: 6,
+    fontSize: 12,
+    fontWeight: 650,
+    cursor: 'pointer',
   },
   bodyRow: { flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' },
   body: { flex: 1, display: 'flex', minHeight: 0 },

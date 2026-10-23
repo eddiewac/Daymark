@@ -33,23 +33,60 @@ export async function loadProjects(workspaceId) {
   }));
 }
 
+// Persist a project. Returns { ok, error } so callers can roll back instead of
+// treating a swallowed PostgREST error as success.
+//
+// Existing rows are UPDATEd (not upserted). Upsert rewrites user_id to the
+// current user and must also satisfy the INSERT policy, which fails silently
+// for teammates editing a project they didn't create — the optimistic UI
+// updates, reload shows the old row. Update keeps the owner's user_id.
+// New projects (no row yet) fall through to insert.
 export async function saveProject(project, workspaceId) {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user) return { ok: false, error: 'Not signed in' };
+  if (!project?.id) return { ok: false, error: 'Project is missing an id' };
 
   const { id, ...data } = project;
-  const row = {
-    id,
+  const updatedAt = new Date().toISOString();
+  const payload = { ...data, updatedAt };
+  const patch = {
     workspace_id: workspaceId || null,
-    user_id: user.id,
-    data: { ...data, updatedAt: new Date().toISOString() },
-    updated_at: new Date().toISOString(),
+    data: payload,
+    updated_at: updatedAt,
   };
 
-  const { error } = await supabase
+  const { data: updatedRows, error: updateError } = await supabase
     .from('projects')
-    .upsert(row, { onConflict: 'id' });
-  if (error) console.error('saveProject:', error);
+    .update(patch)
+    .eq('id', id)
+    .select('id, data');
+
+  if (updateError) {
+    console.error('saveProject:', updateError);
+    return { ok: false, error: updateError.message || 'Could not save project' };
+  }
+  if (updatedRows && updatedRows.length > 0) return { ok: true };
+
+  const { error: insertError } = await supabase.from('projects').insert({
+    id,
+    user_id: user.id,
+    ...patch,
+  });
+  if (!insertError) return { ok: true };
+
+  // Update matched 0 rows (select hidden by RLS, or a race) and the row
+  // already exists. If our payload landed, treat that as success.
+  if (insertError.code === '23505') {
+    const { data: row } = await supabase
+      .from('projects')
+      .select('data')
+      .eq('id', id)
+      .maybeSingle();
+    if (row?.data?.updatedAt === updatedAt) return { ok: true };
+  }
+
+  console.error('saveProject:', insertError);
+  return { ok: false, error: insertError.message || 'Project update did not persist' };
 }
 
 export async function deleteProject(projectId) {

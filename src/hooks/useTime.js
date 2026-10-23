@@ -9,7 +9,7 @@ import {
   startRunningTimer,
   clearRunningTimer,
 } from '../lib/time.js';
-import { localDateStr } from '../lib/utils.js';
+import { localDateStr, localTimeStr } from '../lib/utils.js';
 
 // Permission check: can the current user log time on this task?
 export function canTrackTime(task, currentUserId, workspaceId) {
@@ -27,8 +27,12 @@ export function useTime(workspaceId) {
   const [tickNow, setTickNow] = useState(Date.now());
   const [currentUserId, setCurrentUserId] = useState(null);
 
-  // Pending stop dialog state — when set, the indicator/UI shows the popup
+  // Pending stop dialog state — when set, the indicator/UI shows the popup.
+  // Only used for stops of at least one minute (editable start/end).
   const [pendingStop, setPendingStop] = useState(null);
+  // { type: 'discard' | 'short' } — confirm before dropping time, or the
+  // sub-1-minute round/discard choice. Never the dead "End must be after start" dialog.
+  const [pendingPrompt, setPendingPrompt] = useState(null);
 
   useEffect(() => {
     getCurrentUser().then((u) => setCurrentUserId(u?.id || null));
@@ -71,22 +75,92 @@ export function useTime(workspaceId) {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  const startTimer = useCallback(
-    async (task) => {
-      if (!task) return;
-      // If something else is running, drop it silently (no time logged)
-      if (runningTimer) {
-        await clearRunningTimer();
+  const rememberBlock = useCallback(
+    (created, blockWorkspaceId) => {
+      if (created && !created.voided && blockWorkspaceId == (workspaceId || null)) {
+        setBlocks((prev) => [...prev, created]);
       }
-      const state = await startRunningTimer(task.id, workspaceId);
-      setRunningTimer(state);
     },
-    [runningTimer, workspaceId]
+    [workspaceId]
   );
 
-  // Open the stop dialog with prefilled times
+  // Write a time_entry for a running timer. minutes is at least 1 so a
+  // sub-minute switch is logged, never dropped. Does not delete anything.
+  const logTimerBlock = useCallback(
+    async (timer, minutes) => {
+      if (!timer) return { ok: false, error: 'No running timer' };
+      const mins = Math.max(1, minutes || 1);
+      const start = new Date(timer.startedAt);
+      const end = new Date(start.getTime() + mins * 60000);
+      const created = await createBlockDb(timer.workspaceId, {
+        taskId: timer.taskId,
+        date: localDateStr(start),
+        startedAt: start.toISOString(),
+        endedAt: end.toISOString(),
+      });
+      if (!created) return { ok: false, error: 'Could not log time' };
+      rememberBlock(created, timer.workspaceId);
+      return {
+        ok: true,
+        blockId: created.id,
+        minutes: mins,
+        previousTaskId: timer.taskId,
+        previousTitle: timer.taskTitle || '',
+        previousProject: timer.projectName || '',
+      };
+    },
+    [rememberBlock]
+  );
+
+  const startTimer = useCallback(
+    async (task) => {
+      if (!task) return { ok: false, error: 'No task' };
+      let switched = null;
+      if (runningTimer && runningTimer.taskId !== task.id) {
+        // Auto-log the running block, then switch. Never silent-drop.
+        const elapsed = Date.now() - runningTimer.startedAt;
+        const minutes = Math.max(1, Math.round(elapsed / 60000));
+        switched = await logTimerBlock(runningTimer, minutes);
+        if (!switched.ok) return switched;
+        await clearRunningTimer();
+        setRunningTimer(null);
+      } else if (runningTimer && runningTimer.taskId === task.id) {
+        return { ok: true, switched: false, already: true };
+      }
+      const state = await startRunningTimer(task.id, workspaceId, {
+        taskTitle: task.title || '',
+        projectName: task.project || '',
+      });
+      if (!state) {
+        // The previous block is already logged. Don't report the whole switch
+        // as a failed save — the caller surfaces the start failure separately.
+        return {
+          ok: !!switched,
+          startFailed: true,
+          error: 'Could not start timer',
+          switched: !!switched,
+          ...(switched || {}),
+        };
+      }
+      setRunningTimer(state);
+      setPendingStop(null);
+      setPendingPrompt(null);
+      return { ok: true, switched: !!switched, ...(switched || {}) };
+    },
+    [runningTimer, workspaceId, logTimerBlock]
+  );
+
+  // Open the stop dialog, or the sub-1-minute chooser when the block is too
+  // short to survive minute-precision start/end fields.
   const requestStop = useCallback(() => {
     if (!runningTimer) return;
+    const elapsed = Date.now() - runningTimer.startedAt;
+    if (elapsed < 60000) {
+      setPendingStop(null);
+      setPendingPrompt({ type: 'short' });
+      return;
+    }
+    setPendingPrompt(null);
     setPendingStop({
       taskId: runningTimer.taskId,
       workspaceId: runningTimer.workspaceId,
@@ -95,43 +169,92 @@ export function useTime(workspaceId) {
     });
   }, [runningTimer]);
 
-  // Confirm the stop, save the block, clear the timer
+  // Confirm the stop, save the block, clear the timer. Fails closed: a write
+  // error leaves the timer running so the time is not lost.
   const confirmStop = useCallback(
     async (finalStart, finalEnd) => {
-      if (!pendingStop) return;
+      if (!pendingStop) return { ok: false, error: 'Nothing to save' };
       const startMs = new Date(finalStart).getTime();
       const endMs = new Date(finalEnd).getTime();
       const ms = endMs - startMs;
-      if (ms >= 30000) {
-        // Don't bother for blocks under 30 seconds
-        const date = localDateStr(new Date(finalStart));
-        const created = await createBlockDb(pendingStop.workspaceId, {
-          taskId: pendingStop.taskId,
-          date,
-          startedAt: finalStart,
-          endedAt: finalEnd,
-        });
-        // Only add to local state if the block belongs to the currently-loaded workspace
-        if (created && pendingStop.workspaceId == (workspaceId || null)) {
-          setBlocks((prev) => [...prev, created]);
-        }
+      if (!(ms > 0)) {
+        return { ok: false, error: 'End must be after start' };
       }
+      const date = localDateStr(new Date(finalStart));
+      const created = await createBlockDb(pendingStop.workspaceId, {
+        taskId: pendingStop.taskId,
+        date,
+        startedAt: finalStart,
+        endedAt: finalEnd,
+      });
+      if (!created) return { ok: false, error: 'Could not log time' };
+      rememberBlock(created, pendingStop.workspaceId);
       await clearRunningTimer();
       setRunningTimer(null);
       setPendingStop(null);
+      setPendingPrompt(null);
+      return {
+        ok: true,
+        blockId: created.id,
+        minutes: Math.max(1, Math.round(ms / 60000)),
+        previousTaskId: pendingStop.taskId,
+      };
     },
-    [pendingStop, workspaceId]
+    [pendingStop, rememberBlock]
   );
+
+  // Sub-1-minute stop: round up to the minutes actually elapsed (at least 1)
+  // instead of opening a save dialog whose minute clocks collapse to equal.
+  const confirmRoundMinute = useCallback(async () => {
+    if (!runningTimer) return { ok: false, error: 'No running timer' };
+    const elapsed = Date.now() - runningTimer.startedAt;
+    const minutes = Math.max(1, Math.round(elapsed / 60000));
+    const logged = await logTimerBlock(runningTimer, minutes);
+    if (!logged.ok) return logged;
+    await clearRunningTimer();
+    setRunningTimer(null);
+    setPendingStop(null);
+    setPendingPrompt(null);
+    return { ...logged, switched: false };
+  }, [runningTimer, logTimerBlock]);
 
   const cancelStop = useCallback(() => {
     setPendingStop(null);
   }, []);
 
-  // Cancel the running timer entirely (no logging, no popup)
+  const requestDiscard = useCallback(() => {
+    if (!runningTimer) return;
+    setPendingPrompt({ type: 'discard' });
+  }, [runningTimer]);
+
+  const cancelPrompt = useCallback(() => {
+    setPendingPrompt(null);
+  }, []);
+
+  // Drop the running timer with no time_entry. Callers confirm first.
   const discardTimer = useCallback(async () => {
     await clearRunningTimer();
     setRunningTimer(null);
     setPendingStop(null);
+    setPendingPrompt(null);
+    return { ok: true };
+  }, []);
+
+  // Undo a logged block without deleting the row: mark it voided and zero
+  // the hours so budget and the timesheet stop counting it.
+  const voidBlock = useCallback(async (blockId) => {
+    if (!blockId) return { ok: false, error: 'Nothing to undo' };
+    let snapshot = null;
+    setBlocks((prev) => {
+      snapshot = prev.find((b) => b.id === blockId) || null;
+      return prev.filter((b) => b.id !== blockId);
+    });
+    const updated = await updateBlockDb(blockId, { hours: 0, voided: true });
+    if (!updated) {
+      if (snapshot) setBlocks((prev) => [...prev, snapshot]);
+      return { ok: false, error: 'Could not undo' };
+    }
+    return { ok: true };
   }, []);
 
   // ── Block CRUD (used from the timesheet) ─────────────────────────────────
@@ -177,11 +300,16 @@ export function useTime(workspaceId) {
     elapsedMsForRunning,
     currentUserId,
     pendingStop,
+    pendingPrompt,
     startTimer,
     requestStop,
     confirmStop,
+    confirmRoundMinute,
     cancelStop,
+    requestDiscard,
+    cancelPrompt,
     discardTimer,
+    voidBlock,
     addBlock,
     updateBlock,
     removeBlock,
@@ -202,21 +330,21 @@ export function fmtHours(h) {
   return h.toFixed(2);
 }
 
-// "HH:MM" from a timestamp
+// "HH:MM" from a timestamp, in the browser's local timezone.
 export function fmtTimeOfDay(ts) {
   if (!ts) return '';
-  const d = new Date(ts);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return localTimeStr(ts);
 }
 
-// Convert "HH:MM" + a date into a full ISO timestamp
+// Convert a local calendar day + "HH:MM" into a UTC ISO timestamp.
+// Built with the local Date constructor so Brisbane mornings are not shifted
+// onto the previous UTC date the way `toISOString().slice(0, 10)` would.
 export function combineDateAndTime(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
-  const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setHours(h || 0);
-  d.setMinutes(m || 0);
-  d.setSeconds(0);
-  d.setMilliseconds(0);
+  const [y, mo, da] = dateStr.split('-').map((x) => parseInt(x, 10));
+  const [h, m, s] = timeStr.split(':').map((x) => parseInt(x, 10));
+  if (!y || !mo || !da) return null;
+  const d = new Date(y, mo - 1, da, h || 0, m || 0, s || 0, 0);
+  if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }

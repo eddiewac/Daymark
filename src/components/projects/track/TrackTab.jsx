@@ -17,6 +17,8 @@ export default function TrackTab({
   members,
   workspaceId,
   initialProjectId,
+  initialFocusKey,
+  initialFocusNonce,
   stationTemplates,
   categories,
   priorities,
@@ -145,6 +147,8 @@ export default function TrackTab({
             onToggleTask={onToggleTask}
             onDeleteTask={onDeleteTask}
             onAssignTask={onAssignTask}
+            initialFocusKey={initialProjectId === selected.id ? initialFocusKey : null}
+            initialFocusNonce={initialFocusNonce}
             onClose={null}
           />
         )}

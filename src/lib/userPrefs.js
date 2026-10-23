@@ -13,6 +13,7 @@ const KEY_SUFFIX = 'user-prefs-v1';
 export const DEFAULT_USER_PREFS = {
   showPriorityBanner: true, // show "What's today's priority?" banner each morning
   displayName: '', // how you appear to others (e.g. in the Resource view)
+  focusModeOnStart: false, // open Focus Mode when a timer starts (opt-in)
 };
 
 function prefsKey(user) {

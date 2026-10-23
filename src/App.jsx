@@ -6,7 +6,9 @@ import {
   setStoredActiveWorkspaceId,
 } from './lib/workspaces.js';
 import { loadAssignedTasks } from './lib/tasks.js';
-import { useTime } from './hooks/useTime.js';
+import { useTime, fmtElapsed } from './hooks/useTime.js';
+import { useSaveStatus } from './components/save/SaveStatus.jsx';
+import TimerFlowDialog from './components/time/TimerFlowDialog.jsx';
 import { useGoals } from './hooks/useGoals.js';
 import Auth from './components/Auth.jsx';
 import MfaChallenge from './components/MfaChallenge.jsx';
@@ -53,6 +55,7 @@ export default function App() {
 
   const time = useTime(activeWorkspace?.id || null);
   const goalsApi = useGoals();
+  const { runSave, showToast } = useSaveStatus();
 
   useEffect(() => {
     let mounted = true;
@@ -226,12 +229,9 @@ export default function App() {
     <RunningTimerIndicator
       runningTimer={time.runningTimer}
       elapsedMs={time.elapsedMsForRunning}
-      taskTitle={runningTaskTitle}
+      taskTitle={time.runningTimer?.taskTitle || runningTaskTitle}
       onStop={time.requestStop}
-      onCancel={() => {
-        time.discardTimer();
-        setRunningTaskTitle('');
-      }}
+      onCancel={() => time.requestDiscard()}
     />
   ) : null;
 
@@ -268,18 +268,80 @@ export default function App() {
         time={time}
         onTimerStartedForTask={(task) => setRunningTaskTitle(task?.title || '')}
       />
+      {time.pendingPrompt?.type === 'discard' && (
+        <TimerFlowDialog
+          title="Discard time?"
+          body={`Discard ${fmtElapsed(time.elapsedMsForRunning)} without logging?`}
+          onClose={time.cancelPrompt}
+          actions={[
+            { label: 'Keep timing', onClick: time.cancelPrompt },
+            {
+              label: 'Confirm discard',
+              danger: true,
+              onClick: async () => {
+                const label = fmtElapsed(time.elapsedMsForRunning);
+                await time.discardTimer();
+                setRunningTaskTitle('');
+                showToast(`Discarded ${label} — not logged`);
+              },
+            },
+          ]}
+        />
+      )}
+      {time.pendingPrompt?.type === 'short' && (
+        <TimerFlowDialog
+          title="Under 1 minute"
+          body={`You timed less than a minute on “${time.runningTimer?.taskTitle || runningTaskTitle || 'this task'}”. Round up to save, or discard.`}
+          onClose={time.cancelPrompt}
+          actions={[
+            {
+              label: 'Discard',
+              onClick: async () => {
+                await time.discardTimer();
+                setRunningTaskTitle('');
+                showToast('Discarded sub-1-min — not logged');
+              },
+            },
+            {
+              label: 'Round to 1 min & save',
+              primary: true,
+              onClick: async () => {
+                const title = time.runningTimer?.taskTitle || runningTaskTitle || 'task';
+                const result = await runSave(() => time.confirmRoundMinute());
+                if (result?.ok === false) return;
+                setRunningTaskTitle('');
+                const mins = result.minutes || 1;
+                showToast(`Logged ${mins} min · ${title}${mins === 1 ? ' (rounded)' : ''}`, {
+                  onUndo: result.blockId
+                    ? () => runSave(() => time.voidBlock(result.blockId))
+                    : undefined,
+                });
+              },
+            },
+          ]}
+        />
+      )}
       {time.pendingStop && (
         <StopTimerDialog
           pendingStop={time.pendingStop}
-          taskTitle={runningTaskTitle}
-          onConfirm={(start, end) => {
-            time.confirmStop(start, end);
+          taskTitle={time.runningTimer?.taskTitle || runningTaskTitle}
+          onConfirm={async (start, end) => {
+            const title = time.runningTimer?.taskTitle || runningTaskTitle || 'task';
+            const result = await runSave(() => time.confirmStop(start, end));
+            if (result?.ok === false) return;
             setRunningTaskTitle('');
+            showToast(`Logged ${result.minutes || 1} min · ${title}`, {
+              onUndo: result.blockId
+                ? () => runSave(() => time.voidBlock(result.blockId))
+                : undefined,
+            });
           }}
           onCancel={time.cancelStop}
           onDiscard={() => {
+            const label = fmtElapsed(time.elapsedMsForRunning);
             time.discardTimer();
             setRunningTaskTitle('');
+            showToast(`Discarded ${label} — not logged`);
           }}
         />
       )}

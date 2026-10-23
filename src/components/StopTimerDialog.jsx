@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { fmtTimeOfDay, combineDateAndTime } from '../hooks/useTime.js';
-import { localDateStr } from '../lib/utils.js';
+import { combineDateAndTime } from '../hooks/useTime.js';
+import { localDateStr, localTimeStr } from '../lib/utils.js';
 
 export default function StopTimerDialog({
   pendingStop,
@@ -10,14 +10,25 @@ export default function StopTimerDialog({
   onDiscard,
 }) {
   const [date, setDate] = useState(() => localDateStr(new Date(pendingStop.startedAt)));
-  const [startTime, setStartTime] = useState(() => fmtTimeOfDay(pendingStop.startedAt));
-  const [endTime, setEndTime] = useState(() => fmtTimeOfDay(pendingStop.endedAt));
+  const [startTime, setStartTime] = useState(() => localTimeStr(pendingStop.startedAt));
+  const [endTime, setEndTime] = useState(() => localTimeStr(pendingStop.endedAt));
 
   useEffect(() => {
     setDate(localDateStr(new Date(pendingStop.startedAt)));
-    setStartTime(fmtTimeOfDay(pendingStop.startedAt));
-    setEndTime(fmtTimeOfDay(pendingStop.endedAt));
+    setStartTime(localTimeStr(pendingStop.startedAt));
+    setEndTime(localTimeStr(pendingStop.endedAt));
   }, [pendingStop.startedAt, pendingStop.endedAt]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onCancel?.();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onCancel]);
 
   const startISO = combineDateAndTime(date, startTime);
   const endISO = combineDateAndTime(date, endTime);

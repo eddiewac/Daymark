@@ -615,8 +615,11 @@ function PlanListRow({
           <button
             onClick={() => onStartTimer(task)}
             style={listStyles.trackBtn}
-            disabled={!!runningTimer}
-            title={runningTimer ? 'Stop the running timer first' : 'Start tracking'}
+            title={
+              runningTimer && runningTimer.taskId !== task.id
+                ? 'Switch timer — logs the current block'
+                : 'Start tracking'
+            }
           >
             ▶ Track
           </button>

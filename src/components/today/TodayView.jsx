@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
-import { todayStr } from '../../lib/utils.js';
+import { localDateStr, todayStr } from '../../lib/utils.js';
+import { useSaveStatus } from '../save/SaveStatus.jsx';
 import { taskDeliverableName } from '../../lib/deliverableStatus.js';
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
@@ -36,7 +37,7 @@ function defaultChaseDate() {
     const day = d.getDay();
     if (day !== 0 && day !== 6) added++;
   }
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 // Short relative label for a waiting item's date vs today.
@@ -66,6 +67,7 @@ export default function TodayView({
   onToggleDone,
   onUpdateTask,
   onUpdateProject,
+  onPatchProject,
   runningTimer,
   onStartTimer,
   onStopTimer,
@@ -73,6 +75,7 @@ export default function TodayView({
   seedingDemo,
 }) {
   const today = todayStr();
+  const { runSave, showToast } = useSaveStatus();
 
   const [closeDayOpen, setCloseDayOpen] = useState(false);
   // Which waiting item currently has its chase popover open (by key).
@@ -182,6 +185,17 @@ export default function TodayView({
   const waitCount = waitingItems.length;
   const hasNothing = doCount === 0 && waitCount === 0 && upcomingCongresses.length === 0;
 
+  // Apply a deliverables patch. On failure, put the previous array back locally
+  // (no second write — the server still has it) and let the strip offer Retry.
+  const saveDeliverables = (projectId, previous, next) => {
+    const attempt = async () => {
+      const result = await onUpdateProject(projectId, { deliverables: next });
+      if (!result?.ok && onPatchProject) onPatchProject(projectId, { deliverables: previous });
+      return result || { ok: false, error: 'Could not save' };
+    };
+    return runSave(attempt);
+  };
+
   // ── Chase handler — writes the new expected-back date to the right place ────
   const handleChase = (item, newDate) => {
     if (!onUpdateProject || !newDate) {
@@ -193,6 +207,7 @@ export default function TodayView({
       setChaseOpen(null);
       return;
     }
+    const previous = proj.deliverables;
     const stamp = new Date().toISOString();
     let deliverables;
     if (item.type === 'deliverable') {
@@ -214,16 +229,20 @@ export default function TodayView({
         ),
       }));
     }
-    onUpdateProject(proj.id, { deliverables });
     setChaseOpen(null);
+    saveDeliverables(proj.id, previous, deliverables).then((result) => {
+      if (result?.ok) showToast('Chase logged — expect-back updated');
+    });
   };
 
   // ── Resolve handler — clears the waiting state at its source so it stops
-  //    showing here AND on the project card ─────────────────────────────────────
+  //    showing here AND on the project card. The row leaves immediately; the
+  //    write has to succeed or the row comes back with Retry. ────────────────
   const handleResolve = (item) => {
     if (!onUpdateProject) return;
     const proj = (projects || []).find((p) => p.id === item.project.id);
     if (!proj) return;
+    const previous = proj.deliverables;
     const stamp = new Date().toISOString();
     let deliverables;
     if (item.type === 'deliverable') {
@@ -252,8 +271,36 @@ export default function TodayView({
         ),
       }));
     }
-    onUpdateProject(proj.id, { deliverables });
     setChaseOpen((k) => (k === item.key ? null : k));
+
+    // Undo restores the previous deliverables. If the save is still in flight,
+    // flag it so a successful write is immediately reversed. If it already
+    // landed, persist the previous array.
+    let phase = 'pending';
+    showToast('Resolved — Undo', {
+      onUndo: () => {
+        if (phase === 'saved') {
+          runSave(() => onUpdateProject(proj.id, { deliverables: previous }));
+        } else {
+          phase = 'undone';
+          if (onPatchProject) onPatchProject(proj.id, { deliverables: previous });
+        }
+      },
+    });
+
+    const attempt = async () => {
+      phase = 'pending';
+      const result = await onUpdateProject(proj.id, { deliverables });
+      if (phase === 'undone') {
+        if (result?.ok) await onUpdateProject(proj.id, { deliverables: previous });
+        else if (onPatchProject) onPatchProject(proj.id, { deliverables: previous });
+        return { ok: true, skipped: true };
+      }
+      if (!result?.ok && onPatchProject) onPatchProject(proj.id, { deliverables: previous });
+      if (result?.ok) phase = 'saved';
+      return result || { ok: false, error: 'Could not save' };
+    };
+    runSave(attempt);
   };
 
   const draftChaseEmail = (item) => {
@@ -426,7 +473,13 @@ export default function TodayView({
                     onChase={handleChase}
                     onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
-                    onOpen={() => onJumpToProject(item.project.id)}
+                    onOpen={() =>
+                      onJumpToProject({
+                        projectId: item.project.id,
+                        deliverableId: item.deliverable?.id,
+                        stationId: item.station?.id || null,
+                      })
+                    }
                   />
                 ))}
 
@@ -442,7 +495,13 @@ export default function TodayView({
                     onChase={handleChase}
                     onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
-                    onOpen={() => onJumpToProject(item.project.id)}
+                    onOpen={() =>
+                      onJumpToProject({
+                        projectId: item.project.id,
+                        deliverableId: item.deliverable?.id,
+                        stationId: item.station?.id || null,
+                      })
+                    }
                   />
                 ))}
 
@@ -458,7 +517,13 @@ export default function TodayView({
                     onChase={handleChase}
                     onResolve={handleResolve}
                     onDraftEmail={draftChaseEmail}
-                    onOpen={() => onJumpToProject(item.project.id)}
+                    onOpen={() =>
+                      onJumpToProject({
+                        projectId: item.project.id,
+                        deliverableId: item.deliverable?.id,
+                        stationId: item.station?.id || null,
+                      })
+                    }
                   />
                 ))}
 
@@ -548,7 +613,11 @@ function WaitingRow({ item, tone, today, open, onToggleChase, onChase, onResolve
   return (
     <div style={waitStyles.outer}>
       <div style={waitStyles.row}>
-        <button style={waitStyles.main} onClick={onOpen} title="Open project">
+        <button
+          style={waitStyles.main}
+          onClick={onOpen}
+          title={item.station ? 'Open station' : 'Open project'}
+        >
           <span style={waitStyles.title}>{item.label}</span>
           <span style={waitStyles.meta}>
             {item.who ? (
@@ -717,13 +786,12 @@ function TimerButton({ task, runningTimer, onStartTimer, onStopTimer }) {
       </button>
     );
   }
-  const blocked = !!runningTimer;
+  const switching = !!runningTimer && runningTimer.taskId !== task.id;
   return (
     <button
       onClick={() => onStartTimer(task)}
-      disabled={blocked}
-      style={{ ...timerStyles.track, opacity: blocked ? 0.4 : 1, cursor: blocked ? 'not-allowed' : 'pointer' }}
-      title={blocked ? 'Stop the running timer first' : 'Start tracking'}
+      style={timerStyles.track}
+      title={switching ? 'Switch timer — logs the current block' : 'Start tracking'}
     >
       ▶ Track
     </button>

@@ -35,7 +35,7 @@ export async function loadTimeEntries(workspaceId, fromDate, toDate) {
     return [];
   }
 
-  return (data || []).map(rowToBlock);
+  return (data || []).map(rowToBlock).filter((b) => !b.voided);
 }
 
 // Sum the CURRENT USER's logged hours per task, across ALL workspaces.
@@ -58,7 +58,7 @@ export async function loadTimeForTasks(taskIds) {
   for (const chunk of chunks) {
     const { data, error } = await supabase
       .from('time_entries')
-      .select('task_id, hours')
+      .select('task_id, hours, data')
       .eq('user_id', user.id)
       .in('task_id', chunk);
     if (error) {
@@ -66,6 +66,8 @@ export async function loadTimeForTasks(taskIds) {
       continue;
     }
     for (const row of data || []) {
+      // Undone logs stay in the table (no deletes) but must not count.
+      if (row.data?.voided) continue;
       const h = parseFloat(row.hours) || 0;
       totals[row.task_id] = (totals[row.task_id] || 0) + h;
     }
@@ -84,6 +86,7 @@ function rowToBlock(row) {
     hours: parseFloat(row.hours) || 0,
     notes: row.data?.notes || '',
     outOfScope: !!row.data?.outOfScope,
+    voided: !!row.data?.voided,
     createdAt: row.created_at,
   };
 }
@@ -136,7 +139,8 @@ export async function updateTimeBlock(blockId, patch) {
   // The `data` jsonb blob holds notes + outOfScope. When either changes we must
   // MERGE into the existing blob, not replace it — otherwise editing notes would
   // wipe the OOS flag (and vice versa). Fetch current data first, then merge.
-  const touchesData = patch.notes !== undefined || patch.outOfScope !== undefined;
+  const touchesData =
+    patch.notes !== undefined || patch.outOfScope !== undefined || patch.voided !== undefined;
   let currentData = null;
   if (touchesData) {
     const { data: cur } = await supabase
@@ -148,6 +152,7 @@ export async function updateTimeBlock(blockId, patch) {
     const merged = { ...currentData };
     if (patch.notes !== undefined) merged.notes = patch.notes;
     if (patch.outOfScope !== undefined) merged.outOfScope = !!patch.outOfScope;
+    if (patch.voided !== undefined) merged.voided = !!patch.voided;
     updateRow.data = merged;
   }
 
@@ -209,15 +214,17 @@ export async function loadRunningTimer() {
   }
 }
 
-export async function startRunningTimer(taskId, workspaceId) {
+export async function startRunningTimer(taskId, workspaceId, meta = {}) {
   const user = await getCurrentUser();
   if (!user) return null;
   const state = {
     taskId,
     workspaceId: workspaceId || null,
     startedAt: Date.now(),
+    taskTitle: meta.taskTitle || '',
+    projectName: meta.projectName || '',
   };
-  await supabase.from('app_storage').upsert(
+  const { error } = await supabase.from('app_storage').upsert(
     {
       key: user.id + ':' + TIMER_KEY_SUFFIX,
       value: JSON.stringify(state),
@@ -225,6 +232,10 @@ export async function startRunningTimer(taskId, workspaceId) {
     },
     { onConflict: 'key' }
   );
+  if (error) {
+    console.error('startRunningTimer:', error);
+    return null;
+  }
   return state;
 }
 

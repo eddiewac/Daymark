@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, getCurrentUser } from '../lib/supabase.js';
 import {
   loadProjects,
@@ -10,6 +10,15 @@ import { uid } from '../lib/utils.js';
 export function useProjects(workspaceId) {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Mirror of projects that is safe to read inside event handlers. Writing the
+  // next snapshot here (not inside a setState updater) is what makes the save
+  // actually run — React does not always invoke updaters before the next line.
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+  // Project ids with a save in flight. Realtime echoes during that window are
+  // ignored so a stale payload can't restore a row we just resolved.
+  const inflightRef = useRef(new Set());
+  const lastWriteAtRef = useRef({});
 
   // Initial load
   useEffect(() => {
@@ -49,6 +58,10 @@ export function useProjects(workspaceId) {
             if (!workspaceId && payload.new?.workspace_id) return;
 
             if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              if (inflightRef.current.has(payload.new?.id)) return;
+              const incomingAt = payload.new?.updated_at || '';
+              const known = lastWriteAtRef.current[payload.new?.id] || '';
+              if (known && incomingAt && incomingAt < known) return;
               const incoming = {
                 ...payload.new.data,
                 id: payload.new.id,
@@ -94,26 +107,48 @@ export function useProjects(workspaceId) {
         congresses: [],
         ...partial,
       };
-      setProjects((prev) => [newProject, ...prev]);
-      await saveProject(newProject, workspaceId);
-      return newProject;
+      const next = [newProject, ...projectsRef.current];
+      projectsRef.current = next;
+      setProjects(next);
+      const saved = await saveProject(newProject, workspaceId);
+      return saved?.ok === false ? { ...newProject, _saveError: saved.error } : newProject;
     },
     [workspaceId]
   );
 
+  // Local-only merge. Used to roll back a failed optimistic write without
+  // firing another request (the server still has the previous row).
+  const patchProject = useCallback((projectId, patch) => {
+    const prev = projectsRef.current;
+    const current = prev.find((p) => p.id === projectId);
+    if (!current) return null;
+    const updated = { ...current, ...patch };
+    const next = prev.map((p) => (p.id === projectId ? updated : p));
+    projectsRef.current = next;
+    setProjects(next);
+    return updated;
+  }, []);
+
   const updateProject = useCallback(
     async (projectId, patch) => {
-      let updated;
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.id !== projectId) return p;
-          updated = { ...p, ...patch };
-          return updated;
-        })
-      );
-      if (updated) await saveProject(updated, workspaceId);
+      const current = projectsRef.current.find((p) => p.id === projectId);
+      if (!current) return { ok: false, error: 'Project not found' };
+      const updated = patchProject(projectId, patch);
+      if (!updated) return { ok: false, error: 'Project not found' };
+      const stamp = new Date().toISOString();
+      inflightRef.current.add(projectId);
+      let result;
+      try {
+        result = await saveProject(updated, workspaceId);
+      } catch (err) {
+        result = { ok: false, error: err?.message || 'Could not save project' };
+      } finally {
+        inflightRef.current.delete(projectId);
+      }
+      if (result?.ok) lastWriteAtRef.current[projectId] = stamp;
+      return result || { ok: false, error: 'Could not save project' };
     },
-    [workspaceId]
+    [patchProject, workspaceId]
   );
 
   const deleteProject = useCallback(
@@ -144,6 +179,7 @@ export function useProjects(workspaceId) {
     loading,
     addProject,
     updateProject,
+    patchProject,
     deleteProject,
     updateDeliverables,
     updateStations,

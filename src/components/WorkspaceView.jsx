@@ -670,6 +670,17 @@ export default function WorkspaceView({
     if (userPrefs.focusModeOnStart) setFocusOpen(true);
   };
 
+  // Timesheet trash voids the row (hours 0, voided) and offers Undo.
+  // It must not hard-delete the time_entries row.
+  const voidTimesheetBlock = async (blockId) => {
+    const result = await runSave(() => time.voidBlock(blockId));
+    if (!result || result.ok === false) return;
+    const snapshot = result.snapshot;
+    showToast('Voided', {
+      onUndo: () => runSave(() => time.restoreBlock(blockId, snapshot)),
+    });
+  };
+
   const undoSwitchLog = async () => {
     if (!switchToast?.blockId) return;
     const id = switchToast.blockId;
@@ -1224,7 +1235,7 @@ export default function WorkspaceView({
             workspaceId={workspaceId}
             onAddBlock={time.addBlock}
             onUpdateBlock={time.updateBlock}
-            onRemoveBlock={time.removeBlock}
+            onVoidBlock={voidTimesheetBlock}
             onStartTimer={startTimer}
             onRequestStop={time.requestStop}
           />
@@ -1275,7 +1286,7 @@ export default function WorkspaceView({
                 workspaceId={workspaceId}
                 onAddBlock={time.addBlock}
                 onUpdateBlock={time.updateBlock}
-                onRemoveBlock={time.removeBlock}
+                onVoidBlock={voidTimesheetBlock}
                 onStartTimer={startTimer}
                 onRequestStop={time.requestStop}
               />

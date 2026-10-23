@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase.js';
 import { DaymarkWordmark } from './Logo.jsx';
 import { createWorkspace, setStoredActiveWorkspaceId } from '../lib/workspaces.js';
 import NotificationBell from './NotificationBell.jsx';
+import { useSaveStatus } from './save/SaveStatus.jsx';
 
 export default function TopBar({
   user,
@@ -22,6 +23,7 @@ export default function TopBar({
   const [creating, setCreating] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [savePhase, setSavePhase] = useState(null);
+  const { status, retry } = useSaveStatus();
 
   useEffect(() => {
     let clearTimer;
@@ -63,6 +65,19 @@ export default function TopBar({
     setStoredActiveWorkspaceId(null);
     await supabase.auth.signOut();
   };
+
+  // Real saves (runSave) win over the short pulse. Both use the same
+  // Saving… / Saved copy, rendered here so the pill is not bottom-left.
+  const fromStatus =
+    status?.kind === 'saving' || status?.kind === 'saved' || status?.kind === 'failed';
+  const saveKind = fromStatus ? status.kind : savePhase === 'saving' || savePhase === 'saved' ? savePhase : null;
+  const saveLabel = fromStatus
+    ? status.label
+    : saveKind === 'saved'
+    ? 'Saved'
+    : saveKind === 'saving'
+    ? 'Saving…'
+    : null;
 
   return (
     <header style={styles.bar}>
@@ -130,15 +145,21 @@ export default function TopBar({
 
       <div style={{ flex: 1 }} />
 
-      {savePhase && (
+      {saveLabel && (
         <span
           style={{
             ...styles.savePill,
-            ...(savePhase === 'saved' ? styles.savePillOk : {}),
+            ...(saveKind === 'saved' ? styles.savePillOk : {}),
+            ...(saveKind === 'failed' ? styles.savePillBad : {}),
           }}
           role="status"
         >
-          {savePhase === 'saved' ? 'Saved' : 'Saving…'}
+          {saveLabel}
+          {saveKind === 'failed' && (
+            <button type="button" onClick={retry} style={styles.saveRetry}>
+              Retry
+            </button>
+          )}
         </span>
       )}
 
@@ -213,16 +234,33 @@ export default function TopBar({
 
 const styles = {
   savePill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
     fontSize: 11.5,
     background: '#111827',
     color: '#e5e7eb',
     borderRadius: 999,
     padding: '4px 10px',
     fontWeight: 600,
+    flexShrink: 0,
   },
   savePillOk: {
     background: '#065f46',
     color: '#d1fae5',
+  },
+  savePillBad: {
+    background: '#7f1d1d',
+    color: '#fee2e2',
+  },
+  saveRetry: {
+    border: 'none',
+    background: 'transparent',
+    color: '#fecaca',
+    fontWeight: 700,
+    fontSize: 11.5,
+    cursor: 'pointer',
+    padding: 0,
   },
   bar: {
     display: 'flex',

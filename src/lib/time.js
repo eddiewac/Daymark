@@ -187,13 +187,8 @@ export async function updateTimeBlock(blockId, patch) {
   return rowToBlock(data);
 }
 
-export async function deleteTimeBlock(blockId) {
-  const { error } = await supabase
-    .from('time_entries')
-    .delete()
-    .eq('id', blockId);
-  if (error) console.error('deleteTimeBlock:', error);
-}
+// Time blocks are voided (hours 0, data.voided) rather than deleted, so Undo
+// can restore the row. Nothing in the timesheet path should call .delete().
 
 // ── Running timer ────────────────────────────────────────────────────────────
 const TIMER_KEY_SUFFIX = 'active-timer-v1';

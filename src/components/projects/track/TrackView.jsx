@@ -86,6 +86,8 @@ export default function TrackView({
   onToggleTask,
   onDeleteTask,
   onAssignTask,
+  onUnassignTask,
+  onOpenTasks,
   onClose,
   initialFocusKey = null,
   initialFocusNonce = 0,
@@ -588,6 +590,8 @@ export default function TrackView({
           onToggleTask={onToggleTask}
           onDeleteTask={onDeleteTask}
           onAssignTask={onAssignTask}
+          onUnassignTask={onUnassignTask}
+          onOpenTasks={onOpenTasks}
           onOpenProject={onOpenProject}
           onAddStation={(created) => {
             if (!created || !focused?.deliverable) return;

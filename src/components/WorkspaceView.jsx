@@ -845,12 +845,14 @@ export default function WorkspaceView({
   const lastOpenedProject = (projects || []).find((p) => p.id === lastOpenedProjectId) || null;
 
   const go = (nextTab, door) => {
+    setStationOverlay(null);
     setTab(nextTab);
     if (door) setNavDoor(door);
     setOpenGroup(null);
   };
 
   const openProjects = (view, projectId) => {
+    setStationOverlay(null);
     const nextView = view === 'forecast' ? 'forecast' : 'grid';
     setProjectsView(nextView);
     setProjectsViewNonce((n) => n + 1);
@@ -886,7 +888,9 @@ export default function WorkspaceView({
       return;
     }
     if (doorId === 'plan') {
-      setTab(pref === 'congresses' ? 'congresses' : 'plan');
+      if (pref === 'congresses') setTab('congresses');
+      else if (pref === 'tasks') setTab('tasks');
+      else setTab('plan');
       return;
     }
     if (doorId === 'track') {
@@ -913,6 +917,7 @@ export default function WorkspaceView({
       setFlyAnchor({ left: r.left, top: r.bottom + 4 });
     }
     if (door.id === 'today') {
+      setStationOverlay(null);
       setTab('today');
       setOpenGroup(null);
       return;
@@ -936,11 +941,13 @@ export default function WorkspaceView({
     }
     if (doorId === 'plan') {
       return [
+        { label: 'Tasks', run: () => go('tasks', 'plan') },
         { label: 'This week', run: () => go('plan', 'plan') },
         {
           label: 'Prep tomorrow',
           run: () => {
             clearCloseOutDismissed();
+            setStationOverlay(null);
             setPrepSignal((n) => n + 1);
             setTab('today');
             setNavDoor('plan');
@@ -985,10 +992,10 @@ export default function WorkspaceView({
           type="button"
           aria-label="Close menu"
           onClick={() => setOpenGroup(null)}
-          style={styles.menuScrim}
+          style={{ ...styles.menuScrim, ...(stationOverlay ? { zIndex: 985 } : {}) }}
         />
       )}
-      <div style={styles.tabBar}>
+      <div style={{ ...styles.tabBar, ...(stationOverlay ? { zIndex: 990 } : {}) }}>
         {DOORS.map((door) => {
           const isOpen = openGroup === door.id;
           const active = navDoor === door.id;
@@ -1093,7 +1100,7 @@ export default function WorkspaceView({
               setTab(t);
               if (t === 'today') setNavDoor('today');
               else if (t === 'projects' || t === 'deliverables') setNavDoor('projects');
-              else if (t === 'plan' || t === 'congresses') setNavDoor('plan');
+              else if (t === 'plan' || t === 'congresses' || t === 'tasks') setNavDoor('plan');
               else if (t === 'track' || t === 'time') setNavDoor('track');
               else if (t === 'record' || t === 'notes' || t === 'export' || t === 'comms') setNavDoor('record');
             }}
@@ -1204,6 +1211,8 @@ export default function WorkspaceView({
             onToggleTask={handleToggleDone}
             onDeleteTask={deleteTask}
             onAssignTask={assignToMember}
+            onUnassignTask={unassignFromMember}
+            onOpenTasks={() => go('tasks', 'plan')}
           />
         )}
         {tab === 'track' && (
@@ -1234,6 +1243,8 @@ export default function WorkspaceView({
             onToggleTask={handleToggleDone}
             onDeleteTask={deleteTask}
             onAssignTask={assignToMember}
+            onUnassignTask={unassignFromMember}
+            onOpenTasks={() => go('tasks', 'plan')}
           />
         )}
         {tab === 'resource' && (
@@ -1530,6 +1541,8 @@ export default function WorkspaceView({
           onToggleTask={handleToggleDone}
           onDeleteTask={deleteTask}
           onAssignTask={assignToMember}
+          onUnassignTask={unassignFromMember}
+          onOpenTasks={() => go('tasks', 'plan')}
           onOpenProject={(projectId) => {
             setStationOverlay(null);
             if (projectId) openProjectById(projectId);

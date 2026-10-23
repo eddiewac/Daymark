@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { uid, addBusinessDays } from '../../../lib/utils.js';
 import { loadTimeForTasks } from '../../../lib/time.js';
 import { pulseSave } from '../../../lib/savePulse.js';
+import TaskForm from '../../tasks/TaskForm.jsx';
 
 // Station workbench — one beat on top of the track: tasks, timer, log a comm
 // into Today · Waiting, and advance. The train stays underneath.
@@ -41,7 +42,17 @@ export default function StationWorkbench({
   onAddTask,
   onToggleTask,
   onOpenProject,
+  onOpenTasks,
   onAddStation,
+  allProjects,
+  members,
+  workspaceId,
+  categories,
+  priorities,
+  statuses,
+  onUpdateTask,
+  onAssignTask,
+  onUnassignTask,
 }) {
   const stations = deliverable?.stations || [];
   const stationIdx = stations.findIndex((s) => s.id === station?.id);
@@ -58,6 +69,7 @@ export default function StationWorkbench({
   const [commOpen, setCommOpen] = useState(false);
   const [advanceAsk, setAdvanceAsk] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
   const [draft, setDraft] = useState('');
   const [loop, setLoop] = useState('');
   const [who, setWho] = useState('');
@@ -73,6 +85,7 @@ export default function StationWorkbench({
     setCommOpen(false);
     setLoop('');
     setAdding(false);
+    setEditingTask(null);
   }, [station?.id]);
 
   useEffect(() => {
@@ -144,6 +157,56 @@ export default function StationWorkbench({
     setLoop(`Saved · now on Today · Waiting (${person} · expect ${fmtShort(expectReplyBy)})`);
   };
 
+  const canAssign = !!(workspaceId && members && members.length > 0);
+
+  const patchTask = (task, patch) => {
+    if (!onUpdateTask) return;
+    onUpdateTask(task.id, patch);
+    pulseSave();
+  };
+
+  // Pass the task object into assign so the assignment snapshot keeps the
+  // fields already on the row. A lookup-by-id inside assign would save a
+  // stale copy and wipe a due date that was just written.
+  const setAssignee = async (task, memberId) => {
+    if (!memberId) {
+      // Unassign rewrites the task from its own lookup. Write the row the
+      // user is looking at afterwards so a due date or deadline on screen
+      // is not replaced by that older copy.
+      if (onUnassignTask) await onUnassignTask(task.id);
+      else if (onAssignTask) await onAssignTask({ ...task, assignedToId: '', assignedToEmail: '' }, null, null);
+      if (onUpdateTask) {
+        await onUpdateTask(task.id, {
+          dueDate: task.dueDate || '',
+          deadline: task.deadline || '',
+          assignedToId: '',
+          assignedToEmail: '',
+        });
+      }
+      pulseSave();
+      return;
+    }
+    const member = (members || []).find((m) => m.id === memberId);
+    const email = member?.email || '';
+    if (onAssignTask) onAssignTask(task, memberId, email);
+    else if (onUpdateTask) onUpdateTask(task.id, { assignedToId: memberId, assignedToEmail: email });
+    pulseSave();
+  };
+
+  const saveTaskDetails = async (patch) => {
+    if (!editingTask) return;
+    const prevId = editingTask.assignedToId || '';
+    const nextId = patch.assignedToId || '';
+    if (nextId !== prevId && nextId && onAssignTask) {
+      await onAssignTask({ ...editingTask, ...patch }, nextId, patch.assignedToEmail || '');
+    } else {
+      if (nextId !== prevId && !nextId && onUnassignTask) await onUnassignTask(editingTask.id);
+      if (onUpdateTask) await onUpdateTask(editingTask.id, patch);
+    }
+    pulseSave();
+    setEditingTask(null);
+  };
+
   const addStationTask = async () => {
     const title = draft.trim();
     if (!title || !onAddTask) return;
@@ -184,6 +247,7 @@ export default function StationWorkbench({
   const pct = budget > 0 ? Math.min(100, Math.round((logged / budget) * 100)) : 0;
 
   return (
+    <>
     <div style={styles.backdrop} onClick={onClose}>
       <div
         style={styles.panel}
@@ -206,6 +270,11 @@ export default function StationWorkbench({
                   {project.id && onOpenProject ? (
                     <button type="button" style={styles.linkBtn} onClick={() => onOpenProject(project.id)}>
                       Open project
+                    </button>
+                  ) : null}
+                  {onOpenTasks ? (
+                    <button type="button" style={styles.linkBtn} onClick={onOpenTasks}>
+                      Tasks
                     </button>
                   ) : null}
                 </div>
@@ -297,6 +366,55 @@ export default function StationWorkbench({
                         {task.title || '(untitled)'}
                       </div>
                       <div style={styles.taskMeta}>{meta}</div>
+                      <div style={styles.detailRow}>
+                        <label style={styles.detailLbl}>
+                          Due
+                          <input
+                            type="date"
+                            aria-label={`Due date for ${task.title || 'task'}`}
+                            value={task.dueDate || ''}
+                            onChange={(e) => patchTask(task, { dueDate: e.target.value })}
+                            style={styles.dateInput}
+                          />
+                        </label>
+                        <label style={styles.detailLbl}>
+                          Deadline
+                          <input
+                            type="date"
+                            aria-label={`Deadline for ${task.title || 'task'}`}
+                            value={task.deadline || ''}
+                            onChange={(e) => patchTask(task, { deadline: e.target.value })}
+                            style={styles.dateInput}
+                          />
+                        </label>
+                        {canAssign && (
+                          <label style={styles.detailLbl}>
+                            Assign
+                            <select
+                              aria-label={`Assign ${task.title || 'task'}`}
+                              value={task.assignedToId || ''}
+                              onChange={(e) => setAssignee(task, e.target.value)}
+                              style={styles.assignSelect}
+                            >
+                              <option value="">Unassigned</option>
+                              {members.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.email || m.id.slice(0, 8)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        <button
+                          type="button"
+                          style={styles.detailsBtn}
+                          title="Deadline, assignee, and other task details"
+                          aria-label={`Edit details for ${task.title || 'task'}`}
+                          onClick={() => setEditingTask(task)}
+                        >
+                          ✎ Details
+                        </button>
+                      </div>
                     </div>
                     {task.done ? (
                       <span style={styles.doneLbl}>Done</span>
@@ -453,6 +571,43 @@ export default function StationWorkbench({
         </div>
       </div>
     </div>
+    {editingTask && (
+      <div
+        style={styles.modalBackdrop}
+        onClick={() => setEditingTask(null)}
+      >
+        <div
+          style={styles.modalDialog}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-label="Task details"
+        >
+          <div style={styles.modalHeader}>
+            <span style={styles.modalTitle}>Task details</span>
+            <button
+              type="button"
+              onClick={() => setEditingTask(null)}
+              style={styles.modalClose}
+              aria-label="Close task details"
+            >
+              ×
+            </button>
+          </div>
+          <TaskForm
+            initialTask={editingTask}
+            projects={allProjects}
+            categories={categories}
+            priorities={priorities}
+            statuses={statuses}
+            members={members}
+            workspaceId={workspaceId}
+            onSave={saveTaskDetails}
+            onCancel={() => setEditingTask(null)}
+          />
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -465,7 +620,7 @@ const styles = {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'flex-start',
-    padding: '28px 16px',
+    padding: '108px 16px 28px',
     overflow: 'auto',
   },
   panel: { width: 'min(1180px, 100%)' },
@@ -624,6 +779,85 @@ const styles = {
   taskTitle: { fontWeight: 550, fontSize: 13.5 },
   struck: { textDecoration: 'line-through', color: 'var(--color-text-secondary)' },
   taskMeta: { fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 },
+  detailRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  detailLbl: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    fontSize: 11,
+    fontWeight: 650,
+    color: 'var(--color-text-secondary)',
+  },
+  dateInput: {
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    padding: '3px 6px',
+    fontSize: 12,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+  },
+  assignSelect: {
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 6,
+    padding: '3px 6px',
+    fontSize: 12,
+    maxWidth: 180,
+    background: 'var(--bg-surface)',
+    color: 'var(--color-text-primary)',
+  },
+  detailsBtn: {
+    border: '0.5px solid var(--color-border-secondary)',
+    background: 'var(--bg-surface)',
+    borderRadius: 6,
+    padding: '3px 8px',
+    fontSize: 12,
+    fontWeight: 650,
+    cursor: 'pointer',
+    color: 'var(--color-text-primary)',
+  },
+  modalBackdrop: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.4)',
+    zIndex: 2100,
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    overflow: 'auto',
+    padding: '40px 20px 80px',
+  },
+  modalDialog: {
+    background: 'var(--bg-surface)',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 600,
+    boxShadow: '0 12px 40px rgba(0,0,0,0.18)',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+    background: 'var(--color-background-secondary)',
+  },
+  modalTitle: { fontSize: 13, fontWeight: 650 },
+  modalClose: {
+    width: 28,
+    height: 28,
+    background: 'transparent',
+    border: 'none',
+    fontSize: 22,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
+  },
   startBtn: {
     background: 'var(--accent)',
     color: '#fff',

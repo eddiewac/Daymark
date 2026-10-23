@@ -29,6 +29,8 @@ export default function TrackTab({
   onToggleTask,
   onDeleteTask,
   onAssignTask,
+  onUnassignTask,
+  onOpenTasks,
   onContextProject,
   blocks,
   runningTimer,
@@ -158,6 +160,8 @@ export default function TrackTab({
             onToggleTask={onToggleTask}
             onDeleteTask={onDeleteTask}
             onAssignTask={onAssignTask}
+            onUnassignTask={onUnassignTask}
+            onOpenTasks={onOpenTasks}
             initialFocusKey={initialProjectId === selected.id ? initialFocusKey : null}
             initialFocusNonce={initialFocusNonce}
             blocks={blocks}

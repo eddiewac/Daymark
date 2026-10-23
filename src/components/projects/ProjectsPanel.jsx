@@ -29,6 +29,8 @@ export default function ProjectsPanel({
   onToggleTask,
   onDeleteTask,
   onAssignTask,
+  onUnassignTask,
+  onOpenTasks,
   focusProjectId,
   focusNonce,
   requestedView,
@@ -166,6 +168,8 @@ export default function ProjectsPanel({
         onToggleTask={onToggleTask}
         onDeleteTask={onDeleteTask}
         onAssignTask={onAssignTask}
+        onUnassignTask={onUnassignTask}
+        onOpenTasks={onOpenTasks}
         blocks={blocks}
         runningTimer={runningTimer}
         onStartTimer={onStartTimer}

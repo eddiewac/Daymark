@@ -27,7 +27,7 @@ export default function HelpPanel({ open, onClose }) {
         <div style={styles.body}>
           <Section title="The tabs">
             <DefRow term="Today" def="One screen showing what needs your attention now: priority, overdue, due today, awaiting replies, stale stations, congresses." />
-            <DefRow term="Tasks" def="Your individual to-dos. List, kanban, or table view. Filterable by project, priority, status, etc." />
+            <DefRow term="Tasks" def="Plan → Tasks. List, kanban, or table. Filterable by project, priority, status, etc." />
             <DefRow term="Plan" def="Weekly planning. Calendar (drag tasks) or List (with timer + estimate-setting). Generates a capacity email for your team." />
             <DefRow term="Projects" def="Where projects, deliverables, stations, and comms live. Card grid, Gantt timeline, or full-screen Track view." />
             <DefRow term="Notes" def="Notes linked to specific projects — research, meeting outputs, briefs. Lives with the project, surfaces in handoffs." />

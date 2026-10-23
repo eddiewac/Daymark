@@ -1166,6 +1166,7 @@ const NAV_GROUPS = [
     label: 'Plan',
     options: [
       { key: 'plan', label: 'This week' },
+      { key: 'tasks', label: 'Tasks' },
       { key: 'congresses', label: 'Congresses' },
     ],
   },

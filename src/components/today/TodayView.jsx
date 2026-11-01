@@ -173,7 +173,10 @@ export default function TodayView({
   currentUserId,
 }) {
   const today = todayStr();
-  const { runSave, showToast } = useSaveStatus();
+  const { runSave, showToast, retry } = useSaveStatus();
+  const waitingBack = () => {
+    showToast('Couldn’t save, so it’s back in Waiting', { onRetry: retry });
+  };
 
   const [closeDayOpen, setCloseDayOpen] = useState(false);
   const [dismissedBlock, setDismissedBlock] = useState(() => new Set());
@@ -308,7 +311,7 @@ export default function TodayView({
 
   // Apply a deliverables patch built from the latest project, not from the
   // list captured when the click started. The hook rolls a failed write back.
-  const saveDeliverables = (projectId, nextOrFn) => {
+  const saveDeliverables = (projectId, nextOrFn, { waiting = false } = {}) => {
     const attempt = async () => {
       const result = await onUpdateProject(
         projectId,
@@ -316,7 +319,10 @@ export default function TodayView({
           ? (current) => ({ deliverables: nextOrFn(current.deliverables || []) })
           : { deliverables: nextOrFn }
       );
-      if (!result?.ok) showToast('Couldn’t save');
+      if (!result?.ok) {
+        if (waiting) waitingBack();
+        else showToast('Couldn’t save');
+      }
       return result || { ok: false, error: 'Could not save' };
     };
     return runSave(attempt);
@@ -559,7 +565,7 @@ export default function TodayView({
     if (item.type === 'followup') {
       runSave(async () => {
         const result = onUpdateTask ? await onUpdateTask(item.taskId, { dueDate: newDate }) : { ok: false };
-        if (!result?.ok) showToast('Couldn’t save');
+        if (!result?.ok) waitingBack();
         else showToast('Chased · expect-back reset +3 business days');
         return result || { ok: false, error: 'Could not save' };
       });
@@ -567,12 +573,15 @@ export default function TodayView({
     }
     if (!onUpdateProject || !item.project?.id) return;
     const stamp = new Date().toISOString();
-    saveDeliverables(item.project.id, (deliverables) =>
-      patchWaiting(deliverables, item, (row) =>
-        item.type === 'deliverable'
-          ? { ...row, waitingOnDate: newDate, lastChasedAt: stamp }
-          : { ...row, expectReplyBy: newDate, lastChasedAt: stamp }
-      )
+    saveDeliverables(
+      item.project.id,
+      (deliverables) =>
+        patchWaiting(deliverables, item, (row) =>
+          item.type === 'deliverable'
+            ? { ...row, waitingOnDate: newDate, lastChasedAt: stamp }
+            : { ...row, expectReplyBy: newDate, lastChasedAt: stamp }
+        ),
+      { waiting: true }
     ).then((result) => {
       if (result?.ok) showToast('Chased · expect-back reset +3 business days');
     });
@@ -618,7 +627,7 @@ export default function TodayView({
         return { ok: true, skipped: true };
       }
       if (!result?.ok) {
-        showToast('Couldn’t save');
+        waitingBack();
         return result || { ok: false, error: 'Could not save' };
       }
       phase = 'saved';
@@ -637,7 +646,7 @@ export default function TodayView({
       const pending = onToggleDone && onToggleDone(item.taskId);
       const finish = (result) => {
         if (!result || result.ok === false) {
-          showToast('Couldn’t save');
+          waitingBack();
           return;
         }
         showToast('Resolved · cleared from Waiting', {

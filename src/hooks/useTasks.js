@@ -22,6 +22,25 @@ function dateOnAssign(incoming, current, key) {
   return (current && current[key]) || '';
 }
 
+// Fields painted onto an assignment so the personal (or other) desk can show
+// where it came from. They are not part of the team task row.
+const ASSIGNED_DESK_FIELDS = [
+  'assignmentId',
+  'assignedFrom',
+  'assignedBy',
+  'assignedAt',
+  'isAssigned',
+  'dismissed',
+  'workspaceId',
+  'workspaceName',
+];
+
+function withoutDeskFields(task) {
+  const next = { ...task };
+  for (const key of ASSIGNED_DESK_FIELDS) delete next[key];
+  return next;
+}
+
 export function useTasks(workspaceId, workspaceName) {
   const [tasks, setTasks] = useState([]);
   const [assignedTasks, setAssignedTasks] = useState([]);
@@ -238,32 +257,41 @@ export function useTasks(workspaceId, workspaceName) {
 
   const updateTask = useCallback(
     async (taskId, patch) => {
-      const current =
-        tasksRef.current.find((t) => t.id === taskId) ||
-        assignedRef.current.find((t) => t.id === taskId);
+      // A task loaded for this desk wins. An assignment-only row is someone
+      // else's workspace shown here; it must be written back to that workspace,
+      // not to the desk the assignee happens to be looking at.
+      const onDesk = tasksRef.current.find((t) => t.id === taskId) || null;
+      const assigned = assignedRef.current.find((t) => t.id === taskId) || null;
+      const current = onDesk || assigned;
       if (!current) return { ok: false, error: 'Task not found' };
+
       // Apply outside the setState updater. React does not always run that
       // updater before the next line, so the save used to be skipped and the
       // chase date came back on refresh.
-      const updated = { ...current, ...patch };
-      const nextTasks = tasksRef.current.map((t) => (t.id === taskId ? updated : t));
-      const nextAssigned = assignedRef.current.map((t) => (t.id === taskId ? updated : t));
+      const prevTasks = tasksRef.current;
+      const prevAssigned = assignedRef.current;
+      const nextTasks = prevTasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t));
+      const nextAssigned = prevAssigned.map((t) => (t.id === taskId ? { ...t, ...patch } : t));
+      const patchedTask = nextTasks.find((t) => t.id === taskId);
+      const patchedAssigned = nextAssigned.find((t) => t.id === taskId);
       tasksRef.current = nextTasks;
       assignedRef.current = nextAssigned;
       setTasks(nextTasks);
       setAssignedTasks(nextAssigned);
-      const result = await saveTask(updated, workspaceId);
+
+      // Desk tasks stay on this workspace. Assignment-only rows keep their own
+      // workspace_id. Either way, personal-desk labels stay off the task jsonb.
+      const payload = withoutDeskFields(onDesk ? { ...onDesk, ...patch } : { ...assigned, ...patch });
+      const homeWorkspaceId = onDesk ? workspaceId : assigned.workspaceId || null;
+      const result = await saveTask(payload, homeWorkspaceId);
       const still =
-        tasksRef.current.find((t) => t.id === taskId) === updated ||
-        assignedRef.current.find((t) => t.id === taskId) === updated;
+        tasksRef.current.find((t) => t.id === taskId) === patchedTask &&
+        assignedRef.current.find((t) => t.id === taskId) === patchedAssigned;
       if (!result?.ok && still) {
-        const revert = (list) => list.map((t) => (t.id === taskId ? current : t));
-        const backTasks = revert(tasksRef.current);
-        const backAssigned = revert(assignedRef.current);
-        tasksRef.current = backTasks;
-        assignedRef.current = backAssigned;
-        setTasks(backTasks);
-        setAssignedTasks(backAssigned);
+        tasksRef.current = prevTasks;
+        assignedRef.current = prevAssigned;
+        setTasks(prevTasks);
+        setAssignedTasks(prevAssigned);
       }
       return result || { ok: false, error: 'Could not save task' };
     },

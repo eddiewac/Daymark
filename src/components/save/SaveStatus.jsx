@@ -22,11 +22,11 @@ export function SaveStatusProvider({ children }) {
   const inflight = useRef(0);
   const savedTimer = useRef(null);
 
-  const showToast = useCallback((message, { onUndo, duration } = {}) => {
+  const showToast = useCallback((message, { onUndo, onRetry, duration } = {}) => {
     const id = uid();
-    // Undo after void/log needs time to reach. Plain notices stay short.
-    const ms = duration ?? (onUndo ? 12000 : 5000);
-    setToasts((prev) => [...prev, { id, message, onUndo }]);
+    // Undo / Retry need time to reach. Plain notices stay short.
+    const ms = duration ?? (onUndo || onRetry ? 12000 : 5000);
+    setToasts((prev) => [...prev, { id, message, onUndo, onRetry }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, ms);
@@ -80,6 +80,18 @@ export function SaveStatusProvider({ children }) {
         {toasts.map((t) => (
           <div key={t.id} style={styles.toast}>
             <span>{t.message}</span>
+            {t.onRetry && (
+              <button
+                type="button"
+                style={styles.undo}
+                onClick={() => {
+                  dismissToast(t.id);
+                  t.onRetry();
+                }}
+              >
+                Retry
+              </button>
+            )}
             {t.onUndo && (
               <button
                 type="button"

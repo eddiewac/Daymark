@@ -994,12 +994,13 @@ export default function WorkspaceView({
       {openGroup && (
         <button
           type="button"
+          data-daymark-chrome="nav"
           aria-label="Close menu"
           onClick={() => setOpenGroup(null)}
           style={{ ...styles.menuScrim, ...(stationOverlay ? { zIndex: 985 } : {}) }}
         />
       )}
-      <div style={{ ...styles.tabBar, ...(stationOverlay ? { zIndex: 990 } : {}) }}>
+      <div data-daymark-chrome="nav" style={{ ...styles.tabBar, ...(stationOverlay ? { zIndex: 990 } : {}) }}>
         {DOORS.map((door) => {
           const isOpen = openGroup === door.id;
           const active = navDoor === door.id;

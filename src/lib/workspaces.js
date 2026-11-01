@@ -85,16 +85,19 @@ export async function createWorkspace(name) {
 export async function deleteWorkspace(workspaceId) {
   if (!workspaceId) throw new Error('Missing workspace id');
 
-  // Clean up app_storage rows whose key starts with `ws:{workspaceId}:`
-  // (covers settings, notepad blobs, anything else keyed this way)
-  const prefix = `ws:${workspaceId}:`;
-  const { error: storageError } = await supabase
-    .from('app_storage')
-    .delete()
-    .like('key', `${prefix}%`);
-  if (storageError) {
-    console.error('deleteWorkspace app_storage cleanup:', storageError);
-    // Don't abort — the workspace delete is the more important step.
+  // Team settings live at `{workspaceId}:…` so they match workspace_storage.
+  // Also drop the older `ws:{workspaceId}:…` keys when this member can see them.
+  const id = String(workspaceId).toLowerCase();
+  const prefixes = [...new Set([`${id}:`, `ws:${workspaceId}:`, `ws:${id}:`])];
+  for (const prefix of prefixes) {
+    const { error: storageError } = await supabase
+      .from('app_storage')
+      .delete()
+      .like('key', `${prefix}%`);
+    if (storageError) {
+      console.error('deleteWorkspace app_storage cleanup:', storageError);
+      // Don't abort — the workspace delete is the more important step.
+    }
   }
 
   // Now delete the workspace itself. Cascade handles the rest.

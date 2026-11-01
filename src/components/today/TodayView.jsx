@@ -15,7 +15,6 @@ import { useSaveStatus } from '../save/SaveStatus.jsx';
 import { taskDeliverableName, taskProjectName } from '../../lib/deliverableStatus.js';
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import { stationLastActivityAt } from '../../lib/stations.js';
-import { pulseSave } from '../../lib/savePulse.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
 
 // ── TodayView ───────────────────────────────────────────────────────────────
@@ -49,6 +48,25 @@ function defaultChaseDate() {
     if (day !== 0 && day !== 6) added++;
   }
   return localDateStr(d);
+}
+
+// Change one deliverable marker or one comm on the list passed in, which is the
+// latest copy — not the copy from when an earlier click was rendered.
+function patchWaiting(deliverables, item, mapRow) {
+  if (item.type === 'deliverable') {
+    return (deliverables || []).map((d) => (d.id === item.deliverable?.id ? mapRow(d) : d));
+  }
+  return (deliverables || []).map((d) => ({
+    ...d,
+    stations: (d.stations || []).map((s) =>
+      s.id === item.station?.id
+        ? {
+            ...s,
+            comms: (s.comms || []).map((c) => (c.id === item.comm?.id ? mapRow(c) : c)),
+          }
+        : s
+    ),
+  }));
 }
 
 function isCrossWorkspaceTask(task, workspaceId) {
@@ -288,12 +306,17 @@ export default function TodayView({
   const waitCount = waitingItems.length;
   const hasNothing = doCount === 0 && waitCount === 0 && upcomingCongresses.length === 0;
 
-  // Apply a deliverables patch. On failure, put the previous array back locally
-  // (no second write — the server still has it) and let the strip offer Retry.
-  const saveDeliverables = (projectId, previous, next) => {
+  // Apply a deliverables patch built from the latest project, not from the
+  // list captured when the click started. The hook rolls a failed write back.
+  const saveDeliverables = (projectId, nextOrFn) => {
     const attempt = async () => {
-      const result = await onUpdateProject(projectId, { deliverables: next });
-      if (!result?.ok && onPatchProject) onPatchProject(projectId, { deliverables: previous });
+      const result = await onUpdateProject(
+        projectId,
+        typeof nextOrFn === 'function'
+          ? (current) => ({ deliverables: nextOrFn(current.deliverables || []) })
+          : { deliverables: nextOrFn }
+      );
+      if (!result?.ok) showToast('Couldn’t save');
       return result || { ok: false, error: 'Could not save' };
     };
     return runSave(attempt);
@@ -504,20 +527,20 @@ export default function TodayView({
   const commitAdvance = (row) => {
     const proj = (projects || []).find((p) => p.id === row.project.id);
     if (!proj || !onUpdateProject) return;
-    const deliverables = (proj.deliverables || []).map((d) => {
-      if (d.id !== row.deliverable.id) return d;
-      return {
-        ...d,
-        stations: (d.stations || []).map((s) =>
-          s.id === row.station.id ? { ...s, done: true, completedAt: new Date().toISOString() } : s
-        ),
-      };
-    });
-    const previous = proj.deliverables;
     setAdvanceAsk(null);
-    pulseSave();
     const dest = row.next?.name || 'done';
-    saveDeliverables(proj.id, previous, deliverables).then((result) => {
+    const completedAt = new Date().toISOString();
+    saveDeliverables(proj.id, (deliverables) =>
+      (deliverables || []).map((d) => {
+        if (d.id !== row.deliverable.id) return d;
+        return {
+          ...d,
+          stations: (d.stations || []).map((s) =>
+            s.id === row.station.id ? { ...s, done: true, completedAt } : s
+          ),
+        };
+      })
+    ).then((result) => {
       if (result?.ok) showToast(`Saved · advanced toward ${dest}`);
     });
   };
@@ -534,109 +557,73 @@ export default function TodayView({
   const handleChase = (item, newDate) => {
     if (!newDate) return;
     if (item.type === 'followup') {
-      onUpdateTask && onUpdateTask(item.taskId, { dueDate: newDate });
-      pulseSave();
-      showToast('Chased · expect-back reset +3 business days');
+      runSave(async () => {
+        const result = onUpdateTask ? await onUpdateTask(item.taskId, { dueDate: newDate }) : { ok: false };
+        if (!result?.ok) showToast('Couldn’t save');
+        else showToast('Chased · expect-back reset +3 business days');
+        return result || { ok: false, error: 'Could not save' };
+      });
       return;
     }
-    if (!onUpdateProject) return;
-    const proj = (projects || []).find((p) => p.id === item.project.id);
-    if (!proj) return;
-    const previous = proj.deliverables;
+    if (!onUpdateProject || !item.project?.id) return;
     const stamp = new Date().toISOString();
-    let deliverables;
-    if (item.type === 'deliverable') {
-      deliverables = (proj.deliverables || []).map((d) =>
-        d.id === item.deliverable.id ? { ...d, waitingOnDate: newDate, lastChasedAt: stamp } : d
-      );
-    } else {
-      deliverables = (proj.deliverables || []).map((d) => ({
-        ...d,
-        stations: (d.stations || []).map((s) =>
-          s.id === item.station.id
-            ? {
-                ...s,
-                comms: (s.comms || []).map((c) =>
-                  c.id === item.comm.id ? { ...c, expectReplyBy: newDate, lastChasedAt: stamp } : c
-                ),
-              }
-            : s
-        ),
-      }));
-    }
-    pulseSave();
-    saveDeliverables(proj.id, previous, deliverables).then((result) => {
+    saveDeliverables(item.project.id, (deliverables) =>
+      patchWaiting(deliverables, item, (row) =>
+        item.type === 'deliverable'
+          ? { ...row, waitingOnDate: newDate, lastChasedAt: stamp }
+          : { ...row, expectReplyBy: newDate, lastChasedAt: stamp }
+      )
+    ).then((result) => {
       if (result?.ok) showToast('Chased · expect-back reset +3 business days');
     });
   };
 
   // ── Resolve handler — clears the waiting state at its source so it stops
   //    showing here AND on the project card. The row leaves immediately; the
-  //    write has to succeed or the row comes back with Retry. ────────────────
+  //    write has to succeed or the row comes back with a save-failed toast.
   const handleResolve = (item) => {
     if (item.type === 'followup') {
       onToggleDone && onToggleDone(item.taskId);
       return;
     }
-    if (!onUpdateProject) return;
+    if (!onUpdateProject || !item.project?.id) return;
     const proj = (projects || []).find((p) => p.id === item.project.id);
-    if (!proj) return;
-    const previous = proj.deliverables;
+    const previous = proj?.deliverables;
     const stamp = new Date().toISOString();
-    let deliverables;
-    if (item.type === 'deliverable') {
-      // Clear the deliverable's "with [person], back [date]" marker. The project
-      // card reads this via deliverableStatus(), so the status line reverts to
-      // station progress (or awaiting reply) automatically.
-      deliverables = (proj.deliverables || []).map((d) =>
-        d.id === item.deliverable.id
-          ? { ...d, waitingOnName: '', waitingOnDate: '', waitingResolvedAt: stamp }
-          : d
-      );
-    } else {
-      // Mark the comm's reply as received — it drops out of every "awaiting
-      // reply" surface across the app.
-      deliverables = (proj.deliverables || []).map((d) => ({
-        ...d,
-        stations: (d.stations || []).map((s) =>
-          s.id === item.station.id
-            ? {
-                ...s,
-                comms: (s.comms || []).map((c) =>
-                  c.id === item.comm.id ? { ...c, replyReceived: true, replyAt: stamp } : c
-                ),
-              }
-            : s
-        ),
-      }));
-    }
-    pulseSave();
-    // Undo restores the previous deliverables. If the save is still in flight,
-    // flag it so a successful write is immediately reversed. If it already
-    // landed, persist the previous array.
+    // Undo restores the deliverables from this click. If the save is still in
+    // flight, flag it so a successful write is immediately reversed.
     let phase = 'pending';
-    showToast('Resolved · cleared from Waiting', {
-      onUndo: () => {
-        if (phase === 'saved') {
-          runSave(() => onUpdateProject(proj.id, { deliverables: previous }));
-        } else {
-          phase = 'undone';
-          if (onPatchProject) onPatchProject(proj.id, { deliverables: previous });
-        }
-      },
-    });
+    const undo = () => {
+      if (!previous) return;
+      if (phase === 'saved') {
+        runSave(() => onUpdateProject(item.project.id, { deliverables: previous }));
+      } else {
+        phase = 'undone';
+        if (onPatchProject) onPatchProject(item.project.id, { deliverables: previous });
+      }
+    };
 
     const attempt = async () => {
       phase = 'pending';
-      const result = await onUpdateProject(proj.id, { deliverables });
+      const result = await onUpdateProject(item.project.id, (current) => ({
+        deliverables: patchWaiting(current.deliverables || [], item, (row) =>
+          item.type === 'deliverable'
+            ? { ...row, waitingOnName: '', waitingOnDate: '', waitingResolvedAt: stamp }
+            : { ...row, replyReceived: true, replyAt: stamp }
+        ),
+      }));
       if (phase === 'undone') {
-        if (result?.ok) await onUpdateProject(proj.id, { deliverables: previous });
-        else if (onPatchProject) onPatchProject(proj.id, { deliverables: previous });
+        if (result?.ok && previous) await onUpdateProject(item.project.id, { deliverables: previous });
+        else if (onPatchProject && previous) onPatchProject(item.project.id, { deliverables: previous });
         return { ok: true, skipped: true };
       }
-      if (!result?.ok && onPatchProject) onPatchProject(proj.id, { deliverables: previous });
-      if (result?.ok) phase = 'saved';
-      return result || { ok: false, error: 'Could not save' };
+      if (!result?.ok) {
+        showToast('Couldn’t save');
+        return result || { ok: false, error: 'Could not save' };
+      }
+      phase = 'saved';
+      showToast('Resolved · cleared from Waiting', { onUndo: undo });
+      return result;
     };
     runSave(attempt);
   };
@@ -647,11 +634,18 @@ export default function TodayView({
 
   const resolveNow = (item) => {
     if (item.type === 'followup') {
-      onToggleDone && onToggleDone(item.taskId);
-      pulseSave();
-      showToast('Resolved · cleared from Waiting', {
-        onUndo: () => onToggleDone && onToggleDone(item.taskId),
-      });
+      const pending = onToggleDone && onToggleDone(item.taskId);
+      const finish = (result) => {
+        if (!result || result.ok === false) {
+          showToast('Couldn’t save');
+          return;
+        }
+        showToast('Resolved · cleared from Waiting', {
+          onUndo: () => onToggleDone && onToggleDone(item.taskId),
+        });
+      };
+      if (pending && typeof pending.then === 'function') pending.then(finish);
+      else finish(pending || { ok: false, error: 'Could not update task' });
       return;
     }
     handleResolve(item);

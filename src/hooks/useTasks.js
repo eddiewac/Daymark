@@ -238,19 +238,34 @@ export function useTasks(workspaceId, workspaceName) {
 
   const updateTask = useCallback(
     async (taskId, patch) => {
-      let updated;
-      setTasks((prev) => {
-        const next = prev.map((t) => {
-          if (t.id !== taskId) return t;
-          updated = { ...t, ...patch };
-          return updated;
-        });
-        tasksRef.current = next;
-        return next;
-      });
-      if (updated) {
-        await saveTask(updated, workspaceId);
+      const current =
+        tasksRef.current.find((t) => t.id === taskId) ||
+        assignedRef.current.find((t) => t.id === taskId);
+      if (!current) return { ok: false, error: 'Task not found' };
+      // Apply outside the setState updater. React does not always run that
+      // updater before the next line, so the save used to be skipped and the
+      // chase date came back on refresh.
+      const updated = { ...current, ...patch };
+      const nextTasks = tasksRef.current.map((t) => (t.id === taskId ? updated : t));
+      const nextAssigned = assignedRef.current.map((t) => (t.id === taskId ? updated : t));
+      tasksRef.current = nextTasks;
+      assignedRef.current = nextAssigned;
+      setTasks(nextTasks);
+      setAssignedTasks(nextAssigned);
+      const result = await saveTask(updated, workspaceId);
+      const still =
+        tasksRef.current.find((t) => t.id === taskId) === updated ||
+        assignedRef.current.find((t) => t.id === taskId) === updated;
+      if (!result?.ok && still) {
+        const revert = (list) => list.map((t) => (t.id === taskId ? current : t));
+        const backTasks = revert(tasksRef.current);
+        const backAssigned = revert(assignedRef.current);
+        tasksRef.current = backTasks;
+        assignedRef.current = backAssigned;
+        setTasks(backTasks);
+        setAssignedTasks(backAssigned);
       }
+      return result || { ok: false, error: 'Could not save task' };
     },
     [workspaceId]
   );

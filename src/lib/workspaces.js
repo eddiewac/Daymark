@@ -28,6 +28,16 @@ export async function loadWorkspaces() {
     }));
 }
 
+// Shown wherever Assign would otherwise be an empty control.
+export const NO_OTHER_MEMBERS_HINT =
+  'No other members yet. Invite someone from the workspace menu to assign tasks.';
+
+// The signed-in member is always in the list. More than one means someone else
+// can take the task.
+export function canAssignToOthers(members) {
+  return Array.isArray(members) && members.length > 1;
+}
+
 export async function loadWorkspaceMembers(workspaceId) {
   if (!workspaceId) return [];
   const { data, error } = await supabase

@@ -4,6 +4,7 @@ import {
   DEFAULT_STATUSES,
   RECURRING_OPTIONS,
 } from '../../lib/constants.js';
+import { NO_OTHER_MEMBERS_HINT, canAssignToOthers } from '../../lib/workspaces.js';
 
 const blankForm = {
   title: '',
@@ -31,6 +32,7 @@ export default function TaskForm({
   priorities,
   statuses,
   members,
+  membersReady = true,
   workspaceId,
   onSave,
   onCancel,
@@ -182,7 +184,7 @@ export default function TaskForm({
         </div>
       </div>
 
-      {workspaceId && members && members.length > 0 && (
+      {workspaceId && membersReady && canAssignToOthers(members) && (
         <div>
           <label style={styles.label}>Assign to</label>
           <select
@@ -203,6 +205,13 @@ export default function TaskForm({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {workspaceId && membersReady && !canAssignToOthers(members) && (
+        <div>
+          <label style={styles.label}>Assign to</label>
+          <p style={styles.assignHint}>{NO_OTHER_MEMBERS_HINT}</p>
         </div>
       )}
 
@@ -322,6 +331,12 @@ const styles = {
     fontSize: 11,
     color: 'var(--color-text-secondary)',
     marginBottom: 4,
+  },
+  assignHint: {
+    margin: 0,
+    fontSize: 12,
+    lineHeight: 1.4,
+    color: 'var(--color-text-secondary)',
   },
 btnRow: {
     display: 'flex',

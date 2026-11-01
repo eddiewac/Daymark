@@ -165,6 +165,8 @@ export async function loadAssignedTasks() {
     let projectName = explicitProjectName(d.fresh) || explicitProjectName(d.snapshot);
     if (!projectName && d.projectId) projectName = nameById[d.projectId] || '';
     if (!projectName) projectName = legacyProjectName(d.fresh) || legacyProjectName(d.snapshot);
+    const dueDate = storedDate(d.fresh, d.snapshot, 'dueDate');
+    const deadline = storedDate(d.fresh, d.snapshot, 'deadline');
     if (projectName && d.parsedOk && explicitProjectName(d.snapshot) !== projectName) {
       stamps.push(
         supabase
@@ -182,6 +184,8 @@ export async function loadAssignedTasks() {
     return {
       ...d.base,
       ...(projectName ? { projectName } : {}),
+      dueDate,
+      deadline,
       id: d.a.task_id,
       assignmentId: d.a.id,
       workspaceId: d.a.workspace_id,
@@ -200,6 +204,14 @@ export async function loadAssignedTasks() {
 
 function cleanLabel(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+// Prefer the live task row when it actually has the field. Otherwise keep the
+// assignment snapshot so a personal desk does not lose a due date or deadline
+// the team row still carries.
+function storedDate(fresh, snapshot, key) {
+  if (fresh && Object.prototype.hasOwnProperty.call(fresh, key)) return fresh[key] || '';
+  return (snapshot && snapshot[key]) || '';
 }
 
 function explicitProjectName(task) {
@@ -270,30 +282,41 @@ export async function assignTask(task, assigneeId, workspaceId, workspaceName) {
     .maybeSingle();
 
   if (existing) {
-    if (projectName) {
-      let prev = {};
-      let parsedOk = false;
-      try {
-        const parsed = JSON.parse(existing.task_snapshot || '{}');
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          prev = parsed;
-          parsedOk = true;
-        }
-      } catch {
-        parsedOk = false;
+    let prev = {};
+    let parsedOk = false;
+    try {
+      const parsed = JSON.parse(existing.task_snapshot || '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        prev = parsed;
+        parsedOk = true;
       }
-      if (parsedOk && explicitProjectName(prev) !== projectName) {
-        const { error: healError } = await supabase
-          .from('assignments')
-          .update({
-            task_snapshot: JSON.stringify({ ...prev, projectName }),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id);
-        if (healError) console.error('assignTask projectName:', healError);
-      }
-      await stampTaskProjectName(task.id, projectName);
+    } catch {
+      parsedOk = false;
     }
+    const dueDate = storedDate(snapshotTask, prev, 'dueDate');
+    const deadline = storedDate(snapshotTask, prev, 'deadline');
+    const nextSnap = {
+      ...prev,
+      ...snapshotTask,
+      dueDate,
+      deadline,
+      ...(projectName ? { projectName } : {}),
+    };
+    const datesChanged =
+      (prev.dueDate || '') !== (nextSnap.dueDate || '') ||
+      (prev.deadline || '') !== (nextSnap.deadline || '');
+    const nameChanged = !!(projectName && explicitProjectName(prev) !== projectName);
+    if (!parsedOk || datesChanged || nameChanged) {
+      const { error: healError } = await supabase
+        .from('assignments')
+        .update({
+          task_snapshot: JSON.stringify(nextSnap),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+      if (healError) console.error('assignTask snapshot:', healError);
+    }
+    if (projectName) await stampTaskProjectName(task.id, projectName);
     return;
   }
 

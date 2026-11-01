@@ -9,6 +9,7 @@ import {
   readCloseOutDismissedDay,
   markCloseOutDismissed,
   closeOutPrepDecision,
+  cssTint,
 } from '../../lib/utils.js';
 import { useSaveStatus } from '../save/SaveStatus.jsx';
 import { taskDeliverableName, taskProjectName } from '../../lib/deliverableStatus.js';
@@ -821,7 +822,7 @@ export default function TodayView({
                         className="dm-check"
                         checked={false}
                         aria-label={`Complete ${row.title}`}
-                        onChange={() => onToggleDone && onToggleDone(row.task.id)}
+                        onChange={() => completeAssigned(row.task)}
                         style={desk.check}
                       />
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -1099,11 +1100,11 @@ function TaskDueFlags({ task }) {
   return (
     <>
       {due ? (
-        <span style={{ ...desk.flag, color: dueColor, background: dueColor + '15' }}>{due}</span>
+        <span style={{ ...desk.flag, color: dueColor, background: cssTint(dueColor, '15') }}>{due}</span>
       ) : null}
       {task.deadline ? (
         <span
-          style={{ ...desk.flag, color: dc, background: dc + '18', fontWeight: 600 }}
+          style={{ ...desk.flag, color: dc, background: cssTint(dc, '18'), fontWeight: 600 }}
           title={`Deadline: ${task.deadline}`}
         >
           ⚑ {fmtDeadline(task.deadline)}

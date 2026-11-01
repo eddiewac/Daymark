@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { uid, addBusinessDays } from '../../../lib/utils.js';
 import { loadTimeForTasks } from '../../../lib/time.js';
 import { pulseSave } from '../../../lib/savePulse.js';
+import { NO_OTHER_MEMBERS_HINT, canAssignToOthers } from '../../../lib/workspaces.js';
 import TaskForm from '../../tasks/TaskForm.jsx';
 
 // Station workbench — one beat on top of the track: tasks, timer, log a comm
@@ -18,6 +19,27 @@ function fmtDue(iso) {
   const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Focus, help, quick capture, and the door menu sit above the workbench.
+// Esc belongs to whichever of those is open.
+function layerAboveWorkbench() {
+  const nodes = document.body?.querySelectorAll('*') || [];
+  for (const el of nodes) {
+    const cs = window.getComputedStyle(el);
+    if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
+    const z = parseInt(cs.zIndex, 10);
+    if (!Number.isFinite(z) || z <= 980) continue;
+    if (el.getAttribute('aria-label') === 'Task details') continue;
+    const r = el.getBoundingClientRect();
+    // Full-screen layers (focus, help, capture, the door scrim) and the door
+    // menu itself. Small toasts sit above the workbench too and must not
+    // swallow Esc.
+    const covers = r.width >= window.innerWidth * 0.7 && r.height >= window.innerHeight * 0.7;
+    const menu = z >= 3000 && r.width > 40 && r.height > 40;
+    if (covers || menu) return true;
+  }
+  return false;
 }
 
 function fmtShort(iso) {
@@ -53,6 +75,7 @@ export default function StationWorkbench({
   onUpdateTask,
   onAssignTask,
   onUnassignTask,
+  membersReady = true,
 }) {
   const stations = deliverable?.stations || [];
   const stationIdx = stations.findIndex((s) => s.id === station?.id);
@@ -87,6 +110,39 @@ export default function StationWorkbench({
     setAdding(false);
     setEditingTask(null);
   }, [station?.id]);
+
+  // Esc closes the workbench the way other overlays close. A nested dialog
+  // goes first. A field just blurs, and a half-typed task or comm stays put
+  // so Esc does not throw that text away.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (editingTask) {
+        e.preventDefault();
+        setEditingTask(null);
+        return;
+      }
+      if (advanceAsk) {
+        e.preventDefault();
+        setAdvanceAsk(false);
+        return;
+      }
+      if (layerAboveWorkbench()) return;
+      e.preventDefault();
+      const el = e.target;
+      const panel = document.querySelector('[aria-label="Work this station"]');
+      const inField = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+      if (inField && panel && panel.contains(el) && typeof el.blur === 'function') {
+        el.blur();
+        return;
+      }
+      const unsaved = (adding && draft.trim()) || (commOpen && (who.trim() || note.trim()));
+      if (unsaved) return;
+      onClose?.();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [editingTask, advanceAsk, adding, draft, commOpen, who, note, onClose]);
 
   useEffect(() => {
     const ids = idsKey ? idsKey.split(',') : [];
@@ -157,7 +213,8 @@ export default function StationWorkbench({
     setLoop(`Saved · now on Today · Waiting (${person} · expect ${fmtShort(expectReplyBy)})`);
   };
 
-  const canAssign = !!(workspaceId && members && members.length > 0);
+  const canAssign = !!(workspaceId && membersReady && canAssignToOthers(members));
+  const showAssignHint = !!(workspaceId && membersReady && !canAssignToOthers(members));
 
   const patchTask = (task, patch) => {
     if (!onUpdateTask) return;
@@ -188,8 +245,23 @@ export default function StationWorkbench({
     }
     const member = (members || []).find((m) => m.id === memberId);
     const email = member?.email || '';
-    if (onAssignTask) onAssignTask(task, memberId, email);
-    else if (onUpdateTask) onUpdateTask(task.id, { assignedToId: memberId, assignedToEmail: email });
+    const dueDate = task.dueDate || '';
+    const deadline = task.deadline || '';
+    if (onAssignTask) {
+      await onAssignTask({ ...task, dueDate, deadline }, memberId, email);
+    } else if (onUpdateTask) {
+      await onUpdateTask(task.id, { assignedToId: memberId, assignedToEmail: email, dueDate, deadline });
+    }
+    // Assign saves its own copy of the row. Write the dates on screen again
+    // afterwards so that copy cannot be the last one and drop them.
+    if (onAssignTask && onUpdateTask) {
+      await onUpdateTask(task.id, {
+        dueDate,
+        deadline,
+        assignedToId: memberId,
+        assignedToEmail: email,
+      });
+    }
     pulseSave();
   };
 
@@ -198,7 +270,22 @@ export default function StationWorkbench({
     const prevId = editingTask.assignedToId || '';
     const nextId = patch.assignedToId || '';
     if (nextId !== prevId && nextId && onAssignTask) {
-      await onAssignTask({ ...editingTask, ...patch }, nextId, patch.assignedToEmail || '');
+      const dueDate = patch.dueDate || '';
+      const deadline = patch.deadline || '';
+      await onAssignTask(
+        { ...editingTask, ...patch, dueDate, deadline },
+        nextId,
+        patch.assignedToEmail || ''
+      );
+      if (onUpdateTask) {
+        await onUpdateTask(editingTask.id, {
+          ...patch,
+          dueDate,
+          deadline,
+          assignedToId: nextId,
+          assignedToEmail: patch.assignedToEmail || '',
+        });
+      }
     } else {
       if (nextId !== prevId && !nextId && onUnassignTask) await onUnassignTask(editingTask.id);
       if (onUpdateTask) await onUpdateTask(editingTask.id, patch);
@@ -324,6 +411,7 @@ export default function StationWorkbench({
             )}
             <div style={styles.bd}>
               <p style={styles.label}>Tasks for this station</p>
+              {showAssignHint && <p style={styles.assignHint}>{NO_OTHER_MEMBERS_HINT}</p>}
               {stationTasks.length === 0 && (
                 <div style={styles.emptyTasks}>No tasks on this station yet.</div>
               )}
@@ -543,16 +631,26 @@ export default function StationWorkbench({
           <aside style={styles.side}>
             <div style={styles.sideCard}>
               <h3 style={styles.sideH}>Budget vs actual</h3>
-              <div style={styles.budget}>
-                <span>This deliverable</span>
-                <span style={styles.budgetV}>
-                  {fmtH(logged)}h / {fmtH(budget)}h
-                </span>
-              </div>
-              <div style={styles.bar}>
-                <i style={{ ...styles.barFill, width: `${pct}%` }} />
-              </div>
-              <p style={styles.sideNote}>Your logged hours / estimate. Also shown on Today · Do.</p>
+              {budget > 0 ? (
+                <>
+                  <div style={styles.budget}>
+                    <span>This deliverable</span>
+                    <span style={styles.budgetV}>
+                      {fmtH(logged)}h / {fmtH(budget)}h
+                    </span>
+                  </div>
+                  <div style={styles.bar}>
+                    <i style={{ ...styles.barFill, width: `${pct}%` }} />
+                  </div>
+                  <p style={styles.sideNote}>Your logged hours / estimate. Also shown on Today · Do.</p>
+                </>
+              ) : (
+                <p style={styles.budgetEmpty}>
+                  {logged > 0
+                    ? `${fmtH(logged)}h logged. No estimate set yet.`
+                    : 'No estimate set for this deliverable.'}
+                </p>
+              )}
             </div>
             <div style={styles.sideCard}>
               <h3 style={styles.sideH}>Station context</h3>
@@ -600,6 +698,7 @@ export default function StationWorkbench({
             priorities={priorities}
             statuses={statuses}
             members={members}
+            membersReady={membersReady}
             workspaceId={workspaceId}
             onSave={saveTaskDetails}
             onCancel={() => setEditingTask(null)}
@@ -802,6 +901,12 @@ const styles = {
     background: 'var(--bg-surface)',
     color: 'var(--color-text-primary)',
   },
+  assignHint: {
+    margin: '0 0 8px',
+    fontSize: 12,
+    lineHeight: 1.4,
+    color: 'var(--color-text-tertiary)',
+  },
   assignSelect: {
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 6,
@@ -989,6 +1094,7 @@ const styles = {
   sideH: { margin: '0 0 10px', fontSize: 16, fontWeight: 650 },
   budget: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, fontSize: 16 },
   budgetV: { fontWeight: 700, fontSize: 20, color: '#d97706', fontVariantNumeric: 'tabular-nums' },
+  budgetEmpty: { margin: 0, fontSize: 13, lineHeight: 1.45, color: 'var(--color-text-tertiary)' },
   bar: {
     height: 8,
     background: 'var(--color-background-secondary)',

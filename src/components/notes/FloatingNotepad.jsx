@@ -62,6 +62,7 @@ export default function FloatingNotepad({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const gestureInsideRef = useRef(false);
+  const navClickRef = useRef(false);
   const [panelHeight, setPanelHeight] = useState(readNotepadHeight);
   const [mode, setMode] = useState('capture'); // capture | triage
   const [rows, setRows] = useState([]);
@@ -193,22 +194,33 @@ export default function FloatingNotepad({
       const panel = panelRef.current;
       gestureInsideRef.current = !!(panel && panel.contains(e.target));
     };
+    // Picking a door-menu item calls setState in React's root listener, which
+    // unmounts the menu before this click bubbles to document. closest() on
+    // the detached item then misses the nav bar. Capture runs first, while
+    // the item is still mounted.
+    const onClickCapture = (e) => {
+      navClickRef.current = eventHitsNavChrome(e);
+    };
     const onClick = (e) => {
       if (gestureInsideRef.current) return;
       const panel = panelRef.current;
       if (!panel || panel.contains(e.target)) return;
       // Door buttons, the door menu, and its scrim are navigation, not a
       // click-away from the notepad. Capture and convert stay as they are.
-      if (e.target instanceof Element && e.target.closest('[data-daymark-chrome="nav"]')) return;
+      if (navClickRef.current || eventHitsNavChrome(e)) return;
       if (eventHitsOverlayAbove(e.target, panel)) return;
       onCloseRef.current?.();
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onPointerDown, true);
-    const timer = window.setTimeout(() => document.addEventListener('click', onClick), 0);
+    const timer = window.setTimeout(() => {
+      document.addEventListener('click', onClickCapture, true);
+      document.addEventListener('click', onClick);
+    }, 0);
     return () => {
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('click', onClickCapture, true);
       document.removeEventListener('click', onClick);
       window.clearTimeout(timer);
     };
@@ -417,6 +429,19 @@ export default function FloatingNotepad({
 }
 
 const FLOAT_Z = 860;
+const NAV_CHROME = '[data-daymark-chrome="nav"]';
+
+// True when the event's path includes the door bar or its menu. composedPath
+// is fixed at dispatch, so it still names the nav bar after React has
+// unmounted the menu item that was clicked.
+function eventHitsNavChrome(e) {
+  if (e.target instanceof Element && e.target.closest(NAV_CHROME)) return true;
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  for (const node of path) {
+    if (node instanceof Element && node.matches(NAV_CHROME)) return true;
+  }
+  return false;
+}
 
 // Full-screen layers above the float (focus, capture dialog, help) own Esc
 // and outside clicks. The float itself is not full-screen.

@@ -197,6 +197,9 @@ export default function FloatingNotepad({
       if (gestureInsideRef.current) return;
       const panel = panelRef.current;
       if (!panel || panel.contains(e.target)) return;
+      // Door buttons, the door menu, and its scrim are navigation, not a
+      // click-away from the notepad. Capture and convert stay as they are.
+      if (e.target instanceof Element && e.target.closest('[data-daymark-chrome="nav"]')) return;
       if (eventHitsOverlayAbove(e.target, panel)) return;
       onCloseRef.current?.();
     };

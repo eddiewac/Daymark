@@ -35,11 +35,18 @@ export const DEFAULT_SETTINGS = {
   dailyHours: 7.5,
 };
 
-// Build the storage key. Personal workspace gets one key per user; team
-// workspaces get a key per workspace so all members share the settings.
-function settingsKey(user, workspaceId) {
-  if (workspaceId) return `ws:${workspaceId}:settings-v1`;
+// Personal rows must start with `{userId}:` (personal_storage).
+// Team rows must start with `{workspaceId}:` (workspace_storage).
+// The old team key `ws:{workspaceId}:settings-v1` matches neither policy, so
+// PostgREST upsert returns 403 for every member. New writes use the key the
+// existing policy already allows.
+export function settingsStorageKey(user, workspaceId) {
+  if (workspaceId) return `${String(workspaceId).toLowerCase()}:settings-v1`;
   return `${user.id}:settings-v1`;
+}
+
+function legacyWorkspaceSettingsKey(workspaceId) {
+  return `ws:${workspaceId}:settings-v1`;
 }
 
 // Migrate legacy reviewStages to a stationTemplates list.
@@ -60,38 +67,58 @@ function migrate(parsed) {
   };
 }
 
+function parseSettings(value) {
+  try {
+    const parsed = JSON.parse(value);
+    return migrate({ ...DEFAULT_SETTINGS, ...parsed });
+  } catch {
+    return null;
+  }
+}
+
+async function readSettingsRow(key) {
+  const { data, error } = await supabase
+    .from('app_storage')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle();
+  if (error || !data?.value) return null;
+  return parseSettings(data.value);
+}
+
 export async function loadSettings(workspaceId) {
   const user = await getCurrentUser();
   if (!user) return DEFAULT_SETTINGS;
 
-  const { data, error } = await supabase
-    .from('app_storage')
-    .select('value')
-    .eq('key', settingsKey(user, workspaceId))
-    .maybeSingle();
+  const current = await readSettingsRow(settingsStorageKey(user, workspaceId));
+  if (current) return current;
 
-  if (error || !data?.value) return DEFAULT_SETTINGS;
-
-  try {
-    const parsed = JSON.parse(data.value);
-    return migrate({ ...DEFAULT_SETTINGS, ...parsed });
-  } catch {
-    return DEFAULT_SETTINGS;
+  // Rows saved before the key matched workspace_storage. Readable only if a
+  // policy actually lets this member see them; otherwise we start from defaults.
+  if (workspaceId) {
+    const legacy = await readSettingsRow(legacyWorkspaceSettingsKey(workspaceId));
+    if (legacy) return legacy;
   }
+
+  return DEFAULT_SETTINGS;
 }
 
 export async function saveSettings(workspaceId, settings) {
   const user = await getCurrentUser();
-  if (!user) return null;
+  if (!user) return { ok: false, error: 'Not signed in' };
 
-  const updated_at = new Date().toISOString();
-  await supabase.from('app_storage').upsert(
+  const updatedAt = new Date().toISOString();
+  const { error } = await supabase.from('app_storage').upsert(
     {
-      key: settingsKey(user, workspaceId),
+      key: settingsStorageKey(user, workspaceId),
       value: JSON.stringify(settings),
-      updated_at,
+      updated_at: updatedAt,
     },
     { onConflict: 'key' }
   );
-  return updated_at;
+  if (error) {
+    console.error('saveSettings:', error);
+    return { ok: false, error };
+  }
+  return { ok: true, updatedAt };
 }

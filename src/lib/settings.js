@@ -82,14 +82,16 @@ export async function loadSettings(workspaceId) {
 
 export async function saveSettings(workspaceId, settings) {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user) return null;
 
+  const updated_at = new Date().toISOString();
   await supabase.from('app_storage').upsert(
     {
       key: settingsKey(user, workspaceId),
       value: JSON.stringify(settings),
-      updated_at: new Date().toISOString(),
+      updated_at,
     },
     { onConflict: 'key' }
   );
+  return updated_at;
 }

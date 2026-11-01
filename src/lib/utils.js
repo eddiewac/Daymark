@@ -124,6 +124,15 @@ export function clearCloseOutDismissed(storage) {
 // A new Prep signal opens the panel unless this local day was already
 // dismissed. The signal is consumed either way so a later remount (leave
 // Today and come back) does not replay the same prompt.
+// Soft tint that stays a valid CSS colour when `color` is a hex value or a
+// CSS variable. Appending an alpha nibble to a var() is not a colour.
+export function cssTint(color, hexAlpha = '15') {
+  if (!color || typeof color !== 'string') return 'transparent';
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color + hexAlpha;
+  const pct = hexAlpha === '18' ? 9 : hexAlpha === '22' ? 13 : 8;
+  return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+}
+
 export function closeOutPrepDecision({ prepSignal, seenSignal, dismissedDay, today }) {
   const signal = Number(prepSignal) || 0;
   const seen = Number(seenSignal) || 0;

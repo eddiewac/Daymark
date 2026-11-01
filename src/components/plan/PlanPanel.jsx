@@ -36,6 +36,7 @@ export default function PlanPanel({
   priorities,
   statuses,
   members,
+  membersReady = true,
   workspaceId,
   onUpdateTask,
   onToggleDone,
@@ -294,6 +295,7 @@ export default function PlanPanel({
               priorities={priorities}
               statuses={statuses}
               members={members}
+              membersReady={membersReady}
               workspaceId={workspaceId}
               onSave={saveEdit}
               onCancel={() => setEditingTask(null)}

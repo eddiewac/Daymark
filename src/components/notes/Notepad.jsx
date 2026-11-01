@@ -13,6 +13,7 @@ const Notepad = forwardRef(function Notepad({
 }, ref) {
   const [body, setBody] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [slowLoad, setSlowLoad] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
 
   // Selection / conversion state
@@ -62,6 +63,17 @@ const Notepad = forwardRef(function Notepad({
       })
       .catch(() => setLoaded(true));
   }, []);
+
+  // A fast notepad open should look like the editor, not a Loading… flash.
+  // Only admit the placeholder once the fetch is actually taking a moment.
+  useEffect(() => {
+    if (loaded) {
+      setSlowLoad(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setSlowLoad(true), 300);
+    return () => window.clearTimeout(timer);
+  }, [loaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -523,11 +535,11 @@ const Notepad = forwardRef(function Notepad({
         onMouseUp={handleSelect}
         onKeyUp={handleSelect}
         placeholder={
-          loaded
-            ? embedded
+          !loaded && slowLoad && !body
+            ? 'Loading…'
+            : embedded
               ? 'Dump lines as they come in…\n\n• one thought per line\n• switch to Triage when the batch is ready'
               : 'Start jotting…\n\nTip: select any text and click "Convert to task", "Convert to project", or "Save as note".'
-            : 'Loading…'
         }
         disabled={!loaded}
         style={styles.area}

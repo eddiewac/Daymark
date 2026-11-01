@@ -32,6 +32,7 @@ import QuickCapture from './QuickCapture.jsx';
 import HelpPanel from './HelpPanel.jsx';
 import TodayView from './today/TodayView.jsx';
 import StationWorkbench from './projects/track/StationWorkbench.jsx';
+import { readGroupPins } from '../lib/navPins.js';
 import CommsLog from './record/CommsLog.jsx';
 import FocusBox from './FocusBox.jsx';
 import QuickCommPrompt from './QuickCommPrompt.jsx';
@@ -158,27 +159,14 @@ export default function WorkspaceView({
   // A pinned default (set in Settings → Tab defaults) overrides remember-last:
   // if the user pinned a specific view for a group, tapping the header always
   // goes there. No pin → fall back to last-viewed → group's first tab.
-  const groupPinKey = `daymark-group-pin:${workspaceId || 'personal'}`;
-  const [groupPins, setGroupPins] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(groupPinKey) || '{}');
-      return stored && typeof stored === 'object' ? stored : {};
-    } catch {
-      return {};
-    }
-  });
-  // Re-read pins when returning to the window, so a change made in Settings
-  // this session is picked up.
+  const [groupPins, setGroupPins] = useState(() => readGroupPins(workspaceId));
+  // Re-read pins when returning to the window. Door clicks also read storage
+  // directly so a pin set in Settings this session is used immediately.
   useEffect(() => {
-    const reread = () => {
-      try {
-        const stored = JSON.parse(localStorage.getItem(groupPinKey) || '{}');
-        setGroupPins(stored && typeof stored === 'object' ? stored : {});
-      } catch {}
-    };
+    const reread = () => setGroupPins(readGroupPins(workspaceId));
     window.addEventListener('focus', reread);
     return () => window.removeEventListener('focus', reread);
-  }, [groupPinKey]);
+  }, [workspaceId]);
 
   // Resolve which tab a group header should open: a pinned default (if valid)
   // wins; else the last-viewed tab in that group; else the group's first key.
@@ -190,6 +178,7 @@ export default function WorkspaceView({
     return node.keys[0];
   };
   const [members, setMembers] = useState([]);
+  const [membersReady, setMembersReady] = useState(false);
 
   // Focus box visibility — auto-opens when timer starts, closes on stop or manual close
   const [focusOpen, setFocusOpen] = useState(false);
@@ -642,11 +631,21 @@ export default function WorkspaceView({
 
   // Load workspace members
   useEffect(() => {
-    if (workspaceId) {
-      loadWorkspaceMembers(workspaceId).then(setMembers);
-    } else {
+    let cancel = false;
+    if (!workspaceId) {
       setMembers([]);
+      setMembersReady(true);
+      return undefined;
     }
+    setMembersReady(false);
+    loadWorkspaceMembers(workspaceId).then((rows) => {
+      if (cancel) return;
+      setMembers(rows || []);
+      setMembersReady(true);
+    });
+    return () => {
+      cancel = true;
+    };
   }, [workspaceId]);
 
   // Esc leaves Focus Mode. It does not discard the timer.
@@ -867,6 +866,9 @@ export default function WorkspaceView({
   };
 
   const landDoor = (doorId, pref) => {
+    // A door changes the view under the workbench. Leave the overlay behind
+    // and the new section is covered by the station you just left.
+    setStationOverlay(null);
     if (doorId === 'projects') {
       if (pref === 'deliverables') {
         setTab('deliverables');
@@ -922,7 +924,9 @@ export default function WorkspaceView({
       setOpenGroup(null);
       return;
     }
-    const pinned = groupPins[door.id];
+    const pinsNow = readGroupPins(workspaceId);
+    setGroupPins(pinsNow);
+    const pinned = pinsNow[door.id];
     const pref = pinned || groupLastView[door.id] || null;
     landDoor(door.id, pref);
     setOpenGroup((cur) => (cur === door.id ? null : door.id));
@@ -1144,6 +1148,7 @@ export default function WorkspaceView({
               priorities={settings.priorities}
               statuses={settings.statuses}
               members={members}
+              membersReady={membersReady}
               workspaceId={workspaceId}
               currentUserId={time.currentUserId}
               runningTimer={time.runningTimer}
@@ -1168,6 +1173,7 @@ export default function WorkspaceView({
             priorities={settings.priorities}
             statuses={settings.statuses}
             members={members}
+            membersReady={membersReady}
             workspaceId={workspaceId}
             onUpdateTask={updateTask}
             onToggleDone={handleToggleDone}
@@ -1513,6 +1519,7 @@ export default function WorkspaceView({
           allProjects={projects}
           tasks={allTasks}
           members={members}
+          membersReady={membersReady}
           workspaceId={workspaceId}
           categories={settings.categories}
           priorities={settings.priorities}

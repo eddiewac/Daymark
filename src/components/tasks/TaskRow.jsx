@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { PRIORITY_COLORS, projectColor } from '../../lib/constants.js';
 import { formatDue, daysUntil } from '../../lib/utils.js';
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
+import { cssTint } from '../../lib/utils.js';
+import { NO_OTHER_MEMBERS_HINT, canAssignToOthers } from '../../lib/workspaces.js';
 import { canTrackTime } from '../../hooks/useTime.js';
 
 export default function TaskRow({
@@ -20,6 +22,7 @@ export default function TaskRow({
   onStartTimer,
   onStopTimer,
   onJumpToTrack,
+  membersReady = true,
 }) {
   const [showAssign, setShowAssign] = useState(false);
   const [confirmDone, setConfirmDone] = useState(null); // null | { assigneeLabel }
@@ -199,7 +202,7 @@ export default function TaskRow({
             </span>
           )}
           {due && (
-            <span style={{ ...styles.pill, color: dueColor, background: dueColor + '15' }}>
+            <span style={{ ...styles.pill, color: dueColor, background: cssTint(dueColor, '15') }}>
               {due}
             </span>
           )}
@@ -207,7 +210,7 @@ export default function TaskRow({
             const dc = deadlineColor(task.deadline);
             return (
               <span
-                style={{ ...styles.pill, color: dc, background: dc + '18', fontWeight: 600 }}
+                style={{ ...styles.pill, color: dc, background: cssTint(dc, '18'), fontWeight: 600 }}
                 title={`Deadline: ${task.deadline}`}
               >
                 ⚑ {fmtDeadline(task.deadline)}
@@ -252,7 +255,7 @@ export default function TaskRow({
             );
           })()
         )}
-        {workspaceId && members && members.length > 0 && !isAssigned && (
+        {workspaceId && membersReady && !isAssigned && (
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowAssign((v) => !v)}
@@ -263,28 +266,34 @@ export default function TaskRow({
             </button>
             {showAssign && (
               <div style={styles.assignMenu}>
-                <div style={styles.assignHdr}>Assign to</div>
-                <button
-                  style={styles.assignItem}
-                  onClick={() => {
-                    onUnassign(task.id);
-                    setShowAssign(false);
-                  }}
-                >
-                  Unassigned
-                </button>
-                {members.map((m) => (
-                  <button
-                    key={m.id}
-                    style={styles.assignItem}
-                    onClick={() => {
-                      onAssign(task.id, m.id, m.email);
-                      setShowAssign(false);
-                    }}
-                  >
-                    {m.email || m.id.slice(0, 8)}
-                  </button>
-                ))}
+                {canAssignToOthers(members) ? (
+                  <>
+                    <div style={styles.assignHdr}>Assign to</div>
+                    <button
+                      style={styles.assignItem}
+                      onClick={() => {
+                        onUnassign(task.id);
+                        setShowAssign(false);
+                      }}
+                    >
+                      Unassigned
+                    </button>
+                    {members.map((m) => (
+                      <button
+                        key={m.id}
+                        style={styles.assignItem}
+                        onClick={() => {
+                          onAssign(task.id, m.id, m.email);
+                          setShowAssign(false);
+                        }}
+                      >
+                        {m.email || m.id.slice(0, 8)}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <div style={styles.assignHint}>{NO_OTHER_MEMBERS_HINT}</div>
+                )}
               </div>
             )}
           </div>
@@ -470,6 +479,13 @@ const styles = {
     padding: '4px 8px',
     fontWeight: 500,
     textTransform: 'uppercase',
+  },
+  assignHint: {
+    padding: '6px 8px',
+    fontSize: 12,
+    lineHeight: 1.4,
+    color: 'var(--color-text-secondary)',
+    maxWidth: 220,
   },
   assignItem: {
     display: 'block',

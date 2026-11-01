@@ -28,6 +28,7 @@ export default function TaskList({
   priorities,
   statuses,
   members,
+  membersReady = true,
   workspaceId,
   currentUserId,
   runningTimer,
@@ -203,6 +204,7 @@ export default function TaskList({
               priorities={priorities}
               statuses={statuses}
               members={members}
+              membersReady={membersReady}
               workspaceId={workspaceId}
               onSave={handleSave}
               onCancel={cancelForm}
@@ -224,6 +226,7 @@ export default function TaskList({
             compact={compact}
             projects={projects}
             members={members}
+            membersReady={membersReady}
             workspaceId={workspaceId}
             currentUserId={currentUserId}
             runningTimer={runningTimer}
@@ -268,7 +271,7 @@ export default function TaskList({
 
 // ── ListView ─────────────────────────────────────────────────────────────────
 function ListView({
-  tasks, compact, projects, members, workspaceId, currentUserId,
+  tasks, compact, projects, members, membersReady, workspaceId, currentUserId,
   runningTimer, onToggleDone, onEdit, onUpdate, onDelete, onAssign, onUnassign,
   onStartTimer, onStopTimer, onJumpToTrack,
 }) {
@@ -300,6 +303,7 @@ function ListView({
           task={t}
           projects={projects}
           members={members}
+          membersReady={membersReady}
           workspaceId={workspaceId}
           currentUserId={currentUserId}
           runningTimer={runningTimer}
@@ -437,7 +441,7 @@ function KanbanView({
   // Determine the columns for the chosen groupBy
   const columns = useMemo(() => {
     if (groupBy === 'status') {
-      const list = (statuses && statuses.length > 0) ? statuses : ['To do', 'In progress', 'Done'];
+      const list = (statuses && statuses.length > 0) ? [...statuses] : ['To do', 'In progress', 'Done'];
       // Always include any status values found in tasks but not in settings, at the end
       const seen = new Set(list);
       for (const t of tasks) {

@@ -7,18 +7,27 @@ export function useSettings(workspaceId) {
   const [loading, setLoading] = useState(true);
   const [savedAt, setSavedAt] = useState(null);
 
-  // Track our own writes so we can ignore the realtime echo we'd otherwise apply
-  // on top of state we just set locally. Without this we get an unnecessary
-  // re-render and a brief moment where the user sees the write bounce.
-  const lastLocalSaveAt = useRef(0);
+  // Latest list the user is looking at. Reorder clicks must not save a copy
+  // captured on an earlier render, or a slower write puts the old order back.
+  const settingsRef = useRef(settings);
+  const saveQueue = useRef(Promise.resolve());
+  // updated_at of the newest settings row we wrote. Older realtime echoes
+  // (a previous order) must not replace the list on screen.
+  const lastWriteAt = useRef('');
+
+  const applySettings = (next) => {
+    settingsRef.current = next;
+    setSettings(next);
+  };
 
   // Initial load
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    lastWriteAt.current = '';
     loadSettings(workspaceId)
       .then((s) => {
-        if (!cancelled) setSettings(s);
+        if (!cancelled) applySettings(s);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -55,19 +64,22 @@ export function useSettings(workspaceId) {
           },
           (payload) => {
             if (!mounted) return;
-            // Ignore our own write echoes
-            if (Date.now() - lastLocalSaveAt.current < 1500) return;
 
             if (payload.eventType === 'DELETE') {
-              setSettings(DEFAULT_SETTINGS);
+              lastWriteAt.current = '';
+              applySettings(DEFAULT_SETTINGS);
               return;
             }
+
+            const incomingAt = payload.new?.updated_at || '';
+            if (incomingAt && lastWriteAt.current && incomingAt <= lastWriteAt.current) return;
 
             const value = payload.new?.value;
             if (!value) return;
             try {
               const parsed = JSON.parse(value);
-              setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+              applySettings({ ...DEFAULT_SETTINGS, ...parsed });
+              if (incomingAt) lastWriteAt.current = incomingAt;
               setSavedAt(Date.now());
             } catch {
               // ignore malformed
@@ -85,13 +97,24 @@ export function useSettings(workspaceId) {
 
   const updateSettings = useCallback(
     async (patch) => {
-      const next = { ...settings, ...patch };
-      setSettings(next);
-      lastLocalSaveAt.current = Date.now();
-      await saveSettings(workspaceId, next);
-      setSavedAt(Date.now());
+      const next = { ...settingsRef.current, ...patch };
+      applySettings(next);
+      const generation = next;
+      const run = saveQueue.current.catch(() => {}).then(async () => {
+        // A newer edit already replaced this snapshot. Writing it now would
+        // put the previous order back.
+        if (settingsRef.current !== generation) return;
+        const writtenAt = await saveSettings(workspaceId, generation);
+        if (!writtenAt || settingsRef.current !== generation) return;
+        if (!lastWriteAt.current || writtenAt > lastWriteAt.current) {
+          lastWriteAt.current = writtenAt;
+        }
+        setSavedAt(Date.now());
+      });
+      saveQueue.current = run;
+      await run;
     },
-    [settings, workspaceId]
+    [workspaceId]
   );
 
   return { settings, loading, updateSettings, savedAt };

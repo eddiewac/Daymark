@@ -12,6 +12,16 @@ import {
 } from '../lib/tasks.js';
 import { uid } from '../lib/utils.js';
 
+// A date on the row the user is assigning wins, including a deliberate clear.
+// If that row never carried the field, keep the date already stored so the
+// assignment write cannot drop it.
+function dateOnAssign(incoming, current, key) {
+  if (incoming && Object.prototype.hasOwnProperty.call(incoming, key)) {
+    return incoming[key] || '';
+  }
+  return (current && current[key]) || '';
+}
+
 export function useTasks(workspaceId, workspaceName) {
   const [tasks, setTasks] = useState([]);
   const [assignedTasks, setAssignedTasks] = useState([]);
@@ -144,9 +154,15 @@ export function useTasks(workspaceId, workspaceName) {
               }
             } else if (payload.eventType === 'UPDATE') {
               let projectName = '';
+              let dueDate;
+              let deadline;
               try {
                 const snap = JSON.parse(payload.new.task_snapshot || '{}');
-                projectName = typeof snap.projectName === 'string' ? snap.projectName.trim() : '';
+                if (snap && typeof snap === 'object' && !Array.isArray(snap)) {
+                  projectName = typeof snap.projectName === 'string' ? snap.projectName.trim() : '';
+                  if (Object.prototype.hasOwnProperty.call(snap, 'dueDate')) dueDate = snap.dueDate || '';
+                  if (Object.prototype.hasOwnProperty.call(snap, 'deadline')) deadline = snap.deadline || '';
+                }
               } catch {
                 projectName = '';
               }
@@ -157,6 +173,8 @@ export function useTasks(workspaceId, workspaceName) {
                         ...t,
                         dismissed: !!payload.new.dismissed,
                         ...(projectName ? { projectName } : {}),
+                        ...(dueDate !== undefined ? { dueDate } : {}),
+                        ...(deadline !== undefined ? { deadline } : {}),
                       }
                     : t
                 )
@@ -221,13 +239,15 @@ export function useTasks(workspaceId, workspaceName) {
   const updateTask = useCallback(
     async (taskId, patch) => {
       let updated;
-      setTasks((prev) =>
-        prev.map((t) => {
+      setTasks((prev) => {
+        const next = prev.map((t) => {
           if (t.id !== taskId) return t;
           updated = { ...t, ...patch };
           return updated;
-        })
-      );
+        });
+        tasksRef.current = next;
+        return next;
+      });
       if (updated) {
         await saveTask(updated, workspaceId);
       }
@@ -359,24 +379,37 @@ export function useTasks(workspaceId, workspaceName) {
 
   const assignToMember = useCallback(
     async (taskOrId, memberId, memberEmail) => {
-      // Accept either an object (right after creation) or just the id
-      const task =
-        typeof taskOrId === 'object' ? taskOrId : tasks.find((t) => t.id === taskOrId);
-      if (!task) return;
+      // An object is the row on screen (it may already include a due date the
+      // stored copy has not caught up to). An id uses the latest in-memory row.
+      const incoming = taskOrId && typeof taskOrId === 'object' ? taskOrId : null;
+      const id = incoming ? incoming.id : taskOrId;
+      if (!id) return;
+      const current = tasksRef.current.find((t) => t.id === id) || null;
+      if (!incoming && !current) return;
 
+      const dueDate = dateOnAssign(incoming, current, 'dueDate');
+      const deadline = dateOnAssign(incoming, current, 'deadline');
       const updated = {
-        ...task,
-        assignedToId: memberId,
-        assignedToEmail: memberEmail,
+        ...(current || {}),
+        ...(incoming || {}),
+        id,
+        dueDate,
+        deadline,
+        assignedToId: memberId || null,
+        assignedToEmail: memberEmail || '',
       };
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+      setTasks((prev) => {
+        const next = prev.map((t) => (t.id === id ? { ...t, ...updated } : t));
+        tasksRef.current = next;
+        return next;
+      });
       await saveTask(updated, workspaceId);
 
-      if (workspaceId) {
+      if (workspaceId && memberId) {
         await assignTaskDb(updated, memberId, workspaceId, workspaceName);
       }
     },
-    [tasks, workspaceId, workspaceName]
+    [workspaceId, workspaceName]
   );
 
   const unassignFromMember = useCallback(

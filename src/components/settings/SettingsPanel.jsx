@@ -1,5 +1,6 @@
 import SecuritySection from './SecuritySection.jsx';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { readGroupPins, writeGroupPins } from '../../lib/navPins.js';
 import { getStoredThemeMode, setThemeMode } from '../../lib/theme.js';
 import { GROUP_COLOR_CHOICES, newGroupId } from '../../lib/projectGroups.js';
 
@@ -1165,8 +1166,8 @@ const NAV_GROUPS = [
     id: 'plan',
     label: 'Plan',
     options: [
-      { key: 'plan', label: 'This week' },
       { key: 'tasks', label: 'Tasks' },
+      { key: 'plan', label: 'This week' },
       { key: 'congresses', label: 'Congresses' },
     ],
   },
@@ -1190,31 +1191,18 @@ const NAV_GROUPS = [
 ];
 
 function NavDefaultsEditor({ workspaceId }) {
-  const pinKey = `daymark-group-pin:${workspaceId || 'personal'}`;
-  const [pins, setPins] = useState(() => {
-    try {
-    const stored = JSON.parse(localStorage.getItem(pinKey) || '{}');
-    if (!stored || typeof stored !== 'object') return {};
-    if (stored.track === 'track') {
-      stored.track = 'time';
-      try {
-        localStorage.setItem(pinKey, JSON.stringify(stored));
-      } catch {}
-    }
-    return stored;
-    } catch {
-      return {};
-    }
-  });
+  const [pins, setPins] = useState(() => readGroupPins(workspaceId));
+
+  useEffect(() => {
+    setPins(readGroupPins(workspaceId));
+  }, [workspaceId]);
 
   const setPin = (groupId, value) => {
     setPins((prev) => {
       const next = { ...prev };
       if (!value) delete next[groupId]; // '' = Last viewed (no pin)
       else next[groupId] = value;
-      try {
-        localStorage.setItem(pinKey, JSON.stringify(next));
-      } catch {}
+      writeGroupPins(workspaceId, next);
       return next;
     });
   };

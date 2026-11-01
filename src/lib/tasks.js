@@ -38,23 +38,52 @@ export async function loadTasks(workspaceId) {
 export async function saveTask(task, workspaceId) {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: 'Not signed in' };
+  if (!task?.id) return { ok: false, error: 'Task is missing an id' };
 
-  const row = {
-    id: task.id,
-    user_id: user.id,
+  // Existing rows are UPDATEd (not upserted). Upsert rewrites user_id to the
+  // current user and must also satisfy the INSERT policy, which fails for a
+  // teammate editing a follow-up they did not create. The row then stays done
+  // on screen and comes back open after a refresh. Update keeps the owner.
+  const updatedAt = new Date().toISOString();
+  const data = { ...task, updatedAt };
+  const patch = {
     workspace_id: workspaceId || null,
-    data: task,
+    data,
     done: !!task.done,
     done_at: task.doneAt || null,
-    updated_at: new Date().toISOString(),
+    updated_at: updatedAt,
   };
 
-  const { error } = await supabase.from('tasks').upsert(row, { onConflict: 'id' });
-  if (error) {
-    console.error('saveTask:', error);
-    return { ok: false, error: error.message || 'Could not save task' };
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('tasks')
+    .update(patch)
+    .eq('id', task.id)
+    .select('id');
+
+  if (updateError) {
+    console.error('saveTask:', updateError);
+    return { ok: false, error: updateError.message || 'Could not save task' };
   }
-  return { ok: true };
+  if (updatedRows && updatedRows.length > 0) return { ok: true, updatedAt };
+
+  const { error: insertError } = await supabase.from('tasks').insert({
+    id: task.id,
+    user_id: user.id,
+    ...patch,
+  });
+  if (!insertError) return { ok: true, updatedAt };
+
+  if (insertError.code === '23505') {
+    const { data: row } = await supabase
+      .from('tasks')
+      .select('data')
+      .eq('id', task.id)
+      .maybeSingle();
+    if (row?.data?.updatedAt === updatedAt) return { ok: true, updatedAt };
+  }
+
+  console.error('saveTask:', insertError);
+  return { ok: false, error: insertError.message || 'Task update did not persist' };
 }
 
 export async function deleteTask(taskId) {

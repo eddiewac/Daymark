@@ -65,14 +65,20 @@ export async function saveProject(project, workspaceId) {
     console.error('saveProject:', updateError);
     return { ok: false, error: updateError.message || 'Could not save project' };
   }
-  if (updatedRows && updatedRows.length > 0) return { ok: true };
+  if (updatedRows && updatedRows.length > 0) {
+    // A row came back. Treat it as saved only when our payload is what stuck.
+    if (updatedRows[0]?.data?.updatedAt !== updatedAt) {
+      return { ok: false, error: 'Project update did not persist' };
+    }
+    return { ok: true, updatedAt };
+  }
 
   const { error: insertError } = await supabase.from('projects').insert({
     id,
     user_id: user.id,
     ...patch,
   });
-  if (!insertError) return { ok: true };
+  if (!insertError) return { ok: true, updatedAt };
 
   // Update matched 0 rows (select hidden by RLS, or a race) and the row
   // already exists. If our payload landed, treat that as success.
@@ -82,7 +88,7 @@ export async function saveProject(project, workspaceId) {
       .select('data')
       .eq('id', id)
       .maybeSingle();
-    if (row?.data?.updatedAt === updatedAt) return { ok: true };
+    if (row?.data?.updatedAt === updatedAt) return { ok: true, updatedAt };
   }
 
   console.error('saveProject:', insertError);

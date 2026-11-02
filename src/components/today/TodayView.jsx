@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import {
   localDateStr,
@@ -146,6 +146,42 @@ function waitRelLabel(dateIso, today) {
   return a.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
 }
 
+// Dismissed "What's blocking me?" keys stay hidden until the next local day.
+// One device-local entry per workspace: { date: 'YYYY-MM-DD', keys: [...] }.
+function blockDismissStorageKey(workspaceId) {
+  return `daymark:blockDismissed:${workspaceId || 'personal'}`;
+}
+
+function readBlockDismissed(workspaceId, today) {
+  const storageKey = blockDismissStorageKey(workspaceId);
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    const keys = parsed && Array.isArray(parsed.keys) ? parsed.keys : null;
+    if (!parsed || parsed.date !== today || !keys) {
+      localStorage.removeItem(storageKey);
+      return new Set();
+    }
+    return new Set(keys.filter((key) => typeof key === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeBlockDismissed(workspaceId, today, keys) {
+  const storageKey = blockDismissStorageKey(workspaceId);
+  try {
+    if (!keys || keys.size === 0) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+    localStorage.setItem(storageKey, JSON.stringify({ date: today, keys: [...keys] }));
+  } catch {
+    /* private mode or quota — dismissing still works for this visit */
+  }
+}
+
 export default function TodayView({
   tasks,
   projects,
@@ -179,8 +215,27 @@ export default function TodayView({
   };
 
   const [closeDayOpen, setCloseDayOpen] = useState(false);
-  const [dismissedBlock, setDismissedBlock] = useState(() => new Set());
+  const [dismissedBlock, setDismissedBlock] = useState(() => readBlockDismissed(workspaceId, today));
+  const blockDismissScope = useRef({ workspaceId, today });
   const [advanceAsk, setAdvanceAsk] = useState(null);
+
+  // Persist whenever the set changes. A workspace switch reloads that
+  // workspace's own set; a new local date drops yesterday's keys instead of
+  // carrying them forward.
+  useEffect(() => {
+    const scope = blockDismissScope.current;
+    const sameWorkspace = scope.workspaceId === workspaceId;
+    const sameDay = scope.today === today;
+    if (!sameWorkspace || !sameDay) {
+      if (!sameWorkspace && sameDay) {
+        writeBlockDismissed(scope.workspaceId, scope.today, dismissedBlock);
+      }
+      blockDismissScope.current = { workspaceId, today };
+      setDismissedBlock(readBlockDismissed(workspaceId, today));
+      return;
+    }
+    writeBlockDismissed(workspaceId, today, dismissedBlock);
+  }, [workspaceId, today, dismissedBlock]);
 
   // ── Priority ids (pinned in the Do column; excluded from the lists below so
   //    they aren't shown twice) ───────────────────────────────────────────────

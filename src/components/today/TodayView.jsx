@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import {
   localDateStr,
@@ -16,14 +16,14 @@ import { taskDeliverableName, taskProjectName } from '../../lib/deliverableStatu
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import { stationLastActivityAt } from '../../lib/stations.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
+import { isFreshWaitingReturn, useTodayOrder } from './todayOrder.js';
 
 // ── TodayView ───────────────────────────────────────────────────────────────
 // Action-first dashboard, restructured into two full-width columns:
 //
-//   LEFT  — "Do today"    : things you own and must act on
-//              • Priority (primary + stretch), pinned
-//              • Overdue tasks
-//              • Tasks due today
+//   LEFT  — "Do"          : things you own and must act on, in one rank order.
+//              Drag, Move to top, and Alt+arrows share a single move.
+//              The top 3 are marked. Row 4 onward sits under "If time".
 //
 //   RIGHT — "Waiting on"  : things out with other people, one list, sorted by
 //            urgency (Overdue → Due back today → Expected later). Merges what
@@ -182,6 +182,151 @@ function writeBlockDismissed(workspaceId, today, keys) {
   }
 }
 
+// Pointer-driven reorder. Mouse drags immediately; touch waits for a long
+// press so a flick still scrolls. Drop calls the same moveRow as the menu
+// and the keyboard.
+function useDoRankDrag({ idsRef, rowRefs, moveRow, enabled }) {
+  const [drag, setDrag] = useState(null);
+  const dragRef = useRef(null);
+  const moveRef = useRef(moveRow);
+  const cleanupRef = useRef(() => {});
+  moveRef.current = moveRow;
+
+  useEffect(() => () => cleanupRef.current(), []);
+
+  const onGripPointerDown = (event, id) => {
+    if (!enabled) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.stopPropagation();
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const from = idsRef.current.indexOf(id);
+    if (from < 0) return;
+    const height = rowRefs.current.get(id)?.getBoundingClientRect().height || 0;
+    let lastY = startY;
+    let timer = 0;
+    const prevSelect = document.body.style.userSelect;
+
+    const indexForY = (clientY) => {
+      const ids = idsRef.current;
+      let index = 0;
+      for (const rowId of ids) {
+        if (rowId === id) continue;
+        const el = rowRefs.current.get(rowId);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        // Subtract the translate already painted on the row so the slot math
+        // stays on the layout position while neighbours slide open.
+        const painted = /translateY\(([-\d.]+)px\)/.exec(el.style.transform || '');
+        const shift = painted ? Number(painted[1]) : 0;
+        const mid = rect.top - shift + rect.height / 2;
+        if (clientY > mid) index += 1;
+      }
+      return index;
+    };
+
+    const apply = (next) => {
+      dragRef.current = next;
+      setDrag(next);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('keydown', onKey);
+      document.body.style.userSelect = prevSelect;
+      dragRef.current = null;
+      setDrag(null);
+      cleanupRef.current = () => {};
+    };
+
+    const finish = (commitMove) => {
+      const state = dragRef.current;
+      cleanup();
+      if (commitMove && state?.active) moveRef.current(state.id, state.to);
+    };
+
+    const activate = (clientY) => {
+      document.body.style.userSelect = 'none';
+      apply({
+        id,
+        from,
+        to: indexForY(clientY),
+        dy: clientY - startY,
+        height,
+        active: true,
+      });
+    };
+
+    const onMove = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      lastY = ev.clientY;
+      const state = dragRef.current;
+      if (!state?.active) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 12) cleanup();
+        return;
+      }
+      if (ev.cancelable) ev.preventDefault();
+      apply({
+        ...state,
+        to: indexForY(ev.clientY),
+        dy: ev.clientY - startY,
+      });
+    };
+
+    const onUp = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      finish(true);
+    };
+
+    const onCancel = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      finish(false);
+    };
+
+    const onKey = (ev) => {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      finish(false);
+    };
+
+    cleanupRef.current = cleanup;
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('keydown', onKey);
+
+    if (event.pointerType === 'touch') timer = window.setTimeout(() => activate(lastY), 450);
+    else activate(startY);
+  };
+
+  return { drag, onGripPointerDown };
+}
+
+function dragShift(drag, ids, id) {
+  if (!drag?.active) return 0;
+  if (id === drag.id) return drag.dy;
+  const index = ids.indexOf(id);
+  if (index < 0) return 0;
+  if (drag.to > drag.from && index > drag.from && index <= drag.to) return -drag.height;
+  if (drag.to < drag.from && index >= drag.to && index < drag.from) return drag.height;
+  return 0;
+}
+
+// Accent only, fading down the top three. Nothing below #3 picks up a colour.
+function rankChrome(rank) {
+  const edge = rank === 1 ? 100 : rank === 2 ? 58 : 32;
+  const badge = rank === 1 ? 100 : rank === 2 ? 42 : 22;
+  return {
+    edge: `color-mix(in srgb, var(--accent) ${edge}%, transparent)`,
+    badgeBg: `color-mix(in srgb, var(--accent) ${badge}%, transparent)`,
+    badgeFg: rank === 1 ? '#fff' : 'var(--accent)',
+  };
+}
+
 export default function TodayView({
   tasks,
   projects,
@@ -237,40 +382,17 @@ export default function TodayView({
     writeBlockDismissed(workspaceId, today, dismissedBlock);
   }, [workspaceId, today, dismissedBlock]);
 
-  // ── Priority ids (pinned in the Do column; excluded from the lists below so
-  //    they aren't shown twice) ───────────────────────────────────────────────
-  const priorityIds = useMemo(() => {
-    const s = new Set();
-    if (todayPriority?.primary) s.add(todayPriority.primary);
-    (todayPriority?.stretch || []).forEach((id) => s.add(id));
-    return s;
+  // Old "today's priority" pins are membership, not a second sort. On the
+  // first save-less visit they are seeded at the top of this order.
+  const pinnedIds = useMemo(() => {
+    const ids = [];
+    if (todayPriority?.primary) ids.push(todayPriority.primary);
+    for (const id of todayPriority?.stretch || []) {
+      if (id && id !== todayPriority?.primary) ids.push(id);
+    }
+    return ids;
   }, [todayPriority]);
-
-  const primaryTask = useMemo(
-    () => (todayPriority?.primary ? (tasks || []).find((t) => t.id === todayPriority.primary) : null),
-    [tasks, todayPriority]
-  );
-  const stretchTasks = useMemo(
-    () =>
-      (todayPriority?.stretch || [])
-        .map((id) => (tasks || []).find((t) => t.id === id))
-        .filter(Boolean),
-    [tasks, todayPriority]
-  );
-
-  // ── Do column: overdue + due-today tasks (priority pinned separately) ───────
-  const overdueTasks = useMemo(
-    () =>
-      (tasks || [])
-        .filter((t) => !t.done && !t.isFollowUp && t.dueDate && t.dueDate < today && !priorityIds.has(t.id))
-        .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')),
-    [tasks, today, priorityIds]
-  );
-
-  const dueTodayTasks = useMemo(
-    () => (tasks || []).filter((t) => !t.done && !t.isFollowUp && t.dueDate === today && !priorityIds.has(t.id)),
-    [tasks, today, priorityIds]
-  );
+  const priorityIds = useMemo(() => new Set(pinnedIds), [pinnedIds]);
 
   // ── Waiting column: one unified, dated list of things out with people ───────
   // Each item: { key, type:'deliverable'|'comm', project, deliverable, station?,
@@ -359,10 +481,7 @@ export default function TodayView({
   }, [congresses]);
 
   // ── Counts ──────────────────────────────────────────────────────────────────
-  const doCount =
-    (primaryTask ? 1 : 0) + stretchTasks.length + overdueTasks.length + dueTodayTasks.length;
   const waitCount = waitingItems.length;
-  const hasNothing = doCount === 0 && waitCount === 0 && upcomingCongresses.length === 0;
 
   // Apply a deliverables patch built from the latest project, not from the
   // list captured when the click started. The hook rolls a failed write back.
@@ -389,21 +508,6 @@ export default function TodayView({
       .reduce((s, b) => s + (Number(b.hours) || 0), 0);
   }, [blocks, today]);
 
-  const budgetHours = useMemo(() => {
-    const ids = new Set();
-    const list = [];
-    const push = (t) => {
-      if (t && !ids.has(t.id)) {
-        ids.add(t.id);
-        list.push(t);
-      }
-    };
-    push(primaryTask);
-    stretchTasks.forEach(push);
-    overdueTasks.forEach(push);
-    dueTodayTasks.forEach(push);
-    return list.reduce((s, t) => s + (Number(t.estimate) || 0), 0);
-  }, [primaryTask, stretchTasks, overdueTasks, dueTodayTasks]);
 
   // What's blocking = exceptions only (overdue work, overdue waits, late stations).
   const blockingTasks = useMemo(
@@ -459,28 +563,18 @@ export default function TodayView({
     [projects]
   );
 
-  // Do is tasks to be done today: overdue, due today, and today's pinned
-  // priority. Not a card for every open station.
-  const doRows = useMemo(() => {
-    const rank = (t) => {
-      if (todayPriority?.primary && t.id === todayPriority.primary) return 0;
-      if ((todayPriority?.stretch || []).includes(t.id)) return 1;
-      if (t.dueDate && t.dueDate < today) return 2;
-      if (t.dueDate === today) return 3;
-      return 4;
-    };
+  // Do is tasks to be done today: overdue, due today, and a migrated pin.
+  // Cross-workspace assignments stay on the Assigned strip — they are not ranked.
+  const doBase = useMemo(() => {
     const list = (tasks || []).filter((t) => {
       if (!t || t.done || t.isFollowUp) return false;
-      // Cross-workspace assignments stay on the Assigned strip so a due-today
-      // team task is not swallowed by this spine and dropped from Assigned.
       if (isCrossWorkspaceTask(t, workspaceId)) return false;
       if (priorityIds.has(t.id)) return true;
       return !!(t.dueDate && t.dueDate <= today);
     });
     list.sort(
       (a, b) =>
-        rank(a) - rank(b) ||
-        (a.dueDate || '').localeCompare(b.dueDate || '') ||
+        (a.dueDate || '9999-99-99').localeCompare(b.dueDate || '9999-99-99') ||
         (a.title || '').localeCompare(b.title || '')
     );
     return list.map((task) => {
@@ -492,6 +586,8 @@ export default function TodayView({
       const projectName = taskProjectName(task, projects) || (ctx?.project?.name || '').trim();
       return {
         key: task.id,
+        id: task.id,
+        returned: isFreshWaitingReturn(ctx, today),
         task,
         title: task.title || '(untitled)',
         project: ctx?.project || null,
@@ -504,7 +600,23 @@ export default function TodayView({
         incomplete,
       };
     });
-  }, [projects, tasks, today, priorityIds, todayPriority, workspaceId]);
+  }, [projects, tasks, today, priorityIds, workspaceId]);
+
+  const order = useTodayOrder({ workspaceId, today, rows: doBase, pinnedIds });
+  const rankIdsRef = useRef(order.ids);
+  rankIdsRef.current = order.ids;
+  const rowRefs = useRef(new Map());
+  const drag = useDoRankDrag({
+    idsRef: rankIdsRef,
+    rowRefs,
+    moveRow: order.moveRow,
+    enabled: order.canMove,
+  });
+
+  const doRows = useMemo(() => {
+    const byId = new Map(doBase.map((row) => [row.id, row]));
+    return order.ids.map((id) => byId.get(id)).filter(Boolean);
+  }, [doBase, order.ids]);
 
   // One Assigned list: same-workspace tasks with no station loaded here, plus
   // tasks assigned to me from another workspace (team → personal and the
@@ -775,6 +887,7 @@ export default function TodayView({
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={styles.scroll}>
+      <style>{RANK_CSS}</style>
       <div style={styles.wrap}>
         <div style={styles.greeting}>
           <div>
@@ -871,10 +984,69 @@ export default function TodayView({
                 {doRows.length === 0 && assignedToMe.length === 0 && (
                   <div style={styles.colEmpty}>Nothing to do today.</div>
                 )}
-                {doRows.map((row) => {
+                {order.ready && order.showHint && doRows.length > 0 && (
+                  <div style={rankStyles.hint}>Drag your top 3 up here</div>
+                )}
+                {order.ready && doRows.length > 3 && <div style={rankStyles.section}>Today</div>}
+                <div role="list" aria-label="Do">
+                {doRows.map((row, index) => {
                   const running = runningTimer?.taskId === row.task.id;
+                  const rank = order.ready && index < 3 ? index + 1 : 0;
+                  const chrome = rank ? rankChrome(rank) : null;
+                  const shift = dragShift(drag.drag, order.ids, row.task.id);
+                  const dragging = !!(drag.drag?.active && drag.drag.id === row.task.id);
+                  const shadows = [];
+                  if (chrome) shadows.push(`inset 3px 0 0 ${chrome.edge}`);
+                  if (dragging) shadows.push('0 8px 20px rgba(17, 24, 39, 0.12)');
                   return (
-                    <div key={row.key} style={desk.doRow}>
+                    <Fragment key={row.key}>
+                      {order.ready && doRows.length > 3 && index === 3 && (
+                        <div style={rankStyles.divider} role="separator">
+                          <span>If time</span>
+                          <span style={rankStyles.rule} />
+                        </div>
+                      )}
+                    <div
+                      ref={(el) => {
+                        if (el) rowRefs.current.set(row.task.id, el);
+                        else rowRefs.current.delete(row.task.id);
+                      }}
+                      className={`dm-do-row${dragging ? ' is-dragging' : ''}`}
+                      role="listitem"
+                      aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                      onKeyDown={(e) => {
+                        if (!order.canMove || !e.altKey) return;
+                        if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return;
+                        e.preventDefault();
+                        const at = rankIdsRef.current.indexOf(row.task.id);
+                        if (at < 0) return;
+                        order.moveRow(row.task.id, e.code === 'ArrowUp' ? at - 1 : at + 1);
+                      }}
+                      style={{
+                        ...desk.doRow,
+                        position: 'relative',
+                        zIndex: dragging ? 3 : undefined,
+                        background: dragging ? 'var(--bg-surface)' : undefined,
+                        transform: shift ? `translateY(${shift}px)` : undefined,
+                        transition: drag.drag?.active && !dragging ? 'transform 140ms ease' : undefined,
+                        boxShadow: shadows.length ? shadows.join(', ') : undefined,
+                      }}
+                    >
+                      <RankGrip
+                        label={`Drag to rank ${row.title}`}
+                        disabled={!order.canMove}
+                        onPointerDown={(e) => drag.onGripPointerDown(e, row.task.id)}
+                      />
+                      {rank ? (
+                        <span
+                          style={{ ...rankStyles.badge, background: chrome.badgeBg, color: chrome.badgeFg }}
+                          aria-label={`Rank ${rank}`}
+                        >
+                          {rank}
+                        </span>
+                      ) : (
+                        <span style={rankStyles.badgeSpacer} aria-hidden="true" />
+                      )}
                       <input
                         type="checkbox"
                         className="dm-check"
@@ -893,6 +1065,9 @@ export default function TodayView({
                           />
                           {row.deliverableName ? <span>{row.deliverableName}</span> : null}
                           <TaskDueFlags task={row.task} />
+                          {order.ready && order.carried.has(row.task.id) ? (
+                            <span style={rankStyles.yesterday}>from yesterday</span>
+                          ) : null}
                         </div>
                         <div style={desk.doActions}>
                           {onStartTimer && (
@@ -937,6 +1112,14 @@ export default function TodayView({
                               Open project
                             </button>
                           )}
+                          <button
+                            type="button"
+                            style={{ ...rankStyles.topBtn, opacity: index === 0 ? 0.4 : 1 }}
+                            disabled={index === 0 || !order.canMove}
+                            onClick={() => order.moveRow(row.task.id, 0)}
+                          >
+                            Move to top
+                          </button>
                         </div>
                         {advanceAsk === row.key && (
                           <div style={desk.confirm}>
@@ -955,8 +1138,10 @@ export default function TodayView({
                         )}
                       </div>
                     </div>
+                    </Fragment>
                   );
                 })}
+                </div>
                 {assignedToMe.length > 0 && (
                   <div style={desk.assigned}>
                     <div style={desk.assignedHd}>Assigned to me</div>
@@ -1877,6 +2062,113 @@ const styles = {
     background: 'var(--bg-surface)',
     border: '0.5px solid var(--color-border-secondary)',
     borderRadius: 3,
+  },
+};
+
+function RankGrip({ label, disabled, onPointerDown }) {
+  return (
+    <button
+      type="button"
+      className="dm-rank-grip"
+      aria-label={label}
+      title="Drag to rank. Alt+↑ or Alt+↓ moves the row."
+      disabled={disabled}
+      onPointerDown={disabled ? undefined : onPointerDown}
+      style={rankStyles.grip}
+    >
+      <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" fill="currentColor">
+        <circle cx="2" cy="2.5" r="1.15" />
+        <circle cx="8" cy="2.5" r="1.15" />
+        <circle cx="2" cy="8" r="1.15" />
+        <circle cx="8" cy="8" r="1.15" />
+        <circle cx="2" cy="13.5" r="1.15" />
+        <circle cx="8" cy="13.5" r="1.15" />
+      </svg>
+    </button>
+  );
+}
+
+const RANK_CSS = `
+.dm-rank-grip { opacity: 0; }
+.dm-do-row:hover .dm-rank-grip,
+.dm-do-row:focus-within .dm-rank-grip,
+.dm-do-row.is-dragging .dm-rank-grip { opacity: 1; }
+.dm-rank-grip:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dm-do-row.is-dragging,
+.dm-do-row.is-dragging .dm-rank-grip { cursor: grabbing; }
+@media (hover: none) {
+  .dm-rank-grip { opacity: 0.85; }
+}
+`;
+
+const rankStyles = {
+  grip: {
+    width: 22,
+    height: 28,
+    marginTop: 0,
+    padding: 0,
+    flexShrink: 0,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--color-text-tertiary)',
+    borderRadius: 6,
+    cursor: 'grab',
+    touchAction: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    width: 18,
+    height: 18,
+    marginTop: 2,
+    flexShrink: 0,
+    borderRadius: 999,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 11,
+    fontWeight: 700,
+    lineHeight: 1,
+  },
+  badgeSpacer: { width: 18, height: 18, marginTop: 2, flexShrink: 0 },
+  hint: {
+    padding: '8px 14px 2px',
+    fontSize: 12,
+    color: 'var(--color-text-tertiary)',
+    fontStyle: 'italic',
+  },
+  section: {
+    padding: '8px 14px 0',
+    fontSize: 11,
+    fontWeight: 650,
+    color: 'var(--color-text-tertiary)',
+  },
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 14px',
+    color: 'var(--color-text-tertiary)',
+    fontSize: 11,
+    fontWeight: 650,
+  },
+  rule: { flex: 1, height: 1, background: 'var(--color-border-tertiary)' },
+  yesterday: { color: 'var(--color-text-tertiary)', fontSize: 11 },
+  topBtn: {
+    border: '0.5px solid var(--color-border-secondary)',
+    background: 'transparent',
+    borderRadius: 8,
+    padding: '5px 11px',
+    fontWeight: 550,
+    fontSize: 12,
+    cursor: 'pointer',
+    color: 'var(--color-text-secondary)',
+    flexShrink: 0,
   },
 };
 

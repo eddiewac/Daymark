@@ -1112,14 +1112,17 @@ export default function TodayView({
                               Open project
                             </button>
                           )}
-                          <button
-                            type="button"
-                            style={{ ...rankStyles.topBtn, opacity: index === 0 ? 0.4 : 1 }}
-                            disabled={index === 0 || !order.canMove}
-                            onClick={() => order.moveRow(row.task.id, 0)}
-                          >
-                            Move to top
-                          </button>
+                          {index > 0 && (
+                            <button
+                              type="button"
+                              className="dm-move-top"
+                              style={rankStyles.topBtn}
+                              disabled={!order.canMove}
+                              onClick={() => order.moveRow(row.task.id, 0)}
+                            >
+                              Move to top
+                            </button>
+                          )}
                         </div>
                         {advanceAsk === row.key && (
                           <div style={desk.confirm}>
@@ -2100,8 +2103,12 @@ const RANK_CSS = `
 }
 .dm-do-row.is-dragging,
 .dm-do-row.is-dragging .dm-rank-grip { cursor: grabbing; }
-@media (hover: none) {
+.dm-move-top { opacity: 0; }
+.dm-do-row:hover .dm-move-top,
+.dm-do-row:focus-within .dm-move-top { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
   .dm-rank-grip { opacity: 0.85; }
+  .dm-move-top { opacity: 1; }
 }
 `;
 

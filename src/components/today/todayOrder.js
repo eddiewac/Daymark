@@ -133,10 +133,11 @@ function withPins(ids, pinnedIds) {
   return [...pin, ...ids.filter((id) => !pinned.has(id))];
 }
 
-// Order for one render. Saved ids stay in front; anything no longer in Do is
-// dropped; rows that were not saved go to the bottom. A new day lifts the
-// previous saved ids (still in Do) and seeds the rest. Pins are prepended
-// only when nothing has been saved yet.
+// Order for one render. On the saved day, those ids stay in front; anything
+// no longer in Do is dropped, and rows that were not saved go to the bottom.
+// A new day carries only the saved top 3 that are still in Do (the rows above
+// the If-time line), in that order. Everything else is seeded. Pins are
+// prepended only when nothing has been saved yet.
 export function deriveTodayOrder({ rows, stored, today, pinnedIds }) {
   const list = (rows || []).filter((row) => row && typeof row.id === 'string' && row.id);
   const allowed = new Set(list.map((row) => row.id));
@@ -162,11 +163,18 @@ export function deriveTodayOrder({ rows, stored, today, pinnedIds }) {
     return { ids: [...saved, ...fresh], carried: emptyCarry, ranked: true };
   }
 
+  // First three saved slots are the committed top, even if a later slot is
+  // still open. A finished row is dropped; it is not replaced from If time.
+  const carriedIds = keepKnown((stored.ids || []).slice(0, 3), allowed);
+  if (carriedIds.length === 0) {
+    return { ids: sortBySeed(list, today), carried: emptyCarry, ranked: false };
+  }
+  const carriedSet = new Set(carriedIds);
   const rest = sortBySeed(
-    list.filter((row) => !savedSet.has(row.id)),
+    list.filter((row) => !carriedSet.has(row.id)),
     today
   );
-  return { ids: [...saved, ...rest], carried: new Set(saved), ranked: true };
+  return { ids: [...carriedIds, ...rest], carried: carriedSet, ranked: true };
 }
 
 // Final index in the resulting list. Same array reference when nothing moves.
@@ -417,33 +425,41 @@ export function useTodayOrder({ workspaceId, today, rows, pinnedIds }) {
           displayIdsRef.current = generationIds;
           setOptimistic({ workspaceId: ws, ids: generationIds });
         }
-        return saveTodayOrder(userId, ws, orderValue(localDateStr(new Date()), generationIds));
+        const savedResult = await saveTodayOrder(
+          userId,
+          ws,
+          orderValue(localDateStr(new Date()), generationIds)
+        );
+        // Retry calls this function again, not the code after runSave. A
+        // successful retry has to finish the save here or pendingRef stays
+        // set and another device's order is ignored.
+        if (savedResult?.ok) {
+          if (savedResult.updatedAt && isNewer(savedResult.updatedAt, lastWriteAt.current)) {
+            lastWriteAt.current = savedResult.updatedAt;
+          }
+          if (pendingGen.current === gen && workspaceRef.current === ws) {
+            const saved = orderValue(localDateStr(new Date()), generationIds);
+            persistedRef.current = saved;
+            if (pendingRef.current?.gen === gen) pendingRef.current = null;
+            setRecord({ workspaceId: ws, stored: saved, ready: true });
+            setOptimistic(null);
+          }
+        } else if (pendingGen.current === gen && workspaceRef.current === ws) {
+          if (pendingRef.current?.gen === gen) pendingRef.current = null;
+          setOptimistic(null);
+        }
+        return savedResult;
       });
 
-      if (workspaceRef.current !== ws || pendingGen.current !== gen) {
-        if (result?.ok && result.updatedAt && isNewer(result.updatedAt, lastWriteAt.current)) {
-          lastWriteAt.current = result.updatedAt;
-        }
-        return;
-      }
       if (result?.skipped) return;
+      if (workspaceRef.current !== ws || pendingGen.current !== gen) return;
       if (!result?.ok) {
         if (pendingRef.current?.gen === gen) pendingRef.current = null;
         setOptimistic(null);
         showToastRef.current('Couldn’t save today’s order', {
           onRetry: () => retryRef.current && retryRef.current(),
         });
-        return;
       }
-
-      const saved = orderValue(localDateStr(new Date()), generationIds);
-      persistedRef.current = saved;
-      if (result.updatedAt && isNewer(result.updatedAt, lastWriteAt.current)) {
-        lastWriteAt.current = result.updatedAt;
-      }
-      if (pendingRef.current?.gen === gen) pendingRef.current = null;
-      setRecord({ workspaceId: ws, stored: saved, ready: true });
-      setOptimistic(null);
     });
     saveQueue.current = run;
   }, []);

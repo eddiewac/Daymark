@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { projectColor } from '../../lib/constants.js';
 import { generateProjectHandoff } from '../../lib/handoff.js';
+import { filterCommsEntries } from '../../lib/commsLogModel.js';
+import CommsLogList from '../comms/CommsLogList.jsx';
 import DeliverableEditor from './DeliverableEditor.jsx';
 
 const STATUS_OPTIONS = ['', '🟢 On track', '🟡 At risk', '🔴 Off track', '✅ Complete'];
@@ -19,6 +21,10 @@ export default function ProjectDetail({
   onDeleteTask,
   onTrack,
   onClose,
+  commsEntries,
+  members,
+  currentUserId,
+  onOpenStation,
 }) {
   const [draft, setDraft] = useState(project);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -312,6 +318,27 @@ export default function ProjectDetail({
               })}
             </div>
           )}
+        </div>
+
+        {/* Comms Log — same entries as the station workbench, one project trail. */}
+        <div style={styles.section}>
+          <div style={styles.sectionTitle}>Comms Log</div>
+          <CommsLogList
+            entries={filterCommsEntries(commsEntries, { projectId: project.id })}
+            place="project"
+            members={members}
+            currentUserId={currentUserId}
+            onOpen={
+              onOpenStation
+                ? (entry) =>
+                    onOpenStation({
+                      projectId: entry.projectId,
+                      deliverableId: entry.deliverableId,
+                      stationId: entry.stationId,
+                    })
+                : null
+            }
+          />
         </div>
 
         {/* Deliverables */}

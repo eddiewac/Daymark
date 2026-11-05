@@ -40,6 +40,9 @@ export default function ProjectsPanel({
   onStartTimer,
   onStopTimer,
   onContextProject,
+  commsEntries,
+  currentUserId,
+  onOpenStation,
 }) {
   const lastOpenedKey = `daymark-projects-last-opened:${workspaceId || 'personal'}`;
   const [activeId, setActiveId] = useState(() => {
@@ -365,6 +368,10 @@ export default function ProjectsPanel({
                   setActiveId(null);
                 }}
                 onClose={() => setActiveId(null)}
+                commsEntries={commsEntries}
+                members={members}
+                currentUserId={currentUserId}
+                onOpenStation={onOpenStation}
               />
             </div>
           </>
@@ -387,6 +394,10 @@ export default function ProjectsPanel({
                 setActiveId(null);
               }}
               onClose={() => setActiveId(null)}
+              commsEntries={commsEntries}
+              members={members}
+              currentUserId={currentUserId}
+              onOpenStation={onOpenStation}
             />
           </div>
         )}

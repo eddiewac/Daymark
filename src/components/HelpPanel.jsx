@@ -67,8 +67,8 @@ export default function HelpPanel({ open, onClose }) {
               as a train of stations.
             </Step>
             <Step n={4} title="Click into the first station">
-              Add a task or two. Log a comm ("Sent to internal team"). Optionally set
-              "Expect reply by" tomorrow.
+              Add a task or two. On the station workbench, log a chase, call, or decision.
+              A chase still shows on Today · Waiting.
             </Step>
             <Step n={5} title="Check the Today tab">
               See your priority, the tasks you scheduled, and the comm you logged

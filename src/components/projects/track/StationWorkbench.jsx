@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { uid, addBusinessDays } from '../../../lib/utils.js';
 import { loadTimeForTasks } from '../../../lib/time.js';
 import { pulseSave } from '../../../lib/savePulse.js';
+import { prepareCommsLogEntry, filterCommsEntries } from '../../../lib/commsLogModel.js';
 import { NO_OTHER_MEMBERS_HINT, canAssignToOthers } from '../../../lib/workspaces.js';
 import TaskForm from '../../tasks/TaskForm.jsx';
+import CommsQuickAdd from '../../comms/CommsQuickAdd.jsx';
+import CommsLogList from '../../comms/CommsLogList.jsx';
 
-// Station workbench — one beat on top of the track: tasks, timer, log a comm
-// into Today · Waiting, and advance. The train stays underneath.
+// Station workbench — one beat on top of the track: tasks, timer, Comms Log,
+// and advance. A chase still lands on Today · Waiting. The train stays underneath.
 
 function fmtH(n) {
   const x = Math.round((Number(n) || 0) * 10) / 10;
@@ -68,6 +71,9 @@ export default function StationWorkbench({
   onAddStation,
   allProjects,
   members,
+  commsEntries,
+  currentUserId,
+  onAddCommsLog,
   workspaceId,
   categories,
   priorities,
@@ -89,24 +95,27 @@ export default function StationWorkbench({
     .map((t) => t.id);
 
   const [hoursByTask, setHoursByTask] = useState({});
-  const [commOpen, setCommOpen] = useState(false);
   const [advanceAsk, setAdvanceAsk] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [draft, setDraft] = useState('');
   const [loop, setLoop] = useState('');
-  const [who, setWho] = useState('');
-  const [commType, setCommType] = useState('Email');
-  const [note, setNote] = useState('');
-  const [expectBy, setExpectBy] = useState(addBusinessDays(3));
+  const [commLabel, setCommLabel] = useState('');
+  const [commUrl, setCommUrl] = useState('');
+  const [commError, setCommError] = useState('');
+  const [savingComm, setSavingComm] = useState(false);
+  const stationComms = filterCommsEntries(commsEntries, { stationId: station?.id });
 
   const idsKey = deliverableTaskIds.join(',');
   const blockStamp = (blocks || []).length;
 
   useEffect(() => {
     setAdvanceAsk(false);
-    setCommOpen(false);
     setLoop('');
+    setCommLabel('');
+    setCommUrl('');
+    setCommError('');
+    setSavingComm(false);
     setAdding(false);
     setEditingTask(null);
   }, [station?.id]);
@@ -136,13 +145,13 @@ export default function StationWorkbench({
         el.blur();
         return;
       }
-      const unsaved = (adding && draft.trim()) || (commOpen && (who.trim() || note.trim()));
+      const unsaved = (adding && draft.trim()) || commLabel.trim() || commUrl.trim();
       if (unsaved) return;
       onClose?.();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [editingTask, advanceAsk, adding, draft, commOpen, who, note, onClose]);
+  }, [editingTask, advanceAsk, adding, draft, commLabel, commUrl, onClose]);
 
   useEffect(() => {
     const ids = idsKey ? idsKey.split(',') : [];
@@ -191,26 +200,52 @@ export default function StationWorkbench({
     commitAdvance();
   };
 
-  const saveComm = () => {
-    const expectReplyBy = expectBy || addBusinessDays(3);
-    const person = who.trim() || 'them';
-    const newComm = {
-      id: uid(),
-      type: commType || 'Email',
-      who: who.trim(),
-      note: note.trim(),
-      color: '#d97706',
-      needsReply: true,
-      sentAt: Date.now(),
-      replyReceived: false,
-      replyAt: null,
+  const logComms = async (type) => {
+    if (savingComm || !station) return;
+    const expectReplyBy = addBusinessDays(3);
+    const built = prepareCommsLogEntry({
+      type,
+      label: commLabel,
+      url: commUrl,
+      project,
+      deliverable,
+      station,
       expectReplyBy,
-    };
-    updateStation({ comms: [...(station.comms || []), newComm] });
-    setCommOpen(false);
-    setNote('');
-    pulseSave();
-    setLoop(`Saved · now on Today · Waiting (${person} · expect ${fmtShort(expectReplyBy)})`);
+    });
+    if (!built.ok) {
+      setCommError(built.error || 'Could not log that');
+      return;
+    }
+    setCommError('');
+    setSavingComm(true);
+    // Chase still writes station.comms (same id) so Waiting is unchanged.
+    // Call and decision stay in the log table only.
+    if (built.stationComm) {
+      updateStation({ comms: [...(station.comms || []), built.stationComm] });
+      pulseSave();
+    }
+    const result = onAddCommsLog
+      ? await onAddCommsLog(built.entry)
+      : { ok: false, error: 'Comms Log is not connected' };
+    setSavingComm(false);
+    if (!result?.ok) {
+      if (built.stationComm) {
+        setCommLabel('');
+        setCommUrl('');
+        setCommError('Waiting is updated. Comms Log storage did not accept this entry.');
+      } else {
+        setCommError(result?.error || 'Could not save to the Comms Log');
+      }
+      return;
+    }
+    if (!built.stationComm) pulseSave();
+    setCommLabel('');
+    setCommUrl('');
+    setLoop(
+      type === 'chase'
+        ? `Saved · now on Today · Waiting (expect ${fmtShort(expectReplyBy)})`
+        : `Logged ${type === 'call' ? 'call' : 'decision'}`
+    );
   };
 
   const canAssign = !!(workspaceId && membersReady && canAssignToOthers(members));
@@ -525,9 +560,6 @@ export default function StationWorkbench({
               })}
 
               <div style={styles.actions}>
-                <button type="button" style={styles.btn} onClick={() => { setCommOpen(true); setLoop(''); }}>
-                  ✉ Log comm
-                </button>
                 <button type="button" style={styles.okBtn} onClick={requestAdvance} disabled={station.done}>
                   {station.done
                     ? 'Station complete'
@@ -538,7 +570,7 @@ export default function StationWorkbench({
                 <button type="button" style={styles.ghost} onClick={() => setAdding((v) => !v)}>
                   + Add station task
                 </button>
-                <span style={styles.hint}>One place: tasks · time · comm · advance</span>
+                <span style={styles.hint}>One place: tasks · time · Comms Log · advance</span>
               </div>
 
               {advanceAsk && (
@@ -577,55 +609,29 @@ export default function StationWorkbench({
                 </div>
               )}
 
-              {commOpen && (
-                <div style={styles.comm}>
-                  <label style={styles.fieldLbl}>To / channel</label>
-                  <div style={styles.row2}>
-                    <input
-                      value={who}
-                      onChange={(e) => setWho(e.target.value)}
-                      placeholder="Who you’re waiting on"
-                      style={styles.input}
-                    />
-                    <select
-                      aria-label="Type"
-                      value={commType}
-                      onChange={(e) => setCommType(e.target.value)}
-                      style={styles.input}
-                    >
-                      <option>Email</option>
-                      <option>Slack / Teams</option>
-                      <option>Call</option>
-                    </select>
+              <div style={styles.commsBlock}>
+                <div style={styles.fieldLbl}>Comms Log</div>
+                <CommsQuickAdd
+                  label={commLabel}
+                  url={commUrl}
+                  onLabel={setCommLabel}
+                  onUrl={setCommUrl}
+                  onLog={logComms}
+                  busy={savingComm}
+                />
+                {commError ? (
+                  <div style={{ ...styles.loop, borderColor: '#fecaca', background: '#fef2f2', color: '#b91c1c' }}>
+                    {commError}
                   </div>
-                  <label style={styles.fieldLbl}>What was said / asked</label>
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    rows={3}
-                    style={{ ...styles.input, resize: 'vertical' }}
-                  />
-                  <div style={styles.row2}>
-                    <div>
-                      <label style={styles.fieldLbl}>Expect reply by</label>
-                      <input
-                        type="date"
-                        value={expectBy}
-                        onChange={(e) => setExpectBy(e.target.value)}
-                        style={styles.input}
-                      />
-                    </div>
-                    <div style={styles.commBtns}>
-                      <button type="button" style={styles.primary} onClick={saveComm}>
-                        Save comm + wait
-                      </button>
-                      <button type="button" style={styles.ghost} onClick={() => setCommOpen(false)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+                ) : null}
+                <CommsLogList
+                  entries={stationComms}
+                  place="station"
+                  compact
+                  members={members}
+                  currentUserId={currentUserId}
+                />
+              </div>
             </div>
           </main>
           <aside style={styles.side}>
@@ -1057,6 +1063,14 @@ const styles = {
     fontWeight: 550,
   },
   addRow: { display: 'flex', gap: 8, marginTop: 10 },
+  commsBlock: {
+    marginTop: 14,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    paddingTop: 14,
+    borderTop: '0.5px solid var(--color-border-tertiary)',
+  },
   comm: {
     marginTop: 12,
     border: '1px dashed var(--accent)',

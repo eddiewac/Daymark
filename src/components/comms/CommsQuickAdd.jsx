@@ -30,7 +30,7 @@ export default function CommsQuickAdd({ label, url, onLabel, onUrl, onLog, busy 
       <input
         value={label}
         onChange={(e) => onLabel(e.target.value)}
-        placeholder="Short label — no client details"
+        placeholder="Who or topic — no client details"
         aria-label="Short label"
         maxLength={LABEL_MAX}
         style={styles.input}

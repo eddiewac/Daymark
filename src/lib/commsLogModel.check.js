@@ -134,8 +134,11 @@ assert(built.entry.id === 'new-chase' && built.stationComm.id === 'new-chase', '
 assert(built.stationComm.needsReply === true && built.stationComm.replyReceived === false, 'chase feeds Waiting');
 assert(built.stationComm.expectReplyBy === '2026-11-10', 'expect date kept for Waiting');
 assert(built.entry.label === 'Follow up please', 'label flattened');
+assert(built.stationComm.who === 'Follow up please', 'chase label is who for Waiting');
 assert(!('note' in built.entry) && !('note' in built.stationComm), 'no message body on either side');
-assert(!('who' in built.stationComm), 'chase does not store a person field');
+
+const blankChase = prepareCommsLogEntry({ type: 'chase', label: '   ', url: '', id: 'blank-chase' });
+assert(blankChase.ok && !('who' in blankChase.stationComm), 'empty label does not set who');
 
 const decision = prepareCommsLogEntry({ type: 'decision', label: '', url: '', id: 'dec-1' });
 assert(decision.ok && decision.stationComm === null, 'decision does not touch station comms');
@@ -164,6 +167,7 @@ assert(!/Discussion|Chat|Messages/.test(html), 'no chat labels');
 
 const emptyHtml = renderToStaticMarkup(React.createElement(CommsLogList, { entries: [] }));
 assert(emptyHtml.includes(EMPTY_COMMS_LOG), 'empty state teaches the model');
+assert(EMPTY_COMMS_LOG.includes('Teams/Slack'), 'empty state names Teams/Slack');
 
 const quick = renderToStaticMarkup(
   React.createElement(CommsQuickAdd, {
@@ -176,7 +180,7 @@ const quick = renderToStaticMarkup(
   })
 );
 assert(quick.includes('Log chase') && quick.includes('Log call') && quick.includes('Log decision'), 'one-tap types');
-assert(quick.includes('no client details'), 'label hint');
+assert(quick.includes('Who or topic — no client details'), 'label hint');
 assert(quick.includes('80 characters'), 'length hint');
 assert(!quick.includes('<textarea'), 'no message body field');
 

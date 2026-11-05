@@ -12,7 +12,7 @@ export const LABEL_MAX = 80;
 export const URL_MAX = 500;
 
 export const EMPTY_COMMS_LOG =
-  'Log a chase, call or decision — link out to Teams if the conversation lives there.';
+  'Log a chase, call or decision — link out to Teams/Slack if the conversation lives there.';
 
 export const COMM_TYPES = [
   { id: 'chase', label: 'Chase', button: 'Log chase' },
@@ -99,6 +99,8 @@ export function prepareCommsLogEntry({
         replyReceived: false,
         replyAt: null,
         expectReplyBy: expectReplyBy || null,
+        // Waiting reads who for “awaiting …”. Only when a short label was set.
+        ...(entry.label ? { who: entry.label } : {}),
       }
     : null;
   return { ok: true, entry, stationComm };

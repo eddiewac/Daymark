@@ -53,7 +53,8 @@ drop policy if exists comms_log_insert on public.comms_log;
 drop policy if exists comms_log_update on public.comms_log;
 drop policy if exists comms_log_delete on public.comms_log;
 
--- Same membership rule as tasks: your own rows, or any row in a workspace you belong to.
+-- Append-only for the client: select, insert, and delete (project removal).
+-- No update policy. Your own rows, or any row in a workspace you belong to.
 create policy comms_log_select on public.comms_log
   for select
   using (
@@ -71,13 +72,6 @@ create policy comms_log_insert on public.comms_log
     )
   );
 
-create policy comms_log_update on public.comms_log
-  for update
-  using (
-    (author_id = auth.uid())
-    or (workspace_id in (select public.get_my_workspace_ids()))
-  );
-
 create policy comms_log_delete on public.comms_log
   for delete
   using (
@@ -86,5 +80,5 @@ create policy comms_log_delete on public.comms_log
   );
 
 revoke all on table public.comms_log from anon;
-grant select, insert, update, delete on table public.comms_log to authenticated;
+grant select, insert, delete on table public.comms_log to authenticated;
 grant all on table public.comms_log to service_role;

@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSaveStatus } from './save/SaveStatus.jsx';
 import { useTasks } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
+import { useCommsLog } from '../hooks/useCommsLog.js';
+import { mergeCommsLog } from '../lib/commsLogModel.js';
 import { useNotes } from '../hooks/useNotes.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useCongresses } from '../hooks/useCongresses.js';
@@ -233,6 +235,12 @@ export default function WorkspaceView({
     patchProject,
     deleteProject,
   } = useProjects(workspaceId);
+
+  const commsApi = useCommsLog(workspaceId);
+  const commsEntries = useMemo(
+    () => mergeCommsLog(commsApi.rows, projects),
+    [commsApi.rows, projects]
+  );
 
   const {
     personal: personalNotes,
@@ -976,7 +984,7 @@ export default function WorkspaceView({
             go('record', 'record');
           },
         },
-        { label: 'Comms log', run: () => go('comms', 'record') },
+        { label: 'Comms Log', run: () => go('comms', 'record') },
         { label: 'Export / handoff', run: () => go('export', 'record') },
       ];
     }
@@ -1204,7 +1212,10 @@ export default function WorkspaceView({
             initialOpenNonce={projectOpenNonce}
             onAdd={addProject}
             onUpdate={updateProject}
-            onDelete={deleteProject}
+            onDelete={(projectId) => {
+              deleteProject(projectId);
+              commsApi.removeForProject(projectId);
+            }}
             focusProjectId={focusProjectId}
             focusNonce={focusNonce}
             requestedView={projectsView}
@@ -1220,6 +1231,12 @@ export default function WorkspaceView({
             onAssignTask={assignToMember}
             onUnassignTask={unassignFromMember}
             onOpenTasks={() => go('tasks', 'plan')}
+            commsEntries={commsEntries}
+            currentUserId={commsApi.currentUserId}
+            onOpenStation={(item) => {
+              setContextProjectId(item.projectId);
+              setStationOverlay(item);
+            }}
           />
         )}
         {tab === 'track' && (
@@ -1385,7 +1402,9 @@ export default function WorkspaceView({
         )}
         {tab === 'comms' && (
           <CommsLog
-            projects={projects}
+            entries={commsEntries}
+            members={members}
+            currentUserId={commsApi.currentUserId}
             onOpenStation={(item) => {
               setContextProjectId(item.projectId);
               setStationOverlay(item);
@@ -1521,6 +1540,9 @@ export default function WorkspaceView({
           tasks={allTasks}
           members={members}
           membersReady={membersReady}
+          commsEntries={commsEntries}
+          currentUserId={commsApi.currentUserId}
+          onAddCommsLog={commsApi.addEntry}
           workspaceId={workspaceId}
           categories={settings.categories}
           priorities={settings.priorities}

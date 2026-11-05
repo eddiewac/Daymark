@@ -1184,7 +1184,7 @@ const NAV_GROUPS = [
     label: 'Record',
     options: [
       { key: 'record', label: 'Timesheet + Notes' },
-      { key: 'comms', label: 'Comms log' },
+      { key: 'comms', label: 'Comms Log' },
       { key: 'export', label: 'Export / handoff' },
     ],
   },

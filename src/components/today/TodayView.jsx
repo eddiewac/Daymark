@@ -16,6 +16,7 @@ import { taskDeliverableName, taskProjectName } from '../../lib/deliverableStatu
 import { deadlineColor, fmtDeadline } from '../../lib/deadline.js';
 import { stationLastActivityAt } from '../../lib/stations.js';
 import CloseDayPanel from './CloseDayPanel.jsx';
+import { contextForTask, todayProjectOpenTarget } from './openProjectTarget.js';
 import { isFreshWaitingReturn, useTodayOrder } from './todayOrder.js';
 
 // ── TodayView ───────────────────────────────────────────────────────────────
@@ -88,43 +89,6 @@ function stationLoadedIn(task, projects) {
     }
   }
   return false;
-}
-
-// Project / deliverable / station a task belongs to, when that project is loaded.
-function contextForTask(task, projects) {
-  if (!task) return null;
-  let named = null;
-  for (const p of projects || []) {
-    const idMatch = task.projectId && p.id === task.projectId;
-    const nameMatch = task.project && p.name === task.project;
-    if (!named && (idMatch || nameMatch)) named = p;
-    for (const d of p.deliverables || []) {
-      const stations = d.stations || [];
-      if (task.stationId) {
-        const idx = stations.findIndex((s) => s.id === task.stationId);
-        if (idx >= 0) {
-          return {
-            project: p,
-            deliverable: d,
-            station: stations[idx],
-            next: stations[idx + 1] || null,
-          };
-        }
-      }
-      if (task.deliverableId && d.id === task.deliverableId) {
-        const idx = stations.findIndex((s) => !s.done);
-        const station = idx >= 0 ? stations[idx] : null;
-        return {
-          project: p,
-          deliverable: d,
-          station,
-          next: station ? stations[idx + 1] || null : null,
-        };
-      }
-    }
-  }
-  if (named) return { project: named, deliverable: null, station: null, next: null };
-  return null;
 }
 
 // Short relative label for a waiting item's date vs today.
@@ -846,30 +810,12 @@ export default function TodayView({
   };
 
   const openProjectById = (projectId, task) => {
-    const ctx = task ? contextForTask(task, projects) : null;
-    if (ctx?.project && ctx.deliverable && ctx.station) {
-      onJumpToProject &&
-        onJumpToProject({
-          projectId: ctx.project.id,
-          deliverableId: ctx.deliverable.id,
-          stationId: ctx.station.id,
-        });
+    const next = todayProjectOpenTarget({ projectId, task, projects });
+    if (next.via === 'jump') {
+      onJumpToProject && onJumpToProject(next.target);
       return;
     }
-    const loaded = projectId && (projects || []).some((p) => p.id === projectId);
-    if (loaded) {
-      onJumpToProject && onJumpToProject(projectId);
-      return;
-    }
-    if (onOpenItem) {
-      onOpenItem({
-        kind: 'project',
-        task: task || null,
-        projectId: projectId || task?.projectId || null,
-        deliverableId: task?.deliverableId || null,
-        stationId: task?.stationId || null,
-      });
-    }
+    if (onOpenItem) onOpenItem(next.target);
   };
 
   const completeAssigned = (task) => {
@@ -991,6 +937,7 @@ export default function TodayView({
                 <div role="list" aria-label="Do">
                 {doRows.map((row, index) => {
                   const running = runningTimer?.taskId === row.task.id;
+                  const canOpenStation = !!(row.station || row.task?.stationId);
                   const rank = order.ready && index < 3 ? index + 1 : 0;
                   const chrome = rank ? rankChrome(rank) : null;
                   const shift = dragShift(drag.drag, order.ids, row.task.id);
@@ -1081,19 +1028,25 @@ export default function TodayView({
                               {running ? '■ Stop' : '▶ Start timer'}
                             </button>
                           )}
-                          {row.station && row.deliverable && row.projectId && (
+                          {canOpenStation && (
                             <button
                               type="button"
                               style={desk.btn}
-                              onClick={() =>
-                                onOpenItem &&
-                                onOpenItem({
-                                  kind: 'station',
-                                  projectId: row.projectId,
-                                  deliverableId: row.deliverable.id,
-                                  stationId: row.station.id,
-                                })
-                              }
+                              onClick={() => {
+                                const sameStation =
+                                  row.station &&
+                                  (!row.task?.stationId || row.station.id === row.task.stationId);
+                                if (sameStation && row.deliverable && row.projectId && onOpenItem) {
+                                  onOpenItem({
+                                    kind: 'station',
+                                    projectId: row.projectId,
+                                    deliverableId: row.deliverable.id,
+                                    stationId: row.station.id,
+                                  });
+                                  return;
+                                }
+                                onOpenItem && onOpenItem({ kind: 'task', task: row.task });
+                              }}
                             >
                               Open station
                             </button>

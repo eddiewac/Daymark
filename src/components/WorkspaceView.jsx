@@ -36,6 +36,7 @@ import TodayView from './today/TodayView.jsx';
 import StationWorkbench from './projects/track/StationWorkbench.jsx';
 import { readGroupPins } from '../lib/navPins.js';
 import CommsLog from './record/CommsLog.jsx';
+import InvoicesPanel from './invoices/InvoicesPanel.jsx';
 import FocusBox from './FocusBox.jsx';
 import QuickCommPrompt from './QuickCommPrompt.jsx';
 import { DEFAULT_COMM_PILLS } from './projects/CommsTab.jsx';
@@ -95,7 +96,7 @@ function normalizeOpenTarget(target) {
 
 const ALL_TAB_KEYS = [
   'today', 'tasks', 'plan', 'projects', 'track', 'resource', 'status', 'waiting', 'deliverables',
-  'notes', 'notepad', 'time', 'export', 'congresses', 'settings', 'record', 'comms', 'forecast',
+  'notes', 'notepad', 'time', 'invoices', 'export', 'congresses', 'settings', 'record', 'comms', 'forecast',
 ];
 
 export default function WorkspaceView({
@@ -905,8 +906,10 @@ export default function WorkspaceView({
     }
     if (doorId === 'track') {
       // Legacy pin "track" was the top-level station track. That view lives
-      // on the project. Time opens Timesheet unless Budget vs actual is pinned.
+      // on the project. Time opens Timesheet unless Budget vs actual or
+      // Invoices is pinned.
       if (pref === 'deliverables') setTab('deliverables');
+      else if (pref === 'invoices') setTab('invoices');
       else setTab('time');
       return;
     }
@@ -972,6 +975,7 @@ export default function WorkspaceView({
     if (doorId === 'track') {
       return [
         { label: 'Timesheet', run: () => go('time', 'track') },
+        { label: 'Invoices', run: () => go('invoices', 'track') },
         { label: 'Budget vs actual', run: () => go('deliverables', 'track') },
       ];
     }
@@ -1114,7 +1118,7 @@ export default function WorkspaceView({
               if (t === 'today') setNavDoor('today');
               else if (t === 'projects' || t === 'deliverables') setNavDoor('projects');
               else if (t === 'plan' || t === 'congresses' || t === 'tasks') setNavDoor('plan');
-              else if (t === 'track' || t === 'time') setNavDoor('track');
+              else if (t === 'track' || t === 'time' || t === 'invoices') setNavDoor('track');
               else if (t === 'record' || t === 'notes' || t === 'export' || t === 'comms') setNavDoor('record');
             }}
             onJumpToProject={openRecord}
@@ -1345,6 +1349,13 @@ export default function WorkspaceView({
             onVoidBlock={voidTimesheetBlock}
             onStartTimer={startTimer}
             onRequestStop={time.requestStop}
+          />
+        )}
+        {tab === 'invoices' && (
+          <InvoicesPanel
+            workspaceId={workspaceId}
+            projects={projects}
+            tasks={allTasks}
           />
         )}
         {(tab === 'record' || tab === 'notes' || tab === 'time') && tab === 'record' && (

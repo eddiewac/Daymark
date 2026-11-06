@@ -5,7 +5,8 @@ import { supabase, getCurrentUser } from './supabase.js';
 // Schema:
 //   id (uuid), user_id, workspace_id (nullable), task_id (text),
 //   date (YYYY-MM-DD), started_at (timestamptz?), ended_at (timestamptz?),
-//   hours (numeric), data (jsonb), created_at, updated_at
+//   hours (numeric), data (jsonb), billed_invoice_id (text, set when an
+//   invoice has pulled this block), created_at, updated_at
 //
 // Each row is one "block" of work. A task on a given day can have multiple
 // blocks. Hours can either be derived from started_at/ended_at OR set manually
@@ -89,6 +90,7 @@ function rowToBlock(row) {
     notes: row.data?.notes || '',
     outOfScope: !!row.data?.outOfScope,
     voided: !!row.data?.voided,
+    billedInvoiceId: row.billed_invoice_id || null,
     createdAt: row.created_at,
   };
 }

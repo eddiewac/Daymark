@@ -76,8 +76,9 @@ export function useInvoices(workspaceId) {
       }
       return result;
     },
-    deleteClient: async (clientId) => {
-      const result = await deleteClient(clientId);
+    deleteClient: async (client) => {
+      const clientId = client?.id || client;
+      const result = await deleteClient(clientId, client?.name || '');
       if (result.ok) setClients((prev) => prev.filter((item) => item.id !== clientId));
       return result;
     },

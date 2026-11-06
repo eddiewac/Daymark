@@ -5,7 +5,9 @@ import { todayStr } from '../../lib/utils.js';
 import {
   blankInvoiceDraft,
   buildMailto,
+  clientDeleteBlock,
   clientForDocument,
+  invoiceActionPayload,
   invoiceTotals,
   projectName,
   sellerForDocument,
@@ -49,15 +51,7 @@ export default function InvoicesPanel({ workspaceId, projects, tasks }) {
     .filter((invoice) => invoice.id !== draft?.id)
     .flatMap((invoice) => invoice.lines || []);
 
-  const payloadFor = (current) => {
-    const client = (api.clients || []).find((item) => item.id === current.clientId) || null;
-    return {
-      ...current,
-      clientId: client ? client.id : '',
-      seller: api.seller,
-      client,
-    };
-  };
+  const payloadFor = (current) => invoiceActionPayload(current, api.clients, api.seller);
 
   const remember = (invoice) => {
     const next = {
@@ -110,7 +104,11 @@ export default function InvoicesPanel({ workspaceId, projects, tasks }) {
     if (!saved) return;
     const client = clientForDocument(saved, saved.client);
     if (!client.email) {
-      setFormError('Add an email address on the client, then try again.');
+      setFormError(
+        saved.status && saved.status !== 'draft'
+          ? 'This invoice has no client email saved on it.'
+          : 'Add an email address on the client, then try again.'
+      );
       return;
     }
     const seller = sellerForDocument(saved, api.seller);
@@ -208,11 +206,18 @@ export default function InvoicesPanel({ workspaceId, projects, tasks }) {
           else setFormError('');
           return result;
         }}
-        onDelete={async (clientId) => {
+        onDelete={async (client) => {
+          const block = clientDeleteBlock(client, api.invoices);
+          if (block) {
+            setFormError(block.error);
+            return;
+          }
+          if (!window.confirm(`Delete ${client.name}?`)) return;
           setBusy(true);
-          const result = await api.deleteClient(clientId);
+          const result = await api.deleteClient(client);
           setBusy(false);
           if (!result?.ok) setFormError(result?.error || 'Could not delete the client');
+          else setFormError('');
         }}
       />
     );

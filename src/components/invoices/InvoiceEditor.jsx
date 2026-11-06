@@ -36,6 +36,9 @@ export default function InvoiceEditor({
   const locked = draft.status && draft.status !== 'draft';
   const displayStatus = invoiceDisplayStatus(draft, today);
   const project = projects.find((item) => item.id === draft.projectId) || null;
+  const liveClient = clients.find((item) => item.id === draft.clientId) || null;
+  const rememberedClient = draft.clientSnapshot?.name || '';
+  const clientGone = !liveClient && !!rememberedClient;
   const [pull, setPull] = useState(null);
   const [addingClient, setAddingClient] = useState(false);
 
@@ -108,6 +111,13 @@ export default function InvoiceEditor({
               ))}
               {!locked && <option value="__new">New client…</option>}
             </select>
+            {clientGone && (
+              <span style={{ ...styles.hint, display: 'block', marginTop: 4 }}>
+                {locked
+                  ? `Billed to ${rememberedClient}. This invoice keeps those saved details.`
+                  : `This draft was for ${rememberedClient}. That client is gone. Choose another, then save.`}
+              </span>
+            )}
           </Field>
           <Field label="Invoice date">
             <input

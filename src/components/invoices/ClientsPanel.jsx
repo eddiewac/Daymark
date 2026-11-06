@@ -60,11 +60,7 @@ export default function ClientsPanel({ clients, busy, error, onSave, onDelete, o
                           type="button"
                           style={styles.danger}
                           disabled={busy}
-                          onClick={() => {
-                            if (window.confirm(`Delete ${client.name}? Invoices already sent keep the name that was on them.`)) {
-                              onDelete(client.id);
-                            }
-                          }}
+                          onClick={() => onDelete(client)}
                         >
                           Delete
                         </button>

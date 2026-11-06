@@ -11,6 +11,7 @@ import { uid } from './utils.js';
 import {
   billingDelta,
   cleanLines,
+  clientDeleteBlock,
   clientSnapshot,
   migrationHint,
   normalizeCurrency,
@@ -185,8 +186,22 @@ export async function saveClient(client, workspaceId) {
   return { ok: true, client: mapClient(data) };
 }
 
-export async function deleteClient(clientId) {
+export async function deleteClient(clientId, clientName) {
   if (!clientId) return { ok: false, error: 'Missing client' };
+  const { data, error: readError } = await supabase
+    .from('invoices')
+    .select('id, invoice_number, status, client_id')
+    .eq('client_id', clientId);
+  if (readError) return fail(readError);
+  const block = clientDeleteBlock(
+    { id: clientId, name: clientName },
+    (data || []).map((row) => ({
+      clientId: row.client_id,
+      invoiceNumber: row.invoice_number,
+      status: row.status,
+    }))
+  );
+  if (block) return { ok: false, error: block.error };
   const { error } = await supabase.from('invoice_clients').delete().eq('id', clientId);
   if (error) return fail(error);
   return { ok: true };

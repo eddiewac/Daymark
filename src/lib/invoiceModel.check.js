@@ -3,12 +3,16 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import InvoiceList from '../components/invoices/InvoiceList.jsx';
+import InvoiceEditor from '../components/invoices/InvoiceEditor.jsx';
 import { InvoiceTotals } from '../components/invoices/invoiceUi.jsx';
 import {
   availableFixedFees,
   billingDelta,
   buildMailto,
   buildTimeLines,
+  clientDeleteBlock,
+  clientForDocument,
+  invoiceActionPayload,
   invoiceDisplayStatus,
   invoiceTotals,
   migrationHint,
@@ -138,6 +142,102 @@ const sendErrors = validateInvoice({
   lines: [{ description: 'Deck', quantity: 1, unitAmount: 100, sourceType: 'manual' }],
 }, { forSend: true });
 assert(sendErrors.some((error) => /ABN/.test(error)), 'tax invoice needs an ABN');
+
+const sentAfterDelete = {
+  id: 'inv-sent',
+  invoiceNumber: 'INV-0008',
+  status: 'sent',
+  projectId: 'p1',
+  clientId: '',
+  client: null,
+  clientSnapshot: { name: 'Ada North', company: 'Northwind', email: 'ada@client.example', address: 'Sydney' },
+  invoiceDate: today,
+  dueDate: '2026-11-20',
+  currency: 'AUD',
+  gstEnabled: false,
+  seller,
+  lines: [{ description: 'Slide deck', quantity: 1, unitAmount: 400, sourceType: 'deliverable' }],
+};
+const sentPayload = invoiceActionPayload(sentAfterDelete, [], seller);
+assert(validateInvoice(sentPayload).length === 0, 'a sent invoice still validates after its client row is deleted');
+assert(
+  validateInvoice({ ...sentPayload, status: 'paid' }).length === 0,
+  'a paid invoice still validates after its client row is deleted'
+);
+const sentClient = clientForDocument(sentPayload, sentPayload.client);
+assert(sentClient.name === 'Ada North' && sentClient.email === 'ada@client.example', 'PDF uses the stored client');
+const sentMail = buildMailto({
+  invoice: sentPayload,
+  seller,
+  client: sentClient,
+  totals: { totalCents: 40000 },
+});
+assert(sentMail.href.startsWith('mailto:ada%40client.example'), 'mailto still addresses the saved client');
+const sentPdf = Buffer.from(invoicePdfBytes({
+  invoice: { ...sentPayload, projectName: 'Brand launch' },
+  lines: sentPayload.lines,
+  seller,
+  client: null,
+  today,
+})).toString('latin1');
+assert(sentPdf.includes('Ada North'), 'PDF still names the deleted client');
+assert(sentPdf.includes('ada@client.example'), 'PDF still has the saved email');
+
+const draftAfterDelete = invoiceActionPayload(
+  { ...sentAfterDelete, status: 'draft', invoiceNumber: 'INV-0009' },
+  [],
+  seller
+);
+assert(draftAfterDelete.clientId === '', 'a draft drops the dangling client id');
+assert(
+  validateInvoice(draftAfterDelete).some((error) => error === 'Choose a client.'),
+  'a draft asks for another client instead of staying blocked'
+);
+const repairedDraft = invoiceActionPayload(
+  { ...draftAfterDelete, clientId: 'c2' },
+  [{ id: 'c2', name: 'Bea South', email: 'bea@client.example' }],
+  seller
+);
+assert(repairedDraft.clientId === 'c2', 'a draft can take a replacement client');
+assert(validateInvoice(repairedDraft).length === 0, 'the repaired draft validates');
+
+const ada = { id: 'c1', name: 'Ada North' };
+assert(clientDeleteBlock(ada, []) === null, 'a client with no invoices can be deleted');
+const refused = clientDeleteBlock(ada, [
+  { clientId: 'c1', invoiceNumber: 'INV-0002', status: 'draft' },
+  { clientId: 'c1', invoiceNumber: 'INV-0003', status: 'sent' },
+  { clientId: 'c9', invoiceNumber: 'INV-0004', status: 'paid' },
+]);
+assert(refused && /INV-0002 \(draft\)/.test(refused.error), 'delete is refused while a draft points at the client');
+assert(/INV-0003 \(sent\)/.test(refused.error), 'delete is refused while a sent invoice points at the client');
+assert(!/INV-0004/.test(refused.error), 'another client\'s invoice is not part of the block');
+
+const sentMarkup = renderToStaticMarkup(
+  React.createElement(InvoiceEditor, {
+    draft: sentAfterDelete,
+    projects: [project],
+    tasks: [],
+    clients: [],
+    seller,
+    allLines: [],
+    today,
+    busy: false,
+    error: '',
+    onChange: () => {},
+    onSave: () => {},
+    onDelete: () => {},
+    onStatus: () => {},
+    onDownload: () => {},
+    onEmail: () => {},
+    onBack: () => {},
+    onCreateClient: async () => ({ ok: true, client: { id: 'c2' } }),
+    onLoadUnbilled: async () => ({ ok: true, blocks: [] }),
+    onEditSeller: () => {},
+  })
+);
+assert(sentMarkup.includes('Billed to Ada North'), 'sent invoice shows the saved client name');
+assert(sentMarkup.includes('Download PDF') && sentMarkup.includes('Mark paid'), 'download and status stay available');
+assert(sentMarkup.includes('disabled'), 'the client field stays locked on a sent invoice');
 
 const frozen = sellerForDocument(
   { status: 'sent', sellerSnapshot: { ...seller, paymentInstructions: 'Original PayID' } },

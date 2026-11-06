@@ -379,6 +379,42 @@ export function clientForDocument(invoice, client) {
   return clientSnapshot(client || invoice?.clientSnapshot || {});
 }
 
+export function isDraftInvoice(invoice) {
+  return !invoice?.status || invoice.status === 'draft';
+}
+
+// Shape the invoice for download, email, or a status change.
+// A draft with a deleted client loses the dangling id so another client can
+// be chosen. A sent or paid invoice keeps its id and its snapshot; it must
+// still open when the client row is gone.
+export function invoiceActionPayload(invoice, clients, seller) {
+  const live = (clients || []).find((item) => item.id === invoice?.clientId) || null;
+  return {
+    ...invoice,
+    clientId: live ? live.id : (isDraftInvoice(invoice) ? '' : (invoice?.clientId || '')),
+    client: live,
+    seller: seller || null,
+  };
+}
+
+export function clientDeleteBlock(client, invoices) {
+  const id = client?.id;
+  if (!id) return null;
+  const linked = (invoices || []).filter((invoice) => (invoice.clientId || invoice.client_id) === id);
+  if (linked.length === 0) return null;
+  const labels = linked.map((invoice) => {
+    const number = invoice.invoiceNumber || invoice.invoice_number || 'an invoice';
+    const status = invoice.status === 'paid' ? 'paid' : invoice.status === 'sent' ? 'sent' : 'draft';
+    return `${number} (${status})`;
+  });
+  const shown = labels.slice(0, 6).join(', ');
+  const extra = labels.length > 6 ? `, and ${labels.length - 6} more` : '';
+  const name = String(client.name || 'This client').trim() || 'This client';
+  return {
+    error: `Can't delete ${name}. Still on ${shown}${extra}. Choose another client on each draft first. Sent and paid invoices stay linked to this client so they can still be downloaded.`,
+  };
+}
+
 export function validateSeller(seller) {
   const errors = [];
   const name = String(seller?.businessName || '').trim();
@@ -413,9 +449,13 @@ export function validateClient(client) {
 export function validateInvoice(draft, { forSend = false } = {}) {
   const errors = [];
   if (!draft?.projectId) errors.push('Choose a project.');
-  if (!draft?.clientId) errors.push('Choose a client.');
   const clientName = String(draft?.client?.name || draft?.clientSnapshot?.name || '').trim();
-  if (draft?.clientId && !clientName) errors.push('Client name is required.');
+  // Drafts need a live client row. Sent and paid invoices keep working from
+  // client_snapshot after that row is deleted, so they do not need clientId.
+  if (isDraftInvoice(draft)) {
+    if (!draft?.clientId) errors.push('Choose a client.');
+    else if (!clientName) errors.push('Client name is required.');
+  }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft?.invoiceDate || '')) errors.push('Invoice date is required.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft?.dueDate || '')) errors.push('Due date is required.');
   const currency = String(draft?.currency || '').trim().toUpperCase();

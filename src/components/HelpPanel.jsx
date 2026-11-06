@@ -34,6 +34,7 @@ export default function HelpPanel({ open, onClose }) {
             <DefRow term="Notepad" def="Freeform scratchpad for things not yet structured. Paste in emails, brainstorm, jot ideas. Convert sections into tasks or projects when ready." />
             <DefRow term="Status" def="Weekly project status updates, archived per round." />
             <DefRow term="Time" def="Block-based time tracking. Reports break down hours by project, week, or month." />
+            <DefRow term="Invoices" def="Time → Invoices. Bill a client for your own work on a project. Add lines by hand, from unbilled time, or from a deliverable. Download a PDF or open an email to attach it. You mark it paid — Daymark does not take the payment." />
             <DefRow term="Congresses" def="Calendar of upcoming medical congresses, optionally linked to projects." />
           </Section>
 

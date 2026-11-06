@@ -1176,6 +1176,7 @@ const NAV_GROUPS = [
     label: 'Time',
     options: [
       { key: 'time', label: 'Timesheet' },
+      { key: 'invoices', label: 'Invoices' },
       { key: 'deliverables', label: 'Budget vs actual' },
     ],
   },
